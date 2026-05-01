@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect } from "react";
-import { EditorView } from "@codemirror/view";
+import { EditorView, ViewPlugin, keymap } from "@codemirror/view";
 import {
   Compartment,
   EditorSelection,
@@ -9,7 +9,6 @@ import {
   Transaction,
   type StateCommand,
 } from "@codemirror/state";
-import { keymap } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { HighlightStyle, forceParsing, syntaxHighlighting, syntaxTree } from "@codemirror/language";
 import { search } from "@codemirror/search";
@@ -76,6 +75,29 @@ function findScrollContainer(root: HTMLElement) {
 
 function resolveScrollContainer(root: HTMLElement, getScrollContainer?: () => HTMLElement | null) {
   return getScrollContainer?.() ?? findScrollContainer(root);
+}
+
+function focusOnRevealExtension(isDisposed: () => boolean): Extension {
+  return ViewPlugin.define((view) => {
+    let wasHidden = getComputedStyle(view.dom).visibility === "hidden";
+
+    const mo = new MutationObserver(() => {
+      if (isDisposed()) return;
+      const isHidden = getComputedStyle(view.dom).visibility === "hidden";
+      if (wasHidden && !isHidden) {
+        view.focus();
+      }
+      wasHidden = isHidden;
+    });
+
+    let node: HTMLElement | null = view.dom.parentElement;
+    while (node && node !== document.documentElement) {
+      mo.observe(node, { attributes: true, attributeFilter: ["class"] });
+      node = node.parentElement;
+    }
+
+    return { destroy: () => mo.disconnect() };
+  });
 }
 
 function restoreCursorPosition(view: EditorView, cursorPos: number) {
@@ -442,6 +464,8 @@ function createEditorExtensions(
         return handleFrontmatterStart(event, view, getFilePath());
       },
     }),
+
+    focusOnRevealExtension(isDisposed),
   ];
 }
 

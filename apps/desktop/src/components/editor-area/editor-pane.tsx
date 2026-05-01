@@ -1,7 +1,6 @@
 import { ProseMarkEditor } from "./prosemark-editor";
 import { FrontmatterPanel } from "./frontmatter-panel";
 import { EditorScrollContainer } from "./editor-scroll-container";
-import { useActivePaneFocus } from "./use-active-pane-focus";
 import { useCloseEditorSearchWhenInactive } from "./use-close-editor-search-when-inactive";
 import { useEditorSettingsRef } from "./use-editor-settings";
 import { useIsFileLoading } from "@/hooks/use-tabs";
@@ -27,7 +26,6 @@ export const EditorPane = memo(function EditorPane({ path, isActive }: EditorPan
   const isLoading = useIsFileLoading(path);
   const editorSettingsRef = useEditorSettingsRef();
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
-  useActivePaneFocus(scrollContainerRef, isActive);
   useCloseEditorSearchWhenInactive(isActive);
 
   const getScrollContainer = useCallback(() => scrollContainerRef.current, []);
