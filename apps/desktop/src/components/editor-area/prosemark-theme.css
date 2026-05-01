@@ -100,18 +100,6 @@
 }
 
 /* Task checkboxes — replace native checkbox with hugeicon-style rounded square */
-@keyframes checkbox-pop {
-  0% {
-    transform: scale(0.85);
-  }
-  50% {
-    transform: scale(1.1);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
 .cm-editor .cm-checkbox {
   appearance: none;
   -webkit-appearance: none;
@@ -122,9 +110,6 @@
   cursor: pointer;
   vertical-align: -3px;
   margin-right: 2px;
-  transition:
-    background-color 0.15s,
-    border-color 0.15s;
 }
 
 .cm-editor .cm-checkbox:checked {
@@ -134,7 +119,6 @@
   background-size: 20px 20px;
   background-position: center;
   background-repeat: no-repeat;
-  animation: checkbox-pop 0.2s ease-out;
 }
 
 /* Wiki-link autocomplete tooltip uses the UI font, not the editor font */
