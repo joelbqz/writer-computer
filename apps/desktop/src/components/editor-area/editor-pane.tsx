@@ -46,6 +46,7 @@ export const EditorPane = memo(function EditorPane({ path, isActive }: EditorPan
 
   return (
     <div
+      data-pane
       className={
         isActive ? "relative z-10 h-full" : "absolute inset-0 invisible pointer-events-none"
       }

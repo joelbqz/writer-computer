@@ -79,22 +79,21 @@ function resolveScrollContainer(root: HTMLElement, getScrollContainer?: () => HT
 
 function focusOnRevealExtension(isDisposed: () => boolean): Extension {
   return ViewPlugin.define((view) => {
-    let wasHidden = getComputedStyle(view.dom).visibility === "hidden";
+    const pane = view.dom.closest<HTMLElement>("[data-pane]");
+    if (!pane) return { destroy() {} };
+
+    let wasHidden = pane.classList.contains("invisible");
 
     const mo = new MutationObserver(() => {
       if (isDisposed()) return;
-      const isHidden = getComputedStyle(view.dom).visibility === "hidden";
+      const isHidden = pane.classList.contains("invisible");
       if (wasHidden && !isHidden) {
         view.focus();
       }
       wasHidden = isHidden;
     });
 
-    let node: HTMLElement | null = view.dom.parentElement;
-    while (node && node !== document.documentElement) {
-      mo.observe(node, { attributes: true, attributeFilter: ["class"] });
-      node = node.parentElement;
-    }
+    mo.observe(pane, { attributes: true, attributeFilter: ["class"] });
 
     return { destroy: () => mo.disconnect() };
   });
