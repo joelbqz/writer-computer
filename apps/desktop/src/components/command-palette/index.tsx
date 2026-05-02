@@ -73,10 +73,10 @@ export function CommandPalette() {
   function handleCreate() {
     if (!createPath) return;
 
+    close();
     void (async () => {
       await tauri.createFile(createPath);
       await openFile(createPath);
-      close();
     })();
   }
 
