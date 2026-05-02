@@ -2,6 +2,7 @@
 
 ## 2026-05-02
 
+- Fix Obsidian-style wikilinks with aliases, escaped table pipes, and heading or block fragments so Sandbox vault links open the intended notes.
 - Unify the default theme accent to `#FF6A00` across light and dark modes.
 - Style task list checkboxes with the accent color and use a Hugeicons checkmark for the checked state.
 - Fix tables getting horizontally squeezed when a single cell holds a long word; columns now lay out at their natural widths and the table scrolls instead.

@@ -1,7 +1,63 @@
-import { getFileStem } from "./paths";
+import { getFileStem, normalizePath } from "./paths";
 import type { SearchResult } from "@/types/fs";
 
 export type WikiLinkTarget = { kind: "internal"; path: string } | { kind: "unresolved" };
+export interface ParsedWikiLink {
+  raw: string;
+  target: string;
+  path: string;
+  fragment: string | null;
+  alias: string | null;
+  displayText: string;
+}
+
+function unescapeWikiText(text: string): string {
+  return text.replace(/\\\|/g, "|").trim();
+}
+
+function splitAlias(raw: string): { target: string; alias: string | null } {
+  const separator = raw.indexOf("|");
+  if (separator === -1) {
+    return { target: raw, alias: null };
+  }
+
+  const escapedSeparator = separator > 0 && raw[separator - 1] === "\\";
+  const targetEnd = escapedSeparator ? separator - 1 : separator;
+
+  return {
+    target: raw.slice(0, targetEnd),
+    alias: unescapeWikiText(raw.slice(separator + 1)),
+  };
+}
+
+function splitFragment(target: string): { path: string; fragment: string | null } {
+  const hashIndex = target.indexOf("#");
+  if (hashIndex === -1) {
+    return { path: target, fragment: null };
+  }
+
+  return {
+    path: target.slice(0, hashIndex),
+    fragment: target.slice(hashIndex + 1),
+  };
+}
+
+export function parseWikiLink(raw: string): ParsedWikiLink {
+  const { target, alias } = splitAlias(raw.trim());
+  const normalizedTarget = unescapeWikiText(target);
+  const { path, fragment } = splitFragment(normalizedTarget);
+  const normalizedPath = normalizeWikiTarget(path);
+  const fallbackDisplay = normalizedPath || (fragment ? `#${fragment}` : normalizedTarget);
+
+  return {
+    raw,
+    target: normalizedTarget,
+    path: normalizedPath,
+    fragment,
+    alias: alias || null,
+    displayText: alias || fallbackDisplay,
+  };
+}
 
 /**
  * Normalize a raw wiki-link target string for resolution:
@@ -9,6 +65,7 @@ export type WikiLinkTarget = { kind: "internal"; path: string } | { kind: "unres
  */
 export function normalizeWikiTarget(raw: string): string {
   let target = raw.trim().replace(/\\/g, "/");
+  target = target.replace(/^\/+/, "");
   const lower = target.toLowerCase();
   if (lower.endsWith(".md")) {
     target = target.slice(0, -3);
@@ -30,14 +87,21 @@ export async function resolveWikiLink(
   workspaceRoot: string,
   fuzzySearch: (query: string, limit?: number) => Promise<SearchResult[]>,
   fileExists: (path: string) => Promise<boolean>,
+  currentFilePath?: string | null,
 ): Promise<WikiLinkTarget> {
-  const target = normalizeWikiTarget(raw);
+  const link = parseWikiLink(raw);
+  const target = link.path;
+  if (!target && link.fragment && currentFilePath) {
+    return { kind: "internal", path: currentFilePath };
+  }
   if (!target) return { kind: "unresolved" };
 
   if (target.includes("/")) {
-    const fullPath = `${workspaceRoot}/${target}.md`;
-    if (await fileExists(fullPath)) {
-      return { kind: "internal", path: fullPath };
+    const basePath = normalizePath(`${workspaceRoot.replace(/\/$/, "")}/${target}`);
+    for (const fullPath of [`${basePath}.md`, `${basePath}.markdown`]) {
+      if (await fileExists(fullPath)) {
+        return { kind: "internal", path: fullPath };
+      }
     }
     return { kind: "unresolved" };
   }

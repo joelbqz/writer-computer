@@ -89,13 +89,25 @@ fn fuzzy_search_from(
         return Ok(Vec::new());
     }
 
-    let needle = query.to_lowercase().replace(' ', "-");
+    let normalized_query = query.to_lowercase();
+    let mut needles = Vec::from([normalized_query.clone()]);
+    let hyphen_query = normalized_query.replace(' ', "-");
+    if !needles.contains(&hyphen_query) {
+        needles.push(hyphen_query);
+    }
+    let space_query = normalized_query.replace('-', " ");
+    if !needles.contains(&space_query) {
+        needles.push(space_query);
+    }
 
     let mut results: Vec<SearchResult> = index
         .iter()
         .filter_map(|file| {
             let haystack = file.relative_path.to_lowercase();
-            let byte_start = haystack.find(&needle)?;
+            let (byte_start, needle) = needles
+                .iter()
+                .filter_map(|needle| haystack.find(needle).map(|start| (start, needle)))
+                .min_by_key(|(start, _)| *start)?;
 
             let char_start = haystack[..byte_start].chars().count();
             let char_len = needle.chars().count();
@@ -290,6 +302,18 @@ mod tests {
         let results = fuzzy_search_impl("readme", &index, 50);
         assert!(!results.is_empty());
         assert_eq!(results[0].filename, "readme.md");
+    }
+
+    #[test]
+    fn test_fuzzy_search_matches_space_separated_names() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("No prior experience.md"), "# Note").unwrap();
+        let (index, _dirs) = index_workspace_test(dir.path());
+
+        let results = fuzzy_search_impl("No prior experience", &index, 50);
+
+        assert!(!results.is_empty());
+        assert_eq!(results[0].filename, "No prior experience.md");
     }
 
     #[test]

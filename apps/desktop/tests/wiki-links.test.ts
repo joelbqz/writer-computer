@@ -1,5 +1,10 @@
 import { describe, expect, test, vi } from "vite-plus/test";
-import { normalizeWikiTarget, resolveWikiLink, canonicalWikiTarget } from "../src/lib/wiki-links";
+import {
+  canonicalWikiTarget,
+  normalizeWikiTarget,
+  parseWikiLink,
+  resolveWikiLink,
+} from "../src/lib/wiki-links";
 import type { SearchResult } from "../src/types/fs";
 
 // ---------------------------------------------------------------------------
@@ -38,6 +43,47 @@ describe("normalizeWikiTarget", () => {
 
   test("returns empty string for whitespace-only input", () => {
     expect(normalizeWikiTarget("   ")).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseWikiLink
+// ---------------------------------------------------------------------------
+
+describe("parseWikiLink", () => {
+  test("splits Obsidian aliases from targets", () => {
+    expect(parseWikiLink("No prior experience|I have no prior experience")).toMatchObject({
+      path: "No prior experience",
+      fragment: null,
+      alias: "I have no prior experience",
+      displayText: "I have no prior experience",
+    });
+  });
+
+  test("keeps heading and block fragments out of the file path", () => {
+    expect(parseWikiLink("Format your notes#^376b9d|second option")).toMatchObject({
+      path: "Format your notes",
+      fragment: "^376b9d",
+      alias: "second option",
+      displayText: "second option",
+    });
+  });
+
+  test("supports same-file fragment links", () => {
+    expect(parseWikiLink("#^0f681f|with great power comes great responsibility")).toMatchObject({
+      path: "",
+      fragment: "^0f681f",
+      alias: "with great power comes great responsibility",
+      displayText: "with great power comes great responsibility",
+    });
+  });
+
+  test("treats table-escaped pipes as Obsidian alias separators", () => {
+    expect(parseWikiLink("Format your notes\\|Formatting")).toMatchObject({
+      path: "Format your notes",
+      alias: "Formatting",
+      displayText: "Formatting",
+    });
   });
 });
 
@@ -156,6 +202,89 @@ describe("resolveWikiLink", () => {
     const fileExists = vi.fn();
 
     const result = await resolveWikiLink("Missing", "/vault", fuzzySearch, fileExists);
+    expect(result).toEqual({ kind: "unresolved" });
+  });
+
+  test("resolves piped links by target instead of alias text", async () => {
+    const fuzzySearch = vi.fn().mockResolvedValue([
+      makeResult({
+        path: "/vault/Adventurer/No prior experience.md",
+        relative_path: "Adventurer/No prior experience.md",
+      }),
+    ]);
+    const fileExists = vi.fn();
+
+    const result = await resolveWikiLink(
+      "No prior experience|I have no prior experience",
+      "/vault",
+      fuzzySearch,
+      fileExists,
+    );
+
+    expect(result).toEqual({
+      kind: "internal",
+      path: "/vault/Adventurer/No prior experience.md",
+    });
+  });
+
+  test("resolves fragments against the target file", async () => {
+    const fuzzySearch = vi.fn().mockResolvedValue([
+      makeResult({
+        path: "/vault/Formatting/Format your notes.md",
+        relative_path: "Formatting/Format your notes.md",
+      }),
+    ]);
+    const fileExists = vi.fn();
+
+    const result = await resolveWikiLink(
+      "Format your notes#^376b9d|second option",
+      "/vault",
+      fuzzySearch,
+      fileExists,
+    );
+
+    expect(result).toEqual({
+      kind: "internal",
+      path: "/vault/Formatting/Format your notes.md",
+    });
+  });
+
+  test("resolves same-file fragment links to the current file", async () => {
+    const fuzzySearch = vi.fn();
+    const fileExists = vi.fn();
+
+    const result = await resolveWikiLink(
+      "#^0f681f|with great power comes great responsibility",
+      "/vault",
+      fuzzySearch,
+      fileExists,
+      "/vault/Vault is just a local folder.md",
+    );
+
+    expect(result).toEqual({
+      kind: "internal",
+      path: "/vault/Vault is just a local folder.md",
+    });
+    expect(fuzzySearch).not.toHaveBeenCalled();
+  });
+
+  test("keeps duplicate stems unresolved unless the path is qualified", async () => {
+    const fuzzySearch = vi.fn().mockResolvedValue([
+      makeResult({
+        path: "/vault/Formatting/Callout.md",
+        filename: "Callout.md",
+        relative_path: "Formatting/Callout.md",
+      }),
+      makeResult({
+        path: "/vault/Other/Callout.md",
+        filename: "Callout.md",
+        relative_path: "Other/Callout.md",
+      }),
+    ]);
+    const fileExists = vi.fn().mockResolvedValue(false);
+
+    const result = await resolveWikiLink("Callout", "/vault", fuzzySearch, fileExists);
+
     expect(result).toEqual({ kind: "unresolved" });
   });
 });

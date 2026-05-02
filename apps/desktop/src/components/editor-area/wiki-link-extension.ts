@@ -18,7 +18,7 @@ import * as tauri from "@/lib/tauri";
 import { getFileStem } from "@/lib/paths";
 import { getWorkspaceRoot } from "@/hooks/workspace-api";
 import * as editorApi from "@/hooks/editor-api";
-import { canonicalWikiTarget, resolveWikiLink } from "@/lib/wiki-links";
+import { canonicalWikiTarget, parseWikiLink, resolveWikiLink } from "@/lib/wiki-links";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -84,7 +84,7 @@ class WikiLinkWidget extends WidgetType {
   toDOM(): HTMLElement {
     const span = document.createElement("span");
     span.className = "cm-wiki-link";
-    span.textContent = this.target;
+    span.textContent = parseWikiLink(this.target).displayText;
     return span;
   }
 
@@ -195,7 +195,7 @@ async function wikiLinkCompletions(context: CompletionContext): Promise<Completi
 // Click handling
 // ---------------------------------------------------------------------------
 
-function wikiLinkClickHandler(isDisposed: () => boolean): Extension {
+function wikiLinkClickHandler(getFilePath: () => string, isDisposed: () => boolean): Extension {
   return Prec.highest(
     EditorView.domEventHandlers({
       mousedown(event, view) {
@@ -215,7 +215,13 @@ function wikiLinkClickHandler(isDisposed: () => boolean): Extension {
         const workspaceRoot = getWorkspaceRoot();
         if (!workspaceRoot) return true;
 
-        void resolveWikiLink(rawTarget, workspaceRoot, tauri.fuzzySearch, tauri.fileExists)
+        void resolveWikiLink(
+          rawTarget,
+          workspaceRoot,
+          tauri.fuzzySearch,
+          tauri.fileExists,
+          getFilePath(),
+        )
           .then((result) => {
             if (isDisposed()) return;
             if (result.kind === "internal") {
@@ -280,10 +286,13 @@ const wikiLinkTheme = EditorView.baseTheme({
 // Public extension
 // ---------------------------------------------------------------------------
 
-export function wikiLinkExtension(isDisposed: () => boolean): Extension[] {
+export function wikiLinkExtension(
+  getFilePath: () => string,
+  isDisposed: () => boolean,
+): Extension[] {
   return [
     wikiLinkDecorations,
-    wikiLinkClickHandler(isDisposed),
+    wikiLinkClickHandler(getFilePath, isDisposed),
     wikiLinkTheme,
     autocompletion({
       override: [wikiLinkCompletions],
