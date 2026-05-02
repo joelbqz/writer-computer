@@ -100,9 +100,15 @@ function focusOnRevealExtension(isDisposed: () => boolean): Extension {
 }
 
 function restoreCursorPosition(view: EditorView, cursorPos: number) {
-  if (cursorPos <= 0) return;
-  const pos = Math.min(cursorPos, view.state.doc.length);
-  view.dispatch({ selection: { anchor: pos } });
+  if (cursorPos > 0) {
+    const pos = Math.min(cursorPos, view.state.doc.length);
+    view.dispatch({ selection: { anchor: pos } });
+    return;
+  }
+  // New-file template from create_file_impl is "# "; land caret after it so the user can type the title immediately.
+  if (view.state.doc.toString() === "# ") {
+    view.dispatch({ selection: { anchor: 2 } });
+  }
 }
 
 function restoreScrollPosition(
