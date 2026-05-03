@@ -46,7 +46,7 @@ Previously-triaged work organized by phase. Pull into `Up Next` as capacity open
 
 ## Done
 
-- Obsidian-style wikilink parsing: [`SPECs/obsidian-wikilink-parsing-spec.md`](SPECs/obsidian-wikilink-parsing-spec.md) — aliases, escaped table pipes, note fragments, and same-file fragment links now resolve like Obsidian. (`635deb1`)
+- Obsidian-style wikilink parsing: [`SPECs/obsidian-wikilink-parsing-spec.md`](SPECs/obsidian-wikilink-parsing-spec.md) — aliases, escaped table pipes, note fragments, and same-file fragment links now resolve like Obsidian. (`cf3d753`)
 - Sidebar toggle tab chrome shift: [`SPECs/sidebar-toggle-tab-chrome-shift-spec.md`](SPECs/sidebar-toggle-tab-chrome-shift-spec.md)
 - Rename bundled Codex theme preset to Writer.
 - Recent workspaces Dock menu: [`SPECs/recent-workspaces-dock-menu-spec.md`](SPECs/recent-workspaces-dock-menu-spec.md) — right-clicking the macOS Dock icon now shows existing recent workspaces above the default Dock menu items; choosing one opens a new workspace window or focuses an existing one.
