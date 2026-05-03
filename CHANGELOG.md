@@ -2,6 +2,10 @@
 
 ## 2026-05-02
 
+- Unify the default theme accent to `#FF6A00` across light and dark modes.
+- Style task list checkboxes with the accent color and use a Hugeicons checkmark for the checked state.
+- Fix tables getting horizontally squeezed when a single cell holds a long word; columns now lay out at their natural widths and the table scrolls instead.
+- Fix the caret jumping to the wrong position when switching tabs.
 - Fix the editor not auto-focusing after creating a new file from the command palette. The dialog now closes before the file is opened so its focus trap and focus restoration finish before the editor mounts and calls `view.focus()`.
 - Land the caret after the `# ` heading prompt when a new file opens so the user can type the title immediately.
 
@@ -9,7 +13,6 @@
 
 - Update the app icon.
 - Default new document content to a heading prompt (`# `) so a fresh file opens ready for a title.
-- Unify the default theme accent to `#FF6A00` across light and dark modes.
 
 ## 2026-04-30
 
