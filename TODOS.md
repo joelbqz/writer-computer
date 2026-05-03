@@ -46,6 +46,7 @@ Previously-triaged work organized by phase. Pull into `Up Next` as capacity open
 
 ## Done
 
+- Caret position after history navigation: [`SPECs/caret-history-navigation-spec.md`](SPECs/caret-history-navigation-spec.md)
 - Obsidian-style wikilink parsing: [`SPECs/obsidian-wikilink-parsing-spec.md`](SPECs/obsidian-wikilink-parsing-spec.md) — aliases, escaped table pipes, note fragments, and same-file fragment links now resolve like Obsidian. (`cf3d753`)
 - Sidebar toggle tab chrome shift: [`SPECs/sidebar-toggle-tab-chrome-shift-spec.md`](SPECs/sidebar-toggle-tab-chrome-shift-spec.md)
 - Rename bundled Codex theme preset to Writer.

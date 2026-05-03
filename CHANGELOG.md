@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-05-03
+
+- Fix the caret rendering offset after using back/forward navigation between files by avoiding transition-scheduled history swaps and using CodeMirror's measured cursor drawing.
+
 ## 2026-05-02
 
 - Fix Obsidian-style wikilinks with aliases, escaped table pipes, and heading or block fragments so Sandbox vault links open the intended notes.

@@ -160,7 +160,8 @@ export function EditorTabs() {
       <div className="flex shrink-0 items-center gap-0.5">
         <button
           type="button"
-          onClick={() => startTransition(() => void navigateBack())}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => void navigateBack()}
           disabled={!canNavigateBack}
           className="flex h-[var(--chrome-control-height)] w-7 items-center justify-center rounded-lg text-base text-[var(--text-icon-muted)] transition-colors enabled:hover:bg-[var(--surface-subtle)] enabled:hover:text-[var(--text-secondary)] disabled:opacity-30"
           title="Back"
@@ -170,7 +171,8 @@ export function EditorTabs() {
         </button>
         <button
           type="button"
-          onClick={() => startTransition(() => void navigateForward())}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => void navigateForward()}
           disabled={!canNavigateForward}
           className="flex h-[var(--chrome-control-height)] w-7 items-center justify-center rounded-lg text-base text-[var(--text-icon-muted)] transition-colors enabled:hover:bg-[var(--surface-subtle)] enabled:hover:text-[var(--text-secondary)] disabled:opacity-30"
           title="Forward"

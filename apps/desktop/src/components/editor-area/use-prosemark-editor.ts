@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect } from "react";
-import { EditorView, ViewPlugin, keymap } from "@codemirror/view";
+import { EditorView, ViewPlugin, drawSelection, keymap } from "@codemirror/view";
 import {
   Compartment,
   EditorSelection,
@@ -396,6 +396,7 @@ function createEditorExtensions(
     linkNavigationExtension(getFilePath, isDisposed),
     editorBodyContextMenuExtension(getFilePath, isDisposed),
     setupCompartment.of(prosemarkBasicSetup()),
+    drawSelection(),
     prosemarkBaseThemeSetup(),
     search({ literal: true, createPanel: invisibleSearchPanel }),
     Prec.highest(
