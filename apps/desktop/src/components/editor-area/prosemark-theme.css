@@ -27,6 +27,14 @@
   --pm-syntax-invalid: oklch(75.93% 0.182 28.91);
 }
 
+/* @codemirror/view's base theme sets `.cm-cursor { border-left: 1.2px solid black }`,
+   which can win over prosemark's `border-left-color: var(--pm-cursor-color)` on
+   source order. Bump specificity here so the cursor stays readable in dark mode. */
+.cm-editor .cm-cursorLayer .cm-cursor,
+.cm-editor .cm-cursorLayer .cm-dropCursor {
+  border-left-color: var(--text-primary);
+}
+
 /* Editor layout — let parent handle scrolling */
 .cm-editor {
   height: auto;
@@ -100,18 +108,6 @@
 }
 
 /* Task checkboxes — replace native checkbox with hugeicon-style rounded square */
-@keyframes checkbox-pop {
-  0% {
-    transform: scale(0.85);
-  }
-  50% {
-    transform: scale(1.1);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
 .cm-editor .cm-checkbox {
   appearance: none;
   -webkit-appearance: none;
@@ -134,7 +130,6 @@
   background-size: 20px 20px;
   background-position: center;
   background-repeat: no-repeat;
-  animation: checkbox-pop 0.2s ease-out;
 }
 
 /* Wiki-link autocomplete tooltip uses the UI font, not the editor font */

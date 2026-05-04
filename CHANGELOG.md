@@ -3,6 +3,9 @@
 ## 2026-05-03
 
 - Fix the caret rendering offset after using back/forward navigation between files by avoiding transition-scheduled history swaps and using CodeMirror's measured cursor drawing.
+- Fix the editor caret rendering as a black bar in dark mode by overriding `@codemirror/view`'s default `border-left: solid black` on `.cm-cursor` with the theme's `--text-primary` token at higher specificity.
+- Remove the scale "pop" animation that played when toggling a task checkbox.
+- Fix the task checkbox checkmark not appearing in production builds by allowing `data:` URIs in the Tauri `img-src` CSP directive (the inline SVG check icon was being blocked).
 
 ## 2026-05-02
 
