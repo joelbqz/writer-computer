@@ -250,14 +250,11 @@ const mermaidTheme = EditorView.baseTheme({
   ".cm-mermaid-canvas": {
     position: "relative",
     height: `${MERMAID_CANVAS_HEIGHT}px`,
-    border: "1px solid var(--bg-3, rgba(127, 127, 127, 0.3))",
-    borderRadius: "6px",
-    backgroundColor: "var(--bg, transparent)",
+    border: "1px solid var(--border-color)",
+    borderRadius: "8px",
+    backgroundColor: "transparent",
     overflow: "hidden",
     outline: "none",
-  },
-  ".cm-mermaid-canvas:focus-visible": {
-    boxShadow: "0 0 0 2px var(--accent, #0066cc)",
   },
   ".cm-mermaid-canvas-viewport": {
     position: "absolute",
@@ -289,54 +286,48 @@ const mermaidTheme = EditorView.baseTheme({
   ".cm-mermaid-canvas-stage svg .edgeLabel rect, .cm-mermaid-canvas-stage svg .labelBkg": {
     fill: "var(--bg) !important",
   },
-  ".cm-mermaid-canvas-controls": {
+  ".cm-mermaid-canvas-edit, .cm-mermaid-canvas-zoom-btn": {
+    border: "1px solid var(--border-color)",
+    borderRadius: "8px",
+    backgroundColor: "var(--surface-card)",
+    color: "var(--text-secondary)",
+    cursor: "pointer",
+    font: "inherit",
+    lineHeight: "1",
+    opacity: "0",
+    transition: "opacity 120ms ease-out, background-color 120ms ease-out, color 120ms ease-out",
+  },
+  ".cm-mermaid-canvas:hover .cm-mermaid-canvas-edit, .cm-mermaid-canvas:focus-within .cm-mermaid-canvas-edit, .cm-mermaid-canvas:hover .cm-mermaid-canvas-zoom-btn, .cm-mermaid-canvas:focus-within .cm-mermaid-canvas-zoom-btn":
+    {
+      opacity: "1",
+    },
+  ".cm-mermaid-canvas-edit:hover, .cm-mermaid-canvas-zoom-btn:hover": {
+    backgroundColor: "var(--surface-subtle)",
+    color: "var(--text-primary)",
+  },
+  ".cm-mermaid-canvas-edit": {
+    position: "absolute",
+    top: "8px",
+    right: "8px",
+    padding: "5px 10px",
+    fontSize: "12px",
+  },
+  ".cm-mermaid-canvas-zoom": {
     position: "absolute",
     bottom: "8px",
     right: "8px",
     display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+  },
+  ".cm-mermaid-canvas-zoom-btn": {
+    width: "28px",
+    height: "28px",
+    display: "flex",
     alignItems: "center",
-    gap: "2px",
-    padding: "3px 4px",
-    backgroundColor: "var(--bg-2, rgba(127, 127, 127, 0.12))",
-    border: "1px solid var(--bg-3, rgba(127, 127, 127, 0.2))",
-    borderRadius: "6px",
-    opacity: "0",
-    transition: "opacity 120ms ease-out",
-    pointerEvents: "auto",
-    fontSize: "12px",
-  },
-  ".cm-mermaid-canvas:hover .cm-mermaid-canvas-controls, .cm-mermaid-canvas:focus-within .cm-mermaid-canvas-controls":
-    {
-      opacity: "1",
-    },
-  ".cm-mermaid-canvas-controls button": {
-    border: "none",
-    background: "transparent",
-    color: "inherit",
-    cursor: "pointer",
-    padding: "3px 7px",
-    borderRadius: "4px",
-    font: "inherit",
-    lineHeight: "1",
-  },
-  ".cm-mermaid-canvas-controls button:hover": {
-    backgroundColor: "var(--bg-3, rgba(127, 127, 127, 0.25))",
-  },
-  ".cm-mermaid-canvas-controls button:focus-visible": {
-    outline: "2px solid var(--accent, #0066cc)",
-    outlineOffset: "1px",
-  },
-  ".cm-mermaid-canvas-zoom-label": {
-    minWidth: "3.5ch",
-    textAlign: "center",
-    opacity: "0.75",
-    fontVariantNumeric: "tabular-nums",
-  },
-  ".cm-mermaid-canvas-edit-toggle": {
-    marginLeft: "4px",
-    paddingLeft: "8px !important",
-    borderLeft: "1px solid var(--bg-3, rgba(127, 127, 127, 0.25)) !important",
-    borderRadius: "0 4px 4px 0 !important",
+    justifyContent: "center",
+    fontSize: "16px",
+    padding: "0",
   },
   ".cm-mermaid-error": {
     padding: "0.5em 1em",

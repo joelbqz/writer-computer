@@ -53,8 +53,21 @@ export function mountMermaidCanvas(host: HTMLElement, opts: MermaidCanvasOptions
   viewport.append(stage);
   host.append(viewport);
 
-  const controls = buildControls(opts.editMode);
-  host.append(controls.root);
+  const editButton = makeButton(
+    opts.editMode ? "Preview" : "Edit code",
+    opts.editMode ? "Return to preview" : "Edit code",
+  );
+  editButton.classList.add("cm-mermaid-canvas-edit");
+
+  const zoomCluster = document.createElement("div");
+  zoomCluster.className = "cm-mermaid-canvas-zoom";
+  const zoomInButton = makeButton("+", "Zoom in");
+  const zoomOutButton = makeButton("−", "Zoom out");
+  zoomInButton.classList.add("cm-mermaid-canvas-zoom-btn");
+  zoomOutButton.classList.add("cm-mermaid-canvas-zoom-btn");
+  zoomCluster.append(zoomInButton, zoomOutButton);
+
+  host.append(editButton, zoomCluster);
 
   const state: CanvasState = { zoom: 1, panX: 0, panY: 0 };
   // Natural (unzoomed) SVG dimensions in pixels. Mermaid always emits a
@@ -85,7 +98,6 @@ export function mountMermaidCanvas(host: HTMLElement, opts: MermaidCanvasOptions
       svg.style.height = `${naturalH * state.zoom}px`;
     }
     stage.style.transform = `translate(${state.panX}px, ${state.panY}px)`;
-    controls.zoomLabel.textContent = `${Math.round(state.zoom * 100)}%`;
   }
 
   function clampZoom(z: number): number {
@@ -130,10 +142,9 @@ export function mountMermaidCanvas(host: HTMLElement, opts: MermaidCanvasOptions
     zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, factor);
   }
 
-  controls.zoomOut.addEventListener("click", () => zoomAtCenter(1 / BUTTON_ZOOM_FACTOR));
-  controls.zoomIn.addEventListener("click", () => zoomAtCenter(BUTTON_ZOOM_FACTOR));
-  controls.reset.addEventListener("click", () => fitToViewport());
-  controls.edit.addEventListener("click", () => opts.onToggleEdit());
+  zoomInButton.addEventListener("click", () => zoomAtCenter(BUTTON_ZOOM_FACTOR));
+  zoomOutButton.addEventListener("click", () => zoomAtCenter(1 / BUTTON_ZOOM_FACTOR));
+  editButton.addEventListener("click", () => opts.onToggleEdit());
 
   // Drag-to-pan via pointer events. Capture the pointer so a drag that leaves
   // the viewport still receives moves; release on pointerup/cancel.
@@ -145,7 +156,6 @@ export function mountMermaidCanvas(host: HTMLElement, opts: MermaidCanvasOptions
 
   viewport.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
-    if ((e.target as HTMLElement).closest(".cm-mermaid-canvas-controls")) return;
     dragPointerId = e.pointerId;
     dragStartX = e.clientX;
     dragStartY = e.clientY;
@@ -235,35 +245,6 @@ export function mountMermaidCanvas(host: HTMLElement, opts: MermaidCanvasOptions
   // First paint: fit the diagram once the layout has settled. Wait one frame
   // so the wrapper has its final width inside CodeMirror's content layout.
   requestAnimationFrame(() => fitToViewport());
-}
-
-type Controls = {
-  root: HTMLDivElement;
-  zoomOut: HTMLButtonElement;
-  zoomIn: HTMLButtonElement;
-  reset: HTMLButtonElement;
-  edit: HTMLButtonElement;
-  zoomLabel: HTMLSpanElement;
-};
-
-function buildControls(editMode: boolean): Controls {
-  const root = document.createElement("div");
-  root.className = "cm-mermaid-canvas-controls";
-
-  const zoomOut = makeButton("−", "Zoom out");
-  const zoomLabel = document.createElement("span");
-  zoomLabel.className = "cm-mermaid-canvas-zoom-label";
-  zoomLabel.textContent = "100%";
-  const zoomIn = makeButton("+", "Zoom in");
-  const reset = makeButton("Fit", "Reset to fit");
-  const edit = makeButton(
-    editMode ? "Preview" : "Edit code",
-    editMode ? "Return to preview" : "Edit code",
-  );
-  edit.classList.add("cm-mermaid-canvas-edit-toggle");
-
-  root.append(zoomOut, zoomLabel, zoomIn, reset, edit);
-  return { root, zoomOut, zoomIn, reset, edit, zoomLabel };
 }
 
 function makeButton(label: string, title: string): HTMLButtonElement {
