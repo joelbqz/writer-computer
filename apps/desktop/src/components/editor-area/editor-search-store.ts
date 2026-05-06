@@ -10,7 +10,6 @@ import {
 } from "@codemirror/search";
 import { EditorSelection } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { EDITOR_SAFE_SCROLL_MARGIN } from "./editor-scroll-container";
 
 interface EditorSearchState {
   isOpen: boolean;
@@ -74,16 +73,6 @@ export function applyEditorSearchQuery(view: EditorView, query: string, replaceT
   useEditorSearchStore.getState().setQuery(query);
 }
 
-// Scroll the active search match clear of the editor's top/bottom fade mask
-// and progressive-blur overlay. Used as the `scrollToMatch` callback for the
-// CodeMirror `search()` extension so findNext/findPrevious land safely.
-export function safeScrollToMatch(range: { from: number; to: number }, _view: EditorView) {
-  return EditorView.scrollIntoView(EditorSelection.range(range.from, range.to), {
-    y: "nearest",
-    yMargin: EDITOR_SAFE_SCROLL_MARGIN,
-  });
-}
-
 export function findNextMatch(view: EditorView) {
   return findNext(view);
 }
@@ -128,7 +117,9 @@ export function collectMatches(view: EditorView, query: string): MatchOffsets | 
 export function jumpToMatch(view: EditorView, range: { from: number; to: number }) {
   view.dispatch({
     selection: EditorSelection.single(range.from, range.to),
-    effects: safeScrollToMatch(range, view),
+    effects: EditorView.scrollIntoView(EditorSelection.range(range.from, range.to), {
+      y: "nearest",
+    }),
     userEvent: "select.search",
   });
 }

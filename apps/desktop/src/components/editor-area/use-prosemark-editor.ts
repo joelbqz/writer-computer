@@ -17,9 +17,9 @@ import {
   findNextMatch,
   findPreviousMatch,
   openEditorSearch,
-  safeScrollToMatch,
   useEditorSearchStore,
 } from "./editor-search-store";
+import { EDITOR_SAFE_SCROLL_MARGIN } from "./editor-scroll-container";
 
 // Invisible CodeMirror search panel: returning a hidden DOM here flips
 // `searchState.panel` to truthy, which is what gates the built-in match
@@ -76,6 +76,16 @@ function findScrollContainer(root: HTMLElement) {
     const { overflowY } = getComputedStyle(node);
     if (overflowY === "auto" || overflowY === "scroll") return node;
     node = node.parentElement;
+  }
+  return null;
+}
+
+function findOuterScroller(view: EditorView): HTMLElement | null {
+  let el: HTMLElement | null = view.dom.parentElement;
+  while (el) {
+    const { overflowY } = getComputedStyle(el);
+    if (overflowY === "auto" || overflowY === "scroll") return el;
+    el = el.parentElement;
   }
   return null;
 }
@@ -405,7 +415,33 @@ function createEditorExtensions(
     setupCompartment.of(prosemarkBasicSetup()),
     drawSelection(),
     prosemarkBaseThemeSetup(),
-    search({ literal: true, createPanel: invisibleSearchPanel, scrollToMatch: safeScrollToMatch }),
+    search({ literal: true, createPanel: invisibleSearchPanel }),
+    // Take over scrollIntoView entirely so search/replace navigation lands
+    // matches in the clear zone of the *outer* scroll container — the
+    // EditorScrollContainer wraps the editor with an overflow-y-auto div
+    // covered by a fade mask + 120px progressive blur, but CodeMirror's
+    // built-in scrollIntoView walks ancestors generically and the geometry
+    // doesn't always land the match where we want it. We position the
+    // match at the top of the safe zone so users keep their reading
+    // context (vs. centering, which jumps).
+    EditorView.scrollHandler.of((view, range) => {
+      const scroller = findOuterScroller(view);
+      if (!scroller) return false;
+      // Use lineBlockAt + documentTop (CodeMirror's layout model) rather
+      // than coordsAtPos (rendered DOM): coordsAtPos returns null when the
+      // match is outside the currently-rendered viewport, which silently
+      // fell back to the default scroll and ignored our fade margin.
+      const block = view.lineBlockAt(range.head);
+      const matchScreenY = view.documentTop + block.top;
+      const scrollerRect = scroller.getBoundingClientRect();
+      const desiredScreenY = scrollerRect.top + scroller.clientTop + EDITOR_SAFE_SCROLL_MARGIN;
+      const delta = matchScreenY - desiredScreenY;
+      const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+      const next = Math.max(0, Math.min(scroller.scrollTop + delta, max));
+      if (Math.abs(scroller.scrollTop - next) < 1) return true;
+      scroller.scrollTo({ top: next, behavior: "auto" });
+      return true;
+    }),
     Prec.highest(
       keymap.of([
         {
