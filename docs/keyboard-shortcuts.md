@@ -63,6 +63,7 @@ Standard editing shortcuts provided by CodeMirror's basic setup.
 | Cmd+[                | Indent less                    |
 | Cmd+F                | Find                           |
 | Cmd+H                | Find and replace               |
-| Cmd+G                | Go to line                     |
+| Cmd+G                | Find next                      |
+| Cmd+Shift+G          | Find previous                  |
 | Alt+Shift+ArrowLeft  | Extend selection by word left  |
 | Alt+Shift+ArrowRight | Extend selection by word right |

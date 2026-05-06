@@ -1,6 +1,7 @@
 import { ProseMarkEditor } from "./prosemark-editor";
 import { FrontmatterPanel } from "./frontmatter-panel";
 import { EditorScrollContainer } from "./editor-scroll-container";
+import { EditorSearchOverview } from "./editor-search-overview";
 import { useCloseEditorSearchWhenInactive } from "./use-close-editor-search-when-inactive";
 import { useEditorSettingsRef } from "./use-editor-settings";
 import { useIsFileLoading } from "@/hooks/use-tabs";
@@ -71,6 +72,7 @@ export const EditorPane = memo(function EditorPane({ path, isActive }: EditorPan
           />
         </div>
       </EditorScrollContainer>
+      {isActive && <EditorSearchOverview scrollContainerRef={scrollContainerRef} />}
     </div>
   );
 });

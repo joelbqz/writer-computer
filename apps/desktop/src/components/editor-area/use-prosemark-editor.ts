@@ -12,7 +12,14 @@ import {
 import { markdown } from "@codemirror/lang-markdown";
 import { HighlightStyle, forceParsing, syntaxHighlighting, syntaxTree } from "@codemirror/language";
 import { search } from "@codemirror/search";
-import { closeEditorSearch, openEditorSearch, useEditorSearchStore } from "./editor-search-store";
+import {
+  closeEditorSearch,
+  findNextMatch,
+  findPreviousMatch,
+  openEditorSearch,
+  safeScrollToMatch,
+  useEditorSearchStore,
+} from "./editor-search-store";
 
 // Invisible CodeMirror search panel: returning a hidden DOM here flips
 // `searchState.panel` to truthy, which is what gates the built-in match
@@ -398,7 +405,7 @@ function createEditorExtensions(
     setupCompartment.of(prosemarkBasicSetup()),
     drawSelection(),
     prosemarkBaseThemeSetup(),
-    search({ literal: true, createPanel: invisibleSearchPanel }),
+    search({ literal: true, createPanel: invisibleSearchPanel, scrollToMatch: safeScrollToMatch }),
     Prec.highest(
       keymap.of([
         {
@@ -406,6 +413,24 @@ function createEditorExtensions(
           run: (view) => {
             openEditorSearch(view);
             return true;
+          },
+        },
+        {
+          key: "Mod-g",
+          preventDefault: true,
+          run: (view) => {
+            if (!useEditorSearchStore.getState().isOpen) {
+              openEditorSearch(view);
+              return true;
+            }
+            return findNextMatch(view);
+          },
+          shift: (view) => {
+            if (!useEditorSearchStore.getState().isOpen) {
+              openEditorSearch(view);
+              return true;
+            }
+            return findPreviousMatch(view);
           },
         },
       ]),

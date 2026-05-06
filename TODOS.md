@@ -42,6 +42,7 @@ Previously-triaged work organized by phase. Pull into `Up Next` as capacity open
 
 See `CHANGELOG.md` and `git log` for shipped work. Notable items:
 
+- Cmd+F polish: safe scroll-into-view, Cmd+G / Cmd+Shift+G next/previous, scrollbar match overview ([`SPECs/cmd-f-spec.md`](SPECs/cmd-f-spec.md))
 - Caret position after history navigation
 - Obsidian-style wikilink parsing — aliases, escaped table pipes, note fragments, same-file fragment links
 - Sidebar toggle tab chrome shift
