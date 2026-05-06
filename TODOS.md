@@ -6,7 +6,7 @@
 
 ## Up Next
 
-- Install CLI menu placement: [`SPECs/install-cli-menu-placement-spec.md`](SPECs/install-cli-menu-placement-spec.md) — move the `Install 'writer' Command in PATH` action out of the macOS Writer app menu and into Preferences under a new `Shell` section.
+- Install CLI menu placement: [`SPECs/install-cli-menu-placement-spec.md`](SPECs/install-cli-menu-placement-spec.md) — keep the CLI install action in the macOS Writer app menu, add a conventional `Preferences…` entry (`⌘,`) alongside it, and tighten the CLI item's label.
 
 ## Blockers At A Glance
 
