@@ -243,6 +243,21 @@ const mermaidTheme = EditorView.baseTheme({
     display: "block",
     maxWidth: "none",
   },
+  // xychart series palette: keep all series close to the accent in hue and
+  // lightness instead of the default rainbow shifts. beautiful-mermaid scopes
+  // its own `--xychart-color-N` defaults to `svg { … }` (specificity 0,0,0,1);
+  // this rule is 0,0,2,1 so it wins, and the derived `--xychart-bar-fill-N`
+  // expressions (which read `--xychart-color-N` via color-mix) follow along
+  // for free.
+  ".cm-mermaid-canvas-stage svg[data-xychart-colors]": {
+    "--xychart-color-1": "color-mix(in srgb, var(--accent) 45%, var(--fg-base) 55%)",
+    "--xychart-color-2": "color-mix(in srgb, var(--accent) 20%, var(--fg-base) 80%)",
+    "--xychart-color-3": "color-mix(in srgb, var(--accent) 8%, var(--fg-base) 92%)",
+    "--xychart-color-4": "color-mix(in srgb, var(--accent) 4%, var(--fg-base) 96%)",
+    "--xychart-color-5": "color-mix(in srgb, var(--accent) 2%, var(--fg-base) 98%)",
+    "--xychart-color-6": "var(--fg-base)",
+    "--xychart-color-7": "var(--fg-base)",
+  },
   ".cm-mermaid-canvas-edit, .cm-mermaid-canvas-zoom-btn": {
     border: "1px solid var(--border-color)",
     borderRadius: "8px",

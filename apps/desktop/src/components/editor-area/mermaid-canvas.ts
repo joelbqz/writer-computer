@@ -2,7 +2,7 @@
 // fit-to-viewport reset, and an edit-code toggle. The frame is mounted by the
 // CodeMirror MermaidWidget once the SVG has been rendered.
 
-export const MERMAID_CANVAS_HEIGHT = 360;
+export const MERMAID_CANVAS_HEIGHT = 480;
 
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 4;
