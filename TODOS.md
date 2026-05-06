@@ -6,6 +6,8 @@
 
 ## Up Next
 
+- Install CLI menu placement: [`SPECs/install-cli-menu-placement-spec.md`](SPECs/install-cli-menu-placement-spec.md) — move the `Install 'writer' Command in PATH` action out of the macOS Writer app menu and into Preferences under a new `Shell` section.
+
 ## Blockers At A Glance
 
 - `workspace-snapshot` → `workspace-switch-hang` (shipped; blocker cleared — snapshot depends on the primitives that landed)
