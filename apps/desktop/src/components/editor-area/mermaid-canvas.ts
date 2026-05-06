@@ -39,13 +39,11 @@ export function mountMermaidCanvas(host: HTMLElement, opts: MermaidCanvasOptions
 
   const svg = stage.querySelector("svg") as SVGSVGElement | null;
   if (svg) {
-    // Strip mermaid's inline `style` (it ships with `max-width: 100%`) but
-    // keep the `width` / `height` attributes so the SVG has a sensible
-    // intrinsic size before our first applyTransform runs. We override sizing
-    // via inline style on each zoom step so the browser re-renders the
-    // vector at the new pixel size — CSS `transform: scale` would rasterize
-    // the SVG into a layer and the zoomed-in result would look pixelated.
-    svg.removeAttribute("style");
+    // Keep the SVG's existing `style` attribute — beautiful-mermaid uses it
+    // to declare the CSS custom properties (--bg, --fg, --_line, …) that the
+    // inner <style> block references for every fill/stroke. Stripping it
+    // collapses all the theming. Width/height for zoom are set via individual
+    // style properties below, which merge with whatever's already there.
     svg.setAttribute("role", "img");
     svg.setAttribute("aria-label", opts.ariaLabel);
   }

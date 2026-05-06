@@ -1,156 +1,12 @@
-import type { Mermaid } from "mermaid";
+import { renderMermaidSVG } from "beautiful-mermaid";
 
-// Lazy-loaded mermaid instance
-let mermaidPromise: Promise<Mermaid> | null = null;
-
-function getMermaid(): Promise<Mermaid> {
-  if (!mermaidPromise) {
-    mermaidPromise = import("mermaid").then((m) => m.default);
-  }
-  return mermaidPromise;
-}
-
-// SVG cache keyed by hash(source + theme).
+// SVG cache keyed by source. beautiful-mermaid emits a single SVG string per
+// source and we hand it the app's CSS variables — colour resolution happens at
+// CSS time, so the same SVG works for both light and dark themes.
 const svgCache = new Map<string, string>();
 
-function hashKey(source: string, theme: string): string {
-  // Simple string hash for cache key
-  const data = source + "|" + theme;
-  let hash = 0;
-  for (let i = 0; i < data.length; i++) {
-    hash = ((hash << 5) - hash + data.charCodeAt(i)) | 0;
-  }
-  return hash.toString(36);
-}
-
+// Kept for callers that still pass a theme argument; unused at render time.
 export type MermaidTheme = "light" | "dark";
-
-// Monochrome palettes. We drive Mermaid via the `base` theme so every color
-// slot is under our control — the default palette is otherwise vivid.
-const monochromeVariables: Record<MermaidTheme, Record<string, string>> = {
-  light: {
-    background: "transparent",
-    primaryColor: "transparent",
-    primaryTextColor: "#1a1a1a",
-    primaryBorderColor: "#1a1a1a",
-    secondaryColor: "transparent",
-    secondaryTextColor: "#1a1a1a",
-    secondaryBorderColor: "#1a1a1a",
-    tertiaryColor: "transparent",
-    tertiaryTextColor: "#1a1a1a",
-    tertiaryBorderColor: "#1a1a1a",
-    lineColor: "#1a1a1a",
-    textColor: "#1a1a1a",
-    mainBkg: "transparent",
-    secondBkg: "transparent",
-    noteBkgColor: "transparent",
-    noteTextColor: "#1a1a1a",
-    noteBorderColor: "#1a1a1a",
-    edgeLabelBackground: "#ffffff",
-    labelBackground: "#ffffff",
-    labelTextColor: "#1a1a1a",
-    labelBoxBkgColor: "transparent",
-    labelBoxBorderColor: "#1a1a1a",
-    clusterBkg: "transparent",
-    clusterBorder: "#1a1a1a",
-    altBackground: "transparent",
-    activationBkgColor: "transparent",
-    activationBorderColor: "#1a1a1a",
-    titleColor: "#1a1a1a",
-    // gitGraph: shades of gray so branches remain distinguishable without color.
-    git0: "#2a2a2a",
-    git1: "#555555",
-    git2: "#777777",
-    git3: "#999999",
-    git4: "#444444",
-    git5: "#666666",
-    git6: "#888888",
-    git7: "#aaaaaa",
-    gitInv0: "#ffffff",
-    gitInv1: "#ffffff",
-    gitInv2: "#ffffff",
-    gitInv3: "#ffffff",
-    gitInv4: "#ffffff",
-    gitInv5: "#ffffff",
-    gitInv6: "#ffffff",
-    gitInv7: "#ffffff",
-    gitBranchLabel0: "#ffffff",
-    gitBranchLabel1: "#ffffff",
-    gitBranchLabel2: "#ffffff",
-    gitBranchLabel3: "#1a1a1a",
-    gitBranchLabel4: "#ffffff",
-    gitBranchLabel5: "#ffffff",
-    gitBranchLabel6: "#ffffff",
-    gitBranchLabel7: "#1a1a1a",
-    commitLabelColor: "#1a1a1a",
-    commitLabelBackground: "#ffffff",
-    commitLabelBorder: "#1a1a1a",
-    tagLabelColor: "#1a1a1a",
-    tagLabelBackground: "#e0e0e0",
-    tagLabelBorder: "#1a1a1a",
-  },
-  dark: {
-    background: "transparent",
-    primaryColor: "transparent",
-    primaryTextColor: "#f0f0f0",
-    primaryBorderColor: "#f0f0f0",
-    secondaryColor: "transparent",
-    secondaryTextColor: "#f0f0f0",
-    secondaryBorderColor: "#f0f0f0",
-    tertiaryColor: "transparent",
-    tertiaryTextColor: "#f0f0f0",
-    tertiaryBorderColor: "#f0f0f0",
-    lineColor: "#f0f0f0",
-    textColor: "#f0f0f0",
-    mainBkg: "transparent",
-    secondBkg: "transparent",
-    noteBkgColor: "transparent",
-    noteTextColor: "#f0f0f0",
-    noteBorderColor: "#f0f0f0",
-    edgeLabelBackground: "#111111",
-    labelBackground: "#111111",
-    labelTextColor: "#f0f0f0",
-    labelBoxBkgColor: "transparent",
-    labelBoxBorderColor: "#f0f0f0",
-    clusterBkg: "transparent",
-    clusterBorder: "#f0f0f0",
-    altBackground: "transparent",
-    activationBkgColor: "transparent",
-    activationBorderColor: "#f0f0f0",
-    titleColor: "#f0f0f0",
-    // gitGraph: shades of gray so branches remain distinguishable without color.
-    git0: "#e0e0e0",
-    git1: "#b0b0b0",
-    git2: "#909090",
-    git3: "#707070",
-    git4: "#c8c8c8",
-    git5: "#a0a0a0",
-    git6: "#808080",
-    git7: "#606060",
-    gitInv0: "#111111",
-    gitInv1: "#111111",
-    gitInv2: "#111111",
-    gitInv3: "#111111",
-    gitInv4: "#111111",
-    gitInv5: "#111111",
-    gitInv6: "#111111",
-    gitInv7: "#111111",
-    gitBranchLabel0: "#111111",
-    gitBranchLabel1: "#111111",
-    gitBranchLabel2: "#111111",
-    gitBranchLabel3: "#f0f0f0",
-    gitBranchLabel4: "#111111",
-    gitBranchLabel5: "#111111",
-    gitBranchLabel6: "#f0f0f0",
-    gitBranchLabel7: "#f0f0f0",
-    commitLabelColor: "#f0f0f0",
-    commitLabelBackground: "#111111",
-    commitLabelBorder: "#f0f0f0",
-    tagLabelColor: "#f0f0f0",
-    tagLabelBackground: "#333333",
-    tagLabelBorder: "#f0f0f0",
-  },
-};
 
 export interface RenderResult {
   svg: string;
@@ -162,37 +18,30 @@ export interface RenderError {
   error: string;
 }
 
+// Map app design tokens onto beautiful-mermaid's colour roles. The library
+// derives everything else (text-secondary, line, surface tints, edge labels,
+// …) from `bg` + `fg` via `color-mix()` inside its own <style> block, so
+// passing those two is enough to make diagrams adapt with the app theme.
+// `transparent: true` skips the explicit `background:var(--bg)` style on the
+// SVG root — the canvas frame already shows through to the editor.
+const RENDER_OPTIONS = {
+  bg: "var(--bg-base)",
+  fg: "var(--fg-base)",
+  transparent: true,
+} as const;
+
 export async function renderMermaid(
   source: string,
-  theme: MermaidTheme,
-  id: string,
+  _theme: MermaidTheme,
+  _id: string,
 ): Promise<RenderResult | RenderError> {
-  const key = hashKey(source, theme);
-  const cached = svgCache.get(key);
+  const cached = svgCache.get(source);
   if (cached) return { svg: cached };
 
   try {
-    const mermaid = await getMermaid();
-
-    const config = {
-      startOnLoad: false,
-      securityLevel: "strict" as const,
-      theme: "base" as const,
-      themeVariables: monochromeVariables[theme],
-      fontFamily: "inherit",
-    };
-    mermaid.initialize(config);
-
-    const { svg } = await mermaid.render(id, source.trim());
-
-    // Sanitize: strip any script tags and event handlers (defense in depth)
-    const sanitized = svg
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-      .replace(/\bon\w+\s*=\s*"[^"]*"/gi, "")
-      .replace(/\bon\w+\s*=\s*'[^']*'/gi, "");
-
-    svgCache.set(key, sanitized);
-    return { svg: sanitized };
+    const svg = renderMermaidSVG(source, RENDER_OPTIONS);
+    svgCache.set(source, svg);
+    return { svg };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { error: message };

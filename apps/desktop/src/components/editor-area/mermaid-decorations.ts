@@ -1,7 +1,7 @@
 import { Decoration, EditorView, ViewPlugin, ViewUpdate, WidgetType } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
 import { foldableSyntaxFacet } from "@prosemark/core";
-import { renderMermaid, type MermaidTheme } from "./mermaid-renderer";
+import { renderMermaid } from "./mermaid-renderer";
 import { MERMAID_CANVAS_HEIGHT, mountMermaidCanvas } from "./mermaid-canvas";
 
 let widgetCounter = 0;
@@ -11,10 +11,6 @@ let widgetCounter = 0;
 // box.
 const WIDGET_VERTICAL_PADDING = 16;
 
-function currentMermaidTheme(): MermaidTheme {
-  return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
-}
-
 const OBSERVER_KEY = Symbol("mermaidObserver");
 type WrapperWithObserver = HTMLElement & { [OBSERVER_KEY]?: IntersectionObserver };
 
@@ -22,7 +18,6 @@ class MermaidWidget extends WidgetType {
   constructor(
     readonly source: string,
     readonly id: string,
-    readonly theme: MermaidTheme,
     readonly editMode: boolean,
     readonly fenceFrom: number,
     readonly fenceTo: number,
@@ -33,9 +28,7 @@ class MermaidWidget extends WidgetType {
   }
 
   eq(other: MermaidWidget): boolean {
-    return (
-      this.source === other.source && this.theme === other.theme && this.editMode === other.editMode
-    );
+    return this.source === other.source && this.editMode === other.editMode;
   }
 
   // The canvas frame has a fixed height regardless of diagram size, so the
@@ -73,7 +66,7 @@ class MermaidWidget extends WidgetType {
       for (const entry of entries) {
         if (!entry.isIntersecting) continue;
         observer.disconnect();
-        void renderMermaid(this.source, this.theme, this.id).then((result) => {
+        void renderMermaid(this.source, "light", this.id).then((result) => {
           if (result.svg) {
             mountMermaidCanvas(host, {
               svgHtml: result.svg,
@@ -193,11 +186,9 @@ const mermaidFoldExtension = foldableSyntaxFacet.of({
     if (!source) return undefined;
 
     const id = `mermaid-${++widgetCounter}`;
-    const theme = currentMermaidTheme();
     const widget = new MermaidWidget(
       source,
       id,
-      theme,
       selectionTouchesRange,
       node.from,
       node.to,
@@ -217,31 +208,6 @@ const mermaidFoldExtension = foldableSyntaxFacet.of({
     );
   },
 });
-
-/**
- * Watch the document's `data-theme` attribute. When the app theme changes,
- * nudge the editor to rebuild decorations so diagrams re-render under the
- * new theme.
- */
-const themeSync = ViewPlugin.fromClass(
-  class {
-    private readonly observer: MutationObserver;
-
-    constructor(view: EditorView) {
-      this.observer = new MutationObserver(() => {
-        view.dispatch({ selection: view.state.selection });
-      });
-      this.observer.observe(document.documentElement, {
-        attributes: true,
-        attributeFilter: ["data-theme"],
-      });
-    }
-
-    destroy() {
-      this.observer.disconnect();
-    }
-  },
-);
 
 const mermaidTheme = EditorView.baseTheme({
   ".cm-mermaid-widget": {
@@ -276,15 +242,6 @@ const mermaidTheme = EditorView.baseTheme({
   ".cm-mermaid-canvas-stage svg": {
     display: "block",
     maxWidth: "none",
-  },
-  // Edge labels render with an opaque background that defaults to white;
-  // align them with the editor background so diagrams blend with both themes.
-  ".cm-mermaid-canvas-stage svg .edgeLabel, .cm-mermaid-canvas-stage svg .edgeLabel foreignObject div, .cm-mermaid-canvas-stage svg .edgeLabel span":
-    {
-      backgroundColor: "var(--bg) !important",
-    },
-  ".cm-mermaid-canvas-stage svg .edgeLabel rect, .cm-mermaid-canvas-stage svg .labelBkg": {
-    fill: "var(--bg) !important",
   },
   ".cm-mermaid-canvas-edit, .cm-mermaid-canvas-zoom-btn": {
     border: "1px solid var(--border-color)",
@@ -358,5 +315,5 @@ const foldTreeSync = ViewPlugin.fromClass(
 );
 
 export function mermaidDecorations() {
-  return [mermaidFoldExtension, mermaidTheme, foldTreeSync, themeSync];
+  return [mermaidFoldExtension, mermaidTheme, foldTreeSync];
 }
