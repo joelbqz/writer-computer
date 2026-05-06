@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-05-06
+
+- Harden Mermaid SVG sanitization by running rendered diagrams through DOMPurify's `svg`/`svgFilters` profiles in the browser, on top of mermaid's existing `securityLevel: "strict"`. The previous regex sweep is kept as a fallback for the no-DOM unit-test path.
+
 ## 2026-05-04
 
 - Update the app icon.

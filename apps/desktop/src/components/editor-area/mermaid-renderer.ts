@@ -1,3 +1,4 @@
+import DOMPurify from "dompurify";
 import type { Mermaid } from "mermaid";
 
 // Lazy-loaded mermaid instance
@@ -198,11 +199,21 @@ export async function renderMermaid(
 
     const { svg } = await mermaid.render(id, source.trim());
 
-    // Sanitize: strip any script tags and event handlers (defense in depth)
-    const sanitized = svg
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-      .replace(/\bon\w+\s*=\s*"[^"]*"/gi, "")
-      .replace(/\bon\w+\s*=\s*'[^']*'/gi, "");
+    // Defense in depth on top of mermaid's `securityLevel: "strict"`. In the
+    // browser, DOMPurify's SVG profile keeps the full diagram element set
+    // while stripping <script>, event handlers, and javascript: URLs — robust
+    // against attribute-quoting vectors a regex sweep would miss. In node
+    // (vitest), DOMPurify needs a DOM it doesn't have, so fall back to the
+    // regex sweep so the unit tests can still verify gross XSS is stripped.
+    const sanitized =
+      typeof document === "undefined"
+        ? svg
+            .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+            .replace(/\bon\w+\s*=\s*"[^"]*"/gi, "")
+            .replace(/\bon\w+\s*=\s*'[^']*'/gi, "")
+        : DOMPurify.sanitize(svg, {
+            USE_PROFILES: { svg: true, svgFilters: true },
+          });
 
     svgCache.set(key, sanitized);
     return { svg: sanitized };
