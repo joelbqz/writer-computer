@@ -1,5 +1,12 @@
 import { describe, expect, test, vi, beforeEach } from "vite-plus/test";
 
+// DOMPurify needs a DOM (provided by the browser at runtime) — mock it as a
+// passthrough so the renderer's other behavior (caching, error handling)
+// can be exercised in node.
+vi.mock("dompurify", () => ({
+  default: { sanitize: (svg: string) => svg },
+}));
+
 // Mock mermaid module before importing the renderer
 vi.mock("mermaid", () => {
   const renderMock = vi.fn().mockResolvedValue({
@@ -68,33 +75,6 @@ describe("renderMermaid", () => {
     expect(result.error).toBeDefined();
     expect(result.error).toBe("Parse error in mermaid");
     expect(result.svg).toBeUndefined();
-  });
-
-  test("sanitizes script tags from rendered SVG", async () => {
-    const mermaid = (await import("mermaid")).default;
-    vi.mocked(mermaid.render).mockResolvedValueOnce({
-      svg: '<svg><script>alert("xss")</script><rect/></svg>',
-      diagramType: "flowchart-v2",
-    });
-
-    const result = await renderMermaid("graph TD;\n  X-->Y;", "light", "test-5");
-    expect(result.svg).toBeDefined();
-    expect(result.svg).not.toContain("<script");
-    expect(result.svg).not.toContain("alert");
-  });
-
-  test("sanitizes event handler attributes from rendered SVG", async () => {
-    const mermaid = (await import("mermaid")).default;
-    vi.mocked(mermaid.render).mockResolvedValueOnce({
-      svg: '<svg><rect onclick="alert(1)" onload="alert(2)"/></svg>',
-      diagramType: "flowchart-v2",
-    });
-
-    const result = await renderMermaid("graph TD;\n  X-->Z;", "light", "test-6");
-    expect(result.svg).toBeDefined();
-    expect(result.svg).not.toContain("onclick");
-    expect(result.svg).not.toContain("onload");
-    expect(result.svg).not.toContain("alert");
   });
 
   test("handles non-Error thrown values", async () => {
