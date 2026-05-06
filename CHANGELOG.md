@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-05-06
+
+- Add a `Preferences…` entry (`Cmd+,`) to the Writer application menu, opening the existing Settings tab in the focused window via a `menu:open-preferences` Tauri event. Rename the macOS-only CLI install item from `Shell Command: Install 'writer' Command in PATH` to `Install 'writer' Command Line Tool…` (and the uninstall counterpart) and group it next to Preferences. See `SPECs/install-cli-menu-placement-spec.md`.
+
 ## 2026-05-04
 
 - Update the app icon.

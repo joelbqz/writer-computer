@@ -6,8 +6,6 @@
 
 ## Up Next
 
-- Install CLI menu placement: [`SPECs/install-cli-menu-placement-spec.md`](SPECs/install-cli-menu-placement-spec.md) — keep the CLI install action in the macOS Writer app menu, add a conventional `Preferences…` entry (`⌘,`) alongside it, and tighten the CLI item's label.
-
 ## Blockers At A Glance
 
 - `workspace-snapshot` → `workspace-switch-hang` (shipped; blocker cleared — snapshot depends on the primitives that landed)
