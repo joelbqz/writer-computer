@@ -12,10 +12,6 @@ function getMermaid(): Promise<Mermaid> {
 
 // SVG cache keyed by hash(source + theme).
 const svgCache = new Map<string, string>();
-// Rendered height cache keyed the same way, used to reserve space in the
-// CodeMirror heightmap so widgets don't start tall → collapse → render tall
-// again when they scroll in and out of the viewport.
-const heightCache = new Map<string, number>();
 
 function hashKey(source: string, theme: string): string {
   // Simple string hash for cache key
@@ -25,15 +21,6 @@ function hashKey(source: string, theme: string): string {
     hash = ((hash << 5) - hash + data.charCodeAt(i)) | 0;
   }
   return hash.toString(36);
-}
-
-export function getCachedHeight(source: string, theme: MermaidTheme): number | undefined {
-  return heightCache.get(hashKey(source, theme));
-}
-
-export function cacheHeight(source: string, theme: MermaidTheme, height: number): void {
-  if (height <= 0) return;
-  heightCache.set(hashKey(source, theme), height);
 }
 
 export type MermaidTheme = "light" | "dark";
@@ -214,5 +201,4 @@ export async function renderMermaid(
 
 export function clearMermaidCache() {
   svgCache.clear();
-  heightCache.clear();
 }

@@ -2,7 +2,7 @@
 
 ## In Progress
 
--
+- Mermaid canvas widget: [`SPECs/mermaid-canvas-widget-spec.md`](SPECs/mermaid-canvas-widget-spec.md) — render mermaid blocks in a fixed-height canvas-style frame with pan, zoom, and an edit-code toggle.
 
 ## Up Next
 

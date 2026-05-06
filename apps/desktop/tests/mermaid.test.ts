@@ -106,3 +106,53 @@ describe("renderMermaid", () => {
     expect(result.svg).toBeUndefined();
   });
 });
+
+const { MERMAID_CANVAS_HEIGHT } = await import("../src/components/editor-area/mermaid-canvas");
+const { computeEditToggleTarget } =
+  await import("../src/components/editor-area/mermaid-decorations");
+
+describe("mermaid canvas frame", () => {
+  test("MERMAID_CANVAS_HEIGHT is a positive fixed height", () => {
+    expect(MERMAID_CANVAS_HEIGHT).toBeGreaterThan(0);
+    expect(Number.isInteger(MERMAID_CANVAS_HEIGHT)).toBe(true);
+  });
+});
+
+describe("computeEditToggleTarget", () => {
+  // For a fence: ```mermaid\ngraph TD;\n  A-->B;\n```
+  // Suppose: fenceFrom=10, codeFrom=20, codeTo=42, fenceTo=46, docLength=200
+  const fence = { fenceFrom: 10, codeFrom: 20, codeTo: 42, fenceTo: 46, docLength: 200 };
+
+  test("preview → edit: jumps to start of code text", () => {
+    expect(computeEditToggleTarget({ ...fence, editMode: false })).toBe(20);
+  });
+
+  test("edit → preview: jumps just past closing fence", () => {
+    expect(computeEditToggleTarget({ ...fence, editMode: true })).toBe(47);
+  });
+
+  test("edit → preview clamps to document length when fence is at EOF", () => {
+    expect(
+      computeEditToggleTarget({ ...fence, editMode: true, fenceTo: 199, docLength: 199 }),
+    ).toBe(199);
+  });
+
+  test("preview → edit falls back to fenceFrom+1 when CodeText is empty", () => {
+    expect(computeEditToggleTarget({ ...fence, editMode: false, codeFrom: 20, codeTo: 20 })).toBe(
+      11,
+    );
+  });
+
+  test("preview → edit fallback never overshoots fenceTo on degenerate fences", () => {
+    expect(
+      computeEditToggleTarget({
+        editMode: false,
+        fenceFrom: 5,
+        fenceTo: 6,
+        codeFrom: 6,
+        codeTo: 6,
+        docLength: 100,
+      }),
+    ).toBe(6);
+  });
+});
