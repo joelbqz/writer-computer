@@ -17,23 +17,29 @@ pub struct FileChangeEvent {
     pub kind: String,
 }
 
-fn should_ignore(path: &Path) -> bool {
-    for component in path.components() {
+/// True if `path` should be dropped before any further processing.
+///
+/// Only the *relative* path (inside the workspace root) is inspected — a
+/// workspace at `~/.notes/` must keep firing events even though `.notes` is a
+/// dotdir. Paths outside the root are kept; the recursive watch already
+/// scopes things, and bailing out here would silently drop legitimate events
+/// that happen to share a prefix with the canonical root via macOS aliasing.
+fn should_ignore(path: &Path, workspace_root: &Path) -> bool {
+    let Ok(relative) = path.strip_prefix(workspace_root) else {
+        return false;
+    };
+    for component in relative.components() {
         let name = component.as_os_str().to_string_lossy();
         if name == ".git" || name == "node_modules" || name == ".DS_Store" {
             return true;
         }
-        // Allow .writer directory (workspace config)
-        if name == ".writer" {
+        // Allow .writer directory (workspace config) and .gitignore files —
+        // both must be watchable: settings reload on the former, matcher
+        // rebuild on the latter.
+        if name == ".writer" || name == ".gitignore" {
             continue;
         }
-        // `.gitignore` must be watchable so we can rebuild the matcher when
-        // it changes, even though all other dotfiles are skipped.
-        if name == ".gitignore" {
-            continue;
-        }
-        // Skip hidden files/dirs (but not the root which might be a dotdir)
-        if name.starts_with('.') && name.len() > 1 && name != ".." {
+        if name.starts_with('.') && name.len() > 1 {
             return true;
         }
     }
@@ -63,15 +69,18 @@ fn is_config_file(path: &Path) -> bool {
     false
 }
 
+/// True if `path` was written by Writer itself within the TTL window.
+///
+/// A single save fans out into multiple FSEvent records on macOS (Create,
+/// Modify(Metadata), Modify(Data)); they all need to be suppressed so the
+/// frontend doesn't reload the file from disk and clobber in-progress edits
+/// keystrokes. The entry is *not* consumed on match — `record_write` cleans up
+/// expired entries on its next call.
 fn is_self_write(state: &WorkspaceState, path: &Path) -> bool {
-    let mut writes = state.recent_writes.write();
-    if let Some(written_at) = writes.get(path) {
-        if written_at.elapsed() < SELF_WRITE_TTL {
-            writes.remove(path);
-            return true;
-        }
-    }
-    false
+    let writes = state.recent_writes.read();
+    writes
+        .get(path)
+        .is_some_and(|written_at| written_at.elapsed() < SELF_WRITE_TTL)
 }
 
 pub fn record_write(state: &WorkspaceState, path: &Path) {
@@ -155,11 +164,14 @@ pub fn start_watcher(
             }
 
             let mut rebuild_ignore = false;
+            let root_for_filter = state.workspace_root.read().clone();
 
             for event in pending.drain(..) {
                 for path in &event.paths {
-                    if should_ignore(path) {
-                        continue;
+                    if let Some(ref root) = root_for_filter {
+                        if should_ignore(path, root) {
+                            continue;
+                        }
                     }
 
                     // `.gitignore` changes defer to a background rebuild.
@@ -341,22 +353,50 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
+    const ROOT: &str = "/workspace";
+
     #[test]
     fn test_ignores_git_directory() {
-        assert!(should_ignore(Path::new("/workspace/.git/config")));
-        assert!(should_ignore(Path::new("/workspace/.git/refs/heads/main")));
+        let root = Path::new(ROOT);
+        assert!(should_ignore(Path::new("/workspace/.git/config"), root));
+        assert!(should_ignore(
+            Path::new("/workspace/.git/refs/heads/main"),
+            root
+        ));
     }
 
     #[test]
     fn test_ignores_hidden_files() {
-        assert!(should_ignore(Path::new("/workspace/.DS_Store")));
-        assert!(should_ignore(Path::new("/workspace/.hidden/file.md")));
+        let root = Path::new(ROOT);
+        assert!(should_ignore(Path::new("/workspace/.DS_Store"), root));
+        assert!(should_ignore(Path::new("/workspace/.hidden/file.md"), root));
     }
 
     #[test]
     fn test_does_not_ignore_normal_files() {
-        assert!(!should_ignore(Path::new("/workspace/notes/hello.md")));
-        assert!(!should_ignore(Path::new("/workspace/readme.md")));
+        let root = Path::new(ROOT);
+        assert!(!should_ignore(Path::new("/workspace/notes/hello.md"), root));
+        assert!(!should_ignore(Path::new("/workspace/readme.md"), root));
+    }
+
+    #[test]
+    fn dotdir_workspace_root_does_not_filter_its_own_paths() {
+        // Regression: a workspace at `~/.notes/` must keep firing events even
+        // though `.notes` is a dotdir.
+        let root = Path::new("/Users/joel/.notes");
+        assert!(!should_ignore(&root.join("foo.md"), root));
+        assert!(!should_ignore(&root.join("docs/bar.md"), root));
+        // Hidden subdirs inside the dotdir root are still filtered.
+        assert!(should_ignore(&root.join(".cache/x"), root));
+        assert!(should_ignore(&root.join(".git/HEAD"), root));
+    }
+
+    #[test]
+    fn paths_outside_root_are_not_filtered_here() {
+        // `should_ignore` only applies to paths inside the root; the recursive
+        // watch and `is_workspace_ignored` handle anything else.
+        let root = Path::new("/workspace");
+        assert!(!should_ignore(Path::new("/elsewhere/.cache/file"), root));
     }
 
     #[test]
@@ -364,16 +404,14 @@ mod tests {
         let state = WorkspaceState::default();
         let path = PathBuf::from("/test/file.md");
 
-        // Not a self-write initially
         assert!(!is_self_write(&state, &path));
-
-        // Record write
         record_write(&state, &path);
 
-        // First check consumes the entry
+        // A single save produces multiple FSEvents (Create + Modify(Metadata)
+        // + Modify(Data)); every match within the TTL window must be
+        // suppressed, not just the first.
         assert!(is_self_write(&state, &path));
-
-        // Second check returns false — entry was consumed
-        assert!(!is_self_write(&state, &path));
+        assert!(is_self_write(&state, &path));
+        assert!(is_self_write(&state, &path));
     }
 }

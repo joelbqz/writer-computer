@@ -81,10 +81,19 @@ pub(crate) fn open_new_workspace_window(
     workspace_path: String,
     file: Option<String>,
 ) -> Result<(), AppError> {
-    let workspace = PathBuf::from(&workspace_path);
-    if !workspace.exists() || !workspace.is_dir() {
+    let raw_workspace = PathBuf::from(&workspace_path);
+    if !raw_workspace.exists() || !raw_workspace.is_dir() {
         return Err(AppError::NotFound(workspace_path));
     }
+
+    // Canonicalize before lookup and pending-open queueing so aliased paths
+    // (`/var/foo` vs. `/private/var/foo`, symlinked workspaces) don't spawn
+    // duplicate windows and the watcher's canonical workspace_root matches
+    // the pending-open record.
+    let workspace = raw_workspace
+        .canonicalize()
+        .map_err(|e| AppError::Io(e.to_string()))?;
+    let workspace_str = workspace.to_string_lossy().to_string();
 
     if let Some(existing_label) = app.state::<AppState>().find_by_workspace(&workspace) {
         if let Some(window) = app.get_webview_window(&existing_label) {
@@ -97,7 +106,7 @@ pub(crate) fn open_new_workspace_window(
     let state = app.state::<AppState>().get_or_create(&label);
     init_window_settings(app, &state);
     state.push_pending_open(PendingOpenPayload {
-        workspace: workspace_path,
+        workspace: workspace_str,
         file,
     });
 

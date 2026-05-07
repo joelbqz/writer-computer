@@ -42,6 +42,7 @@ Previously-triaged work organized by phase. Pull into `Up Next` as capacity open
 
 See `CHANGELOG.md` and `git log` for shipped work. Notable items:
 
+- External file watcher: external file changes (Finder, git, vim, scripts) reach the sidebar and reload-from-disk reliably; dotdir workspace roots, `/var` aliases, and self-write echoes all fixed ([`SPECs/external-file-watcher-spec.md`](SPECs/external-file-watcher-spec.md))
 - Cmd+F polish: safe scroll-into-view, Cmd+G / Cmd+Shift+G next/previous, scrollbar match overview ([`SPECs/cmd-f-spec.md`](SPECs/cmd-f-spec.md))
 - Caret position after history navigation
 - Obsidian-style wikilink parsing — aliases, escaped table pipes, note fragments, same-file fragment links

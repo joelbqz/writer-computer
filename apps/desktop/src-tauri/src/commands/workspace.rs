@@ -36,15 +36,25 @@ fn prepare_workspace_state(
     label: &str,
     path: &str,
 ) -> Result<WorkspaceInfo, AppError> {
-    let root = PathBuf::from(path);
-    if !root.exists() || !root.is_dir() {
+    let raw_root = PathBuf::from(path);
+    if !raw_root.exists() || !raw_root.is_dir() {
         return Err(AppError::NotFound(path.to_string()));
     }
+
+    // Canonicalize so workspace_root and FSEvents-emitted paths share a
+    // representation. macOS aliases `/var → /private/var` (and friends) and
+    // FSEvents always reports the canonical form; without this the frontend's
+    // `path === root` equality check in the file watcher hook fails for any
+    // workspace opened via an aliased path, leaving the sidebar stale.
+    let root = raw_root
+        .canonicalize()
+        .map_err(|e| AppError::Io(e.to_string()))?;
+    let canonical_path = root.to_string_lossy().to_string();
 
     let name = root
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| path.to_string());
+        .unwrap_or_else(|| canonical_path.clone());
 
     let state = app.state::<AppState>().get_or_create(label);
 
@@ -88,8 +98,9 @@ fn prepare_workspace_state(
         settings.load_workspace(&root);
     }
 
-    // Save to recent workspaces (one small JSON write).
-    let _ = save_recent_workspace(app, path);
+    // Save to recent workspaces (one small JSON write). The canonical form is
+    // stored so opening the same workspace via different aliases dedupes.
+    let _ = save_recent_workspace(app, &canonical_path);
 
     // Everything below this line runs on a background thread, guarded by
     // `new_epoch`. Staggering the work this way means `open_workspace`
@@ -102,7 +113,7 @@ fn prepare_workspace_state(
     });
 
     Ok(WorkspaceInfo {
-        root: path.to_string(),
+        root: canonical_path,
         name,
         file_count: 0,
     })
