@@ -38,6 +38,7 @@ All docs except CLAUDE.md, AGENTS.md, TODOS.md, and CHANGELOG.md live in `./docs
 - [docs/consolidation.md](./docs/consolidation.md) — if adding the next case touches more than one file, the structure is wrong: single source of truth, side-effect ownership, registry over per-case branches, one write path
 - [docs/react-guidelines.md](./docs/react-guidelines.md) — imports, state, side effects, component structure, persistence
 - [docs/zustand.md](./docs/zustand.md) — side effect timing, selectors, bail-out patterns
+- [docs/codemirror.md](./docs/codemirror.md) — layout-model APIs over rendered DOM, picking the right scroll API
 - [docs/vite-plus.md](./docs/vite-plus.md) — `vp` CLI usage and common pitfalls
 - [docs/keyboard-shortcuts.md](./docs/keyboard-shortcuts.md) — canonical shortcut map
 
@@ -73,6 +74,7 @@ All docs except CLAUDE.md, AGENTS.md, TODOS.md, and CHANGELOG.md live in `./docs
 - Preserve testability. Keep side effects at the boundaries, make dependencies explicit, and structure logic so it can be exercised in isolation when practical.
 - Maintain clear boundaries, but prefer minimal designs. Split functions, hooks, or modules when responsibilities meaningfully diverge, not as a reflex.
 - If a tradeoff is unavoidable, call it out explicitly and choose the option with the lowest long-term correctness and maintenance risk.
+- When a fix doesn't work after one iteration, add a debug log before changing the approach again. Don't iterate on guesses — let the runtime tell you which term in the math is wrong.
 
 ## Validation
 

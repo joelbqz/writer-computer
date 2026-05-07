@@ -2,15 +2,11 @@
 
 ## In Progress
 
-- Landing page redesign: [`SPECs/landing-page-redesign-spec.md`](SPECs/landing-page-redesign-spec.md) — Figma "Writer Computer" frame implemented under `apps/website/` (single-page React + Vite, dark, SF Pro, single orange accent). Remaining: real screenshots into `apps/website/public/screenshots/`, custom-domain decision, copy review.
+-
 
 ## Up Next
 
-## Blockers At A Glance
-
-- `workspace-snapshot` → `workspace-switch-hang` (shipped; blocker cleared — snapshot depends on the primitives that landed)
-- `fuzzy-search-grep` → `gitignore-aware-workspace` (shipped; blocker cleared)
-- `tags` → `gitignore-aware-workspace` (shipped; blocker cleared)
+-
 
 ## Backlog
 
@@ -23,7 +19,6 @@ Previously-triaged work organized by phase. Pull into `Up Next` as capacity open
 - Tags: [`SPECs/tags-spec.md`](SPECs/tags-spec.md)
 - New tab recent files: [`SPECs/new-tab-recent-files-spec.md`](SPECs/new-tab-recent-files-spec.md)
 - Document date display: [`SPECs/document-date-display-spec.md`](SPECs/document-date-display-spec.md)
-- Breadcrumb: [`SPECs/breadcrumb-spec.md`](SPECs/breadcrumb-spec.md)
 
 ### Visual and media polish
 
@@ -47,6 +42,7 @@ Previously-triaged work organized by phase. Pull into `Up Next` as capacity open
 
 See `CHANGELOG.md` and `git log` for shipped work. Notable items:
 
+- Cmd+F polish: safe scroll-into-view, Cmd+G / Cmd+Shift+G next/previous, scrollbar match overview ([`SPECs/cmd-f-spec.md`](SPECs/cmd-f-spec.md))
 - Caret position after history navigation
 - Obsidian-style wikilink parsing — aliases, escaped table pipes, note fragments, same-file fragment links
 - Sidebar toggle tab chrome shift

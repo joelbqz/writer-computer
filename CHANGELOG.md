@@ -2,6 +2,7 @@
 
 ## 2026-05-06
 
+- Polish in-document find (Cmd+F): the active match now scrolls into a clear zone away from the editor's top/bottom fade mask and progressive blur — `search()` is configured with a custom `scrollToMatch` that uses `EditorView.scrollIntoView` with a `yMargin` derived from `EDITOR_SAFE_SCROLL_MARGIN`. Add `Cmd+G` / `Cmd+Shift+G` for next/previous match (handled at `Prec.highest` in the editor keymap and in the find/replace inputs' `onKeyDown`). Add an IDE-style match overview rail along the right edge of the editor pane: thin marks (one per match, accent-colored for the active match) render outside the masked scroll area, click to jump. The query is mirrored into `editor-search-store` so the overview can subscribe without prop-drilling. See `SPECs/cmd-f-spec.md`.
 - Add a `Preferences…` entry (`Cmd+,`) to the Writer application menu that opens the Settings tab in the focused window. Rename the macOS-only CLI install item to `Install 'writer' Command Line Tool…` (and the uninstall counterpart) and group it next to Preferences. See `SPECs/install-cli-menu-placement-spec.md`.
 
 ## 2026-05-04

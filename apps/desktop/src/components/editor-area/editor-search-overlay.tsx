@@ -111,6 +111,10 @@ export function EditorSearchOverlay() {
       event.preventDefault();
       if (event.shiftKey) actions.prev();
       else actions.next();
+    } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "g") {
+      event.preventDefault();
+      if (event.shiftKey) actions.prev();
+      else actions.next();
     }
   }
 
@@ -133,6 +137,10 @@ export function EditorSearchOverlay() {
     } else if (event.key === "Enter") {
       event.preventDefault();
       actions.doReplace();
+    } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "g") {
+      event.preventDefault();
+      if (event.shiftKey) actions.prev();
+      else actions.next();
     }
   }
 

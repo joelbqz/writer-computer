@@ -19,6 +19,7 @@
 
 ## Sidebar
 
+- there's no watchers in the sidebar, adding or removing files should update it
 - In the settings, "Restore Workspace" is under the "Window" section, it would probably feel more intuitive under "Workspace" just above it.
 - Switching workspaces in the bottom-left opens a new instance of the app. Would be nice to have a setting to control that behavior.
 - File names in the sidebar are derived from the H1 in the document, smart feature, but it can be a bit disorienting when the filename and H1 don't match and you struggle to find what you're looking for. Maybe worth making this optional in settings.
