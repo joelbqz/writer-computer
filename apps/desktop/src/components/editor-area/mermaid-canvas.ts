@@ -251,5 +251,17 @@ function makeButton(label: string, title: string): HTMLButtonElement {
   b.textContent = label;
   b.title = title;
   b.setAttribute("aria-label", title);
+  // Keep the editor focused when the user clicks. Without `preventDefault`
+  // on mousedown, the browser focuses the button — and on the toggle path,
+  // that focus shift races with the dispatch's DOM rebuild + our explicit
+  // `view.contentDOM.focus()` call. The result is the editor briefly losing
+  // focus and CM applying a different selection than the one we dispatched.
+  // `stopPropagation` on mousedown keeps CM's editor-level pointerdown
+  // handlers (which may run before `ignoreEvent` is consulted in some paths)
+  // from racing with the click handler's dispatch.
+  b.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
   return b;
 }

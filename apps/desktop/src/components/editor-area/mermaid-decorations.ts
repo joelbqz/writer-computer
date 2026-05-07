@@ -1,28 +1,23 @@
 import { Decoration, EditorView, ViewPlugin, ViewUpdate, WidgetType } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
+import { EditorSelection } from "@codemirror/state";
 import { foldableSyntaxFacet } from "@prosemark/core";
 import { renderMermaid } from "./mermaid-renderer";
 import { MERMAID_CANVAS_HEIGHT, mountMermaidCanvas } from "./mermaid-canvas";
 
-let widgetCounter = 0;
-
-// Outer widget padding (top + bottom). Kept in lockstep with the
-// `.cm-mermaid-widget` rule below so `estimatedHeight` matches the rendered
-// box.
+// Outer widget padding (top + bottom). The CSS rule below splits this evenly
+// across top/bottom so `estimatedHeight` matches the rendered box.
 const WIDGET_VERTICAL_PADDING = 16;
 
-const OBSERVER_KEY = Symbol("mermaidObserver");
-type WrapperWithObserver = HTMLElement & { [OBSERVER_KEY]?: IntersectionObserver };
-
+/**
+ * Mermaid widget. Identity is just `source` + `editMode`. No position fields,
+ * no eq() side-effect — fence positions are looked up live at click time from
+ * the syntax tree, so there's no stale-state class of bug.
+ */
 class MermaidWidget extends WidgetType {
   constructor(
     readonly source: string,
-    readonly id: string,
     readonly editMode: boolean,
-    readonly fenceFrom: number,
-    readonly fenceTo: number,
-    readonly codeFrom: number,
-    readonly codeTo: number,
   ) {
     super();
   }
@@ -31,123 +26,137 @@ class MermaidWidget extends WidgetType {
     return this.source === other.source && this.editMode === other.editMode;
   }
 
-  // The canvas frame has a fixed height regardless of diagram size, so the
-  // CodeMirror heightmap can settle on a stable value immediately. No more
-  // measurement-cache dance.
+  // Fixed height regardless of diagram size, so the heightmap settles on a
+  // stable value immediately.
   get estimatedHeight(): number {
     return MERMAID_CANVAS_HEIGHT + WIDGET_VERTICAL_PADDING;
   }
 
   toDOM(view: EditorView): HTMLElement {
-    const wrapper = document.createElement("div") as WrapperWithObserver;
+    const wrapper = document.createElement("div");
     wrapper.className = "cm-mermaid-widget";
     wrapper.contentEditable = "false";
 
     const host = document.createElement("div");
     host.className = "cm-mermaid-canvas";
     host.tabIndex = 0;
-    host.textContent = "Loading diagram...";
     wrapper.append(host);
 
-    const onToggleEdit = () => {
-      const target = computeEditToggleTarget({
-        editMode: this.editMode,
-        fenceFrom: this.fenceFrom,
-        fenceTo: this.fenceTo,
-        codeFrom: this.codeFrom,
-        codeTo: this.codeTo,
-        docLength: view.state.doc.length,
-      });
-      view.dispatch({ selection: { anchor: target } });
-      // `view.focus()` calls `contentDOM.focus()` without `preventScroll`,
-      // which lets the browser auto-scroll to bring the new caret into view —
-      // visible as the editor jumping when the user clicks "Edit code". Focus
-      // directly with `preventScroll: true` so the viewport stays anchored.
-      view.contentDOM.focus({ preventScroll: true });
-    };
+    const onToggleEdit = () => toggleEditMode(view, host, this.editMode);
 
-    const observer = new IntersectionObserver((entries) => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        observer.disconnect();
-        void renderMermaid(this.source, "light", this.id).then((result) => {
-          if (result.svg) {
-            mountMermaidCanvas(host, {
-              svgHtml: result.svg,
-              ariaLabel: `Mermaid diagram: ${this.source.split("\n")[0]}`,
-              editMode: this.editMode,
-              onToggleEdit,
-            });
-          } else if (result.error) {
-            host.classList.remove("cm-mermaid-canvas");
-            host.removeAttribute("tabindex");
-            host.classList.add("cm-mermaid-error");
-            host.textContent = `Diagram error: ${result.error}`;
-          }
-        });
-      }
-    });
-    observer.observe(wrapper);
-    wrapper[OBSERVER_KEY] = observer;
+    // Synchronous render. beautiful-mermaid is sync and the SVG cache makes
+    // repeat calls O(map lookup), so the wrapper paints with its final SVG in
+    // the same frame it enters the DOM — no IntersectionObserver, no async
+    // gap that can leave the user stuck on a placeholder.
+    const result = renderMermaid(this.source);
+    if (result.svg) {
+      mountMermaidCanvas(host, {
+        svgHtml: result.svg,
+        ariaLabel: `Mermaid diagram: ${this.source.split("\n")[0]}`,
+        editMode: this.editMode,
+        onToggleEdit,
+      });
+    } else if (result.error) {
+      host.classList.add("cm-mermaid-error");
+      host.textContent = `Diagram error: ${result.error}`;
+    }
 
     return wrapper;
   }
 
-  destroy(dom: HTMLElement): void {
-    const observer = (dom as WrapperWithObserver)[OBSERVER_KEY];
-    observer?.disconnect();
-  }
-
   ignoreEvent(): boolean {
-    // The canvas owns all pointer/keyboard interaction inside the widget —
-    // pan, zoom, control buttons, edit toggle. If CodeMirror also processed
-    // these events it would try to place the caret at the replaced range,
-    // which immediately flips the syntax facet back into edit mode and
-    // hijacks zoom/fit clicks.
+    // The canvas owns all pointer/keyboard interaction inside the widget.
+    // Without this CodeMirror would also process clicks and try to place the
+    // caret at the replaced range, hijacking the toggle and zoom buttons.
     return true;
   }
 }
 
-type EditToggleInput = {
-  editMode: boolean;
-  fenceFrom: number;
-  fenceTo: number;
-  codeFrom: number;
-  codeTo: number;
-  docLength: number;
-};
-
 /**
- * Compute the caret position to dispatch when the user clicks the canvas's
- * edit/preview toggle.
+ * Compute the dispatch payload for an edit/preview toggle click.
  *
- * - In preview mode (editMode=false), move the caret into the fence — to the
- *   start of the CodeText if there is one, otherwise just past the opening
- *   CodeMark. The cursor inside [fenceFrom, fenceTo] flips the syntax facet
- *   to the non-replacing widget so the source is visible for editing.
- * - In edit mode (editMode=true), move the caret to fenceTo + 1 (clamped to
- *   document length) so it no longer touches the fence range.
+ * Preview → edit: select the entire fence range. `selectionTouchesRange` in
+ * `@prosemark/core` is overlap-based with inclusive bounds, so any selection
+ * overlapping the fence flips the syntax facet into edit mode and the source
+ * appears above the canvas.
+ *
+ * Edit → preview: caret to fenceTo+1 (clamped to docLength) so the selection
+ * no longer overlaps the fence range.
  */
-export function computeEditToggleTarget(input: EditToggleInput): number {
-  const { editMode, fenceFrom, fenceTo, codeFrom, codeTo, docLength } = input;
+export function computeToggleSelection(
+  editMode: boolean,
+  fenceFrom: number,
+  fenceTo: number,
+  docLength: number,
+): { anchor: number; head?: number } {
   if (editMode) {
-    return Math.min(fenceTo + 1, docLength);
+    return { anchor: Math.min(fenceTo + 1, docLength) };
   }
-  if (codeTo > codeFrom) return codeFrom;
-  return Math.min(fenceFrom + 1, fenceTo);
+  // Reverse anchor (anchor=fenceTo, head=fenceFrom) matches the convention
+  // used by `selectAllDecorationsOnSelectExtension` in @prosemark/core.
+  return { anchor: fenceTo, head: fenceFrom };
 }
 
 /**
- * Extract info string, code content, and child node positions for a
- * FencedCode. The Lezer markdown tree structure is:
+ * Find the FencedCode node enclosing the position of `host` in the document.
+ *
+ * `posAtDOM` for a `Decoration.widget` at `node.to` returns exactly `node.to`,
+ * and `resolveInner(node.to, 1)` resolves to the node *starting* at that
+ * offset (a sibling, not the fence). We try side=-1 first (which prefers the
+ * node *ending* at the boundary, the common case for an edit-mode widget),
+ * and fall back to side=1 for the replace-mode case where the widget covers
+ * `[node.from, node.to]`.
+ */
+function findEnclosingFencedCode(view: EditorView, host: HTMLElement) {
+  const pos = view.posAtDOM(host);
+  const tree = syntaxTree(view.state);
+  for (const side of [-1, 1] as const) {
+    let node = tree.resolveInner(pos, side);
+    while (node.name !== "FencedCode" && node.parent) node = node.parent;
+    if (node.name === "FencedCode") return node;
+  }
+  return null;
+}
+
+/**
+ * Toggle the edit/preview state for the fence containing `host`.
+ *
+ * Resolves the FencedCode range live from the syntax tree at click time —
+ * no positions captured on the widget, no eq() side-effect — so the dispatch
+ * always uses current offsets even after above-fence text has shifted.
+ *
+ * Scroll is preserved across the dispatch via `view.scrollSnapshot()`. The
+ * heightmap shift between `Decoration.replace` (canvas only) and
+ * `Decoration.widget` (source + canvas) would otherwise jump the viewport.
+ */
+function toggleEditMode(view: EditorView, host: HTMLElement, editMode: boolean): void {
+  const fence = findEnclosingFencedCode(view, host);
+  if (!fence) return;
+
+  const sel = computeToggleSelection(editMode, fence.from, fence.to, view.state.doc.length);
+  view.dispatch({
+    selection:
+      sel.head !== undefined
+        ? EditorSelection.single(sel.anchor, sel.head)
+        : { anchor: sel.anchor },
+    effects: view.scrollSnapshot(),
+  });
+  // `view.focus()` would call `contentDOM.focus()` without `preventScroll`,
+  // letting the browser auto-scroll to bring the caret into view. Anchor the
+  // viewport with `preventScroll: true` instead.
+  view.contentDOM.focus({ preventScroll: true });
+}
+
+/**
+ * Extract info string and code content for a FencedCode node. Lezer's tree:
  *   FencedCode → CodeMark, CodeInfo, CodeText, CodeMark
+ * Multiple CodeText children can occur (e.g. blockquoted fences); we
+ * concatenate their slices.
  */
 function parseFencedCode(
   state: { doc: { sliceString(from: number, to: number): string } },
   node: {
     node: {
-      from: number;
-      to: number;
       firstChild: {
         name: string;
         from: number;
@@ -156,26 +165,22 @@ function parseFencedCode(
       } | null;
     };
   },
-): { info: string; source: string; codeFrom: number; codeTo: number } | undefined {
+): { info: string; source: string } | undefined {
   let info = "";
   let source = "";
-  let codeFrom = node.node.to;
-  let codeTo = node.node.to;
 
   let child = node.node.firstChild;
   while (child) {
     if (child.name === "CodeInfo") {
       info = state.doc.sliceString(child.from, child.to);
     } else if (child.name === "CodeText") {
-      source = state.doc.sliceString(child.from, child.to);
-      codeFrom = child.from;
-      codeTo = child.to;
+      source += state.doc.sliceString(child.from, child.to);
     }
     child = child.nextSibling;
   }
 
   if (!info) return undefined;
-  return { info, source, codeFrom, codeTo };
+  return { info, source };
 }
 
 const mermaidFoldExtension = foldableSyntaxFacet.of({
@@ -189,23 +194,15 @@ const mermaidFoldExtension = foldableSyntaxFacet.of({
     const source = parsed.source.trim();
     if (!source) return undefined;
 
-    const id = `mermaid-${++widgetCounter}`;
-    const widget = new MermaidWidget(
-      source,
-      id,
-      selectionTouchesRange,
-      node.from,
-      node.to,
-      parsed.codeFrom,
-      parsed.codeTo,
-    );
+    const widget = new MermaidWidget(source, selectionTouchesRange);
 
     if (selectionTouchesRange) {
-      // Cursor is inside: show raw source and render a preview widget below the fence
+      // Selection overlaps the fence: show raw source, render the canvas as
+      // a block widget below.
       return Decoration.widget({ widget, block: true }).range(node.to);
     }
 
-    // Cursor is outside: replace the entire fence with the rendered canvas
+    // Selection outside: replace the entire fence with the rendered canvas.
     return Decoration.replace({ widget, block: true, inclusiveStart: true }).range(
       node.from,
       node.to,
@@ -215,7 +212,7 @@ const mermaidFoldExtension = foldableSyntaxFacet.of({
 
 const mermaidTheme = EditorView.baseTheme({
   ".cm-mermaid-widget": {
-    padding: "8px 0",
+    padding: `${WIDGET_VERTICAL_PADDING / 2}px 0`,
   },
   ".cm-mermaid-canvas": {
     position: "relative",
@@ -225,6 +222,10 @@ const mermaidTheme = EditorView.baseTheme({
     backgroundColor: "transparent",
     overflow: "hidden",
     outline: "none",
+  },
+  ".cm-mermaid-canvas:focus-visible": {
+    outline: "2px solid var(--accent)",
+    outlineOffset: "-2px",
   },
   ".cm-mermaid-canvas-viewport": {
     position: "absolute",
@@ -305,13 +306,18 @@ const mermaidTheme = EditorView.baseTheme({
     fontSize: "16px",
     padding: "0",
   },
-  ".cm-mermaid-error": {
+  // Errors render inside the canvas frame (the .cm-mermaid-canvas class is
+  // kept on the host) — this just centres the error text and switches its
+  // colour so the frame border + fixed height stay intact.
+  ".cm-mermaid-canvas.cm-mermaid-error": {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
     padding: "0.5em 1em",
     color: "var(--text-error, #ff6b6b)",
-    backgroundColor: "var(--code-bg, #2d2d2d)",
-    borderRadius: "4px",
-    fontSize: "0.85em",
     fontFamily: "'SF Mono', Menlo, Monaco, Consolas, monospace",
+    fontSize: "0.85em",
+    textAlign: "center",
   },
 });
 
