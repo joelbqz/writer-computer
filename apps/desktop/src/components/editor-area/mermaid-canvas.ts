@@ -36,6 +36,11 @@ export function mountMermaidCanvas(host: HTMLElement, opts: MermaidCanvasOptions
   const stage = document.createElement("div");
   stage.className = "cm-mermaid-canvas-stage";
   stage.innerHTML = opts.svgHtml;
+  // Hide the stage until the first fit. `toDOM` runs before the wrapper is in
+  // the document, so `viewport.clientWidth` is 0 — we can't compute the
+  // centered transform synchronously. Without this the user briefly sees the
+  // diagram at top-left before it snaps to centered on the next frame.
+  stage.style.opacity = "0";
 
   const svg = stage.querySelector("svg") as SVGSVGElement | null;
   if (svg) {
@@ -241,8 +246,12 @@ export function mountMermaidCanvas(host: HTMLElement, opts: MermaidCanvasOptions
   });
 
   // First paint: fit the diagram once the layout has settled. Wait one frame
-  // so the wrapper has its final width inside CodeMirror's content layout.
-  requestAnimationFrame(() => fitToViewport());
+  // so the wrapper has its final width inside CodeMirror's content layout,
+  // then reveal the stage.
+  requestAnimationFrame(() => {
+    fitToViewport();
+    stage.style.opacity = "1";
+  });
 }
 
 function makeButton(label: string, title: string): HTMLButtonElement {
