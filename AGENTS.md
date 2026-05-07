@@ -38,7 +38,7 @@ All docs except CLAUDE.md, AGENTS.md, TODOS.md, and CHANGELOG.md live in `./docs
 - [docs/consolidation.md](./docs/consolidation.md) — if adding the next case touches more than one file, the structure is wrong: single source of truth, side-effect ownership, registry over per-case branches, one write path
 - [docs/react-guidelines.md](./docs/react-guidelines.md) — imports, state, side effects, component structure, persistence
 - [docs/zustand.md](./docs/zustand.md) — side effect timing, selectors, bail-out patterns
-- [docs/codemirror.md](./docs/codemirror.md) — layout-model APIs over rendered DOM, picking the right scroll API
+- [docs/editor.md](./docs/editor.md) — CodeMirror layout-model APIs, scroll-handler ownership, block-widget patterns (decoration shape, range-select to enter edit mode, posAtDOM boundary handling, button focus race, scrollSnapshot for heightmap shifts)
 - [docs/vite-plus.md](./docs/vite-plus.md) — `vp` CLI usage and common pitfalls
 - [docs/keyboard-shortcuts.md](./docs/keyboard-shortcuts.md) — canonical shortcut map
 

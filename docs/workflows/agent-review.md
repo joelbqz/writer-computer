@@ -34,7 +34,7 @@ Activate only the personas relevant to the changed surface area. Each persona ow
   Owned docs: `docs/zustand.md`.
 
 - **Editor Expert**: CodeMirror/Prosemark extension patterns, `reloadVersion` and instance-key semantics, widget decorations, scroll container detection, paste handling, context menu integration with native Tauri menus.
-  Owned docs: `docs/editor.md` (when created), relevant `SPECs/` for the change.
+  Owned docs: `docs/editor.md`, relevant `SPECs/` for the change.
 
 - **Rust/Tauri Expert**: Tauri IPC command design, async command patterns, `AppState` management, file system watcher correctness, lock contention, error serialization over IPC, `cargo clippy` compliance.
   Owned docs: `CLAUDE.md` (Architecture section), Rust source in `apps/desktop/src-tauri/src/`.
