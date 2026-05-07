@@ -6,6 +6,7 @@ import {
   EditorState,
   Extension,
   Prec,
+  StateField,
   Transaction,
   type StateCommand,
 } from "@codemirror/state";
@@ -89,6 +90,20 @@ function findOuterScroller(view: EditorView): HTMLElement | null {
   }
   return null;
 }
+
+// True when the latest transaction was a search/replace navigation
+// (`select.search` from findNext/findPrevious/jumpToMatch, or
+// `input.replace` from replaceNext/replaceAll). The custom scrollHandler
+// reads this to scope the safe-zone scroll to search nav only — without
+// it, ordinary typing would also be repositioned and cause a jump on
+// every keystroke that triggered CodeMirror's cursor tracking.
+const searchScrollIntent = StateField.define<boolean>({
+  create: () => false,
+  update: (value, tr) => {
+    if (!tr.selection && !tr.docChanged) return value;
+    return tr.isUserEvent("select.search") || tr.isUserEvent("input.replace");
+  },
+});
 
 function resolveScrollContainer(root: HTMLElement, getScrollContainer?: () => HTMLElement | null) {
   return getScrollContainer?.() ?? findScrollContainer(root);
@@ -416,15 +431,23 @@ function createEditorExtensions(
     drawSelection(),
     prosemarkBaseThemeSetup(),
     search({ literal: true, createPanel: invisibleSearchPanel }),
-    // Take over scrollIntoView entirely so search/replace navigation lands
-    // matches in the clear zone of the *outer* scroll container — the
-    // EditorScrollContainer wraps the editor with an overflow-y-auto div
-    // covered by a fade mask + 120px progressive blur, but CodeMirror's
-    // built-in scrollIntoView walks ancestors generically and the geometry
-    // doesn't always land the match where we want it. We position the
-    // match at the top of the safe zone so users keep their reading
-    // context (vs. centering, which jumps).
+    // Tracks whether the latest transaction was search/replace navigation
+    // (`@codemirror/search` tags those with userEvents `select.search` for
+    // find-next/previous + `jumpToMatch`, and `input.replace` for replace-
+    // next/all). The scrollHandler below reads this to know whether to
+    // apply our safe-zone scroll, instead of running on every cursor move.
+    searchScrollIntent,
+    // Override scrollIntoView only for search/replace navigation so matches
+    // land in the clear zone of the *outer* scroll container (the
+    // EditorScrollContainer is wrapped by a fade mask + 120px progressive
+    // blur, and CodeMirror's default scroll walks ancestors generically and
+    // doesn't always land the match where we want it). Only nudges the
+    // scroll when the match is outside the safe zone — if it's already
+    // visible we don't move so stepping between nearby matches doesn't
+    // jump. For typing and ordinary cursor moves we return false and let
+    // CodeMirror's default scroll behavior run.
     EditorView.scrollHandler.of((view, range) => {
+      if (!view.state.field(searchScrollIntent, false)) return false;
       const scroller = findOuterScroller(view);
       if (!scroller) return false;
       // Use lineBlockAt + documentTop (CodeMirror's layout model) rather
@@ -432,10 +455,23 @@ function createEditorExtensions(
       // match is outside the currently-rendered viewport, which silently
       // fell back to the default scroll and ignored our fade margin.
       const block = view.lineBlockAt(range.head);
-      const matchScreenY = view.documentTop + block.top;
+      const matchTop = view.documentTop + block.top;
+      const matchBottom = view.documentTop + block.bottom;
       const scrollerRect = scroller.getBoundingClientRect();
-      const desiredScreenY = scrollerRect.top + scroller.clientTop + EDITOR_SAFE_SCROLL_MARGIN;
-      const delta = matchScreenY - desiredScreenY;
+      const contentTop = scrollerRect.top + scroller.clientTop;
+      const safeTop = contentTop + EDITOR_SAFE_SCROLL_MARGIN;
+      const safeBottom = contentTop + scroller.clientHeight - EDITOR_SAFE_SCROLL_MARGIN;
+      // Top edge wins if the line is taller than the safe zone, so the
+      // match (anchored at the line's top) stays visible instead of being
+      // pushed above the fade by a bottom-align scroll.
+      let delta = 0;
+      if (matchTop < safeTop) {
+        delta = matchTop - safeTop;
+      } else if (matchBottom > safeBottom && block.height <= safeBottom - safeTop) {
+        delta = matchBottom - safeBottom;
+      } else {
+        return true;
+      }
       const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
       const next = Math.max(0, Math.min(scroller.scrollTop + delta, max));
       if (Math.abs(scroller.scrollTop - next) < 1) return true;

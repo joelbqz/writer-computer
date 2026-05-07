@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-05-07
+
+- Fix the editor scroll jumping on every keystroke after the Cmd+F polish landed. The custom `EditorView.scrollHandler` was firing for any scroll-into-view (including CodeMirror's default cursor tracking on typing) and unconditionally re-positioning the cursor at the safe-zone top. Now gated by a `searchScrollIntent` `StateField` that only flips on for transactions tagged `select.search` (find next/previous, jump-to-match) or `input.replace` (replace next/all), and the handler only nudges the scroll when the match's line is actually outside the safe zone — typing and ordinary cursor moves fall through to CodeMirror's default scroll, and stepping between already-visible matches no longer jumps.
+
 ## 2026-05-06
 
 - Polish in-document find (Cmd+F): the active match now scrolls into a clear zone away from the editor's top/bottom fade mask and progressive blur — `search()` is configured with a custom `scrollToMatch` that uses `EditorView.scrollIntoView` with a `yMargin` derived from `EDITOR_SAFE_SCROLL_MARGIN`. Add `Cmd+G` / `Cmd+Shift+G` for next/previous match (handled at `Prec.highest` in the editor keymap and in the find/replace inputs' `onKeyDown`). Add an IDE-style match overview rail along the right edge of the editor pane: thin marks (one per match, accent-colored for the active match) render outside the masked scroll area, click to jump. The query is mirrored into `editor-search-store` so the overview can subscribe without prop-drilling. See `SPECs/cmd-f-spec.md`.
