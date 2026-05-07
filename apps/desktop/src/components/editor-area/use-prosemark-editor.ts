@@ -97,12 +97,14 @@ function findOuterScroller(view: EditorView): HTMLElement | null {
 // reads this to scope the safe-zone scroll to search nav only — without
 // it, ordinary typing would also be repositioned and cause a jump on
 // every keystroke that triggered CodeMirror's cursor tracking.
+//
+// Recomputed on every transaction (no early return) so the flag never
+// latches `true` across an effect-only transaction that follows a search
+// nav — otherwise a later non-search `scrollIntoView` would inherit the
+// stale `true` and silently re-anchor.
 const searchScrollIntent = StateField.define<boolean>({
   create: () => false,
-  update: (value, tr) => {
-    if (!tr.selection && !tr.docChanged) return value;
-    return tr.isUserEvent("select.search") || tr.isUserEvent("input.replace");
-  },
+  update: (_value, tr) => tr.isUserEvent("select.search") || tr.isUserEvent("input.replace"),
 });
 
 function resolveScrollContainer(root: HTMLElement, getScrollContainer?: () => HTMLElement | null) {
@@ -447,7 +449,7 @@ function createEditorExtensions(
     // jump. For typing and ordinary cursor moves we return false and let
     // CodeMirror's default scroll behavior run.
     EditorView.scrollHandler.of((view, range) => {
-      if (!view.state.field(searchScrollIntent, false)) return false;
+      if (!view.state.field(searchScrollIntent)) return false;
       const scroller = findOuterScroller(view);
       if (!scroller) return false;
       // Use lineBlockAt + documentTop (CodeMirror's layout model) rather

@@ -42,6 +42,7 @@ CodeMirror's default `findNext` / `findPrevious` (`@codemirror/search`) scrolls 
 - "Clear zone" = the visible region not obscured by either the mask gradient transition or the 120px progressive-blur overlay. Treat the safe top inset and safe bottom inset as a single source of truth — derive both from the constants already in `editor-scroll-container.tsx` (`FADE_DISTANCE`, mask stops) rather than hard-coding numbers in the search code.
 - The scroll adjustment must not flicker or fight CodeMirror's own `scrollIntoView`. Prefer a single `EditorView.scrollIntoView` dispatch with `y: "center"` (or an explicit margin equal to the top/bottom safe insets), instead of letting CodeMirror's default scroll run and then correcting afterwards.
 - Apply the same logic when the overlay is first opened with an existing selection that is the first match.
+- If the active match is already inside the clear zone, do **not** scroll. Stepping between adjacent visible matches (Enter, Cmd+G, rail-click) updates the selection only — re-anchoring a visible match to the safe-zone top would feel like a jump for no reason.
 
 ### Scrollbar match overview
 
