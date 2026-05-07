@@ -227,22 +227,27 @@ fn install_app_menu(
     Ok(())
 }
 
-/// Send a fire-and-forget event to whichever webview window currently has
-/// focus, falling back to the first visible window if none report focus
-/// (e.g. focus changed mid-click). The native menu handler runs on the
-/// `AppHandle` and isn't tied to a window, so we resolve the target here.
+/// Send an event to whichever webview window currently has focus, scoped to
+/// that window so other windows don't react. The native menu handler runs on
+/// the `AppHandle` and isn't tied to a window, so we resolve the target here.
+///
+/// Fallback order if no window reports focus (focus race, platform error
+/// from `is_focused`): the main window if visible, else any visible window.
+/// `webview_windows()` returns a `HashMap` whose iteration order is
+/// non-deterministic, so the explicit main-window preference matters.
 fn emit_to_focused_window(app: &tauri::AppHandle, event: &str) {
-    let target = app
-        .webview_windows()
-        .into_values()
+    let windows = app.webview_windows();
+    let target = windows
+        .values()
         .find(|w| w.is_focused().unwrap_or(false))
         .or_else(|| {
-            app.webview_windows()
-                .into_values()
-                .find(|w| w.is_visible().unwrap_or(false))
-        });
+            windows
+                .get(MAIN_WINDOW_LABEL)
+                .filter(|w| w.is_visible().unwrap_or(false))
+        })
+        .or_else(|| windows.values().find(|w| w.is_visible().unwrap_or(false)));
     if let Some(window) = target {
-        let _ = window.emit(event, ());
+        let _ = app.emit_to(window.label(), event, ());
     }
 }
 

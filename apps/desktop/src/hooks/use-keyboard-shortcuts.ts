@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useUIStore } from "@/stores/ui-store";
-import { createSettingsTab, useEditorStore } from "@/stores/editor-store";
+import { useEditorStore } from "@/stores/editor-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { toggleSidebar } from "@/hooks/use-sidebar";
 
@@ -29,7 +29,6 @@ export function useKeyboardShortcuts() {
         closeActiveTab,
         navigateBack,
         navigateForward,
-        openOrFocus,
       } = useEditorStore.getState();
 
       // Alt+Arrow: history navigation when no editable target is focused;
@@ -43,13 +42,6 @@ export function useKeyboardShortcuts() {
       if (e.altKey && !e.shiftKey && e.key === "ArrowRight" && !isEditableTargetFocused()) {
         e.preventDefault();
         void navigateForward();
-        return;
-      }
-
-      // Cmd+, — open or focus settings tab
-      if (mod && e.key === ",") {
-        e.preventDefault();
-        openOrFocus((tab) => tab.location.kind === "settings", createSettingsTab);
         return;
       }
 

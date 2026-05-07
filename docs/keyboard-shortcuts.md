@@ -8,7 +8,6 @@ These shortcuts are handled by the global `useKeyboardShortcuts` hook and work r
 
 | Shortcut        | Action                        |
 | --------------- | ----------------------------- |
-| Cmd+,           | Open settings                 |
 | Cmd+P           | File search (command palette) |
 | Cmd+O           | Go to file                    |
 | Cmd+N           | Create new note               |
@@ -20,6 +19,14 @@ These shortcuts are handled by the global `useKeyboardShortcuts` hook and work r
 | Cmd+1 ... Cmd+9 | Jump to Nth tab               |
 | Alt+ArrowLeft   | Navigate back                 |
 | Alt+ArrowRight  | Navigate forward              |
+
+## Menu Accelerators
+
+These shortcuts are bound to the native app menu (Tauri menu accelerators) rather than the global JS handler.
+
+| Shortcut | Action                                                |
+| -------- | ----------------------------------------------------- |
+| Cmd+,    | Open Preferences (Settings tab) in the focused window |
 
 ## Editor Formatting
 
