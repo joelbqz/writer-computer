@@ -59,7 +59,11 @@ class MermaidWidget extends WidgetType {
         docLength: view.state.doc.length,
       });
       view.dispatch({ selection: { anchor: target } });
-      view.focus();
+      // `view.focus()` calls `contentDOM.focus()` without `preventScroll`,
+      // which lets the browser auto-scroll to bring the new caret into view —
+      // visible as the editor jumping when the user clicks "Edit code". Focus
+      // directly with `preventScroll: true` so the viewport stays anchored.
+      view.contentDOM.focus({ preventScroll: true });
     };
 
     const observer = new IntersectionObserver((entries) => {
