@@ -42,3 +42,30 @@ When the scrollable element is an ancestor:
 - Account for `clientTop` if the ancestor has a border (Writer's container has a 12px transparent border-top to give the mask gradient room).
 
 Reference: `EditorView.scrollHandler.of((view, range) => …)` in `apps/desktop/src/components/editor-area/use-prosemark-editor.ts`.
+
+## Scope `scrollHandler` to the scroll targets you actually want to override
+
+`EditorView.scrollHandler.of(...)` runs for **every** scroll target the view processes — including CodeMirror's default cursor tracking on typing. A handler that unconditionally rewrites geometry will jolt the viewport on every keystroke.
+
+Gate the handler on a `StateField` of intent that reads the current transaction's user-event tags, then `return false` for transactions you don't own so CodeMirror's default scroll runs unimpeded:
+
+```ts
+const searchScrollIntent = StateField.define<boolean>({
+  create: () => false,
+  update: (_value, tr) => tr.isUserEvent("select.search") || tr.isUserEvent("input.replace"),
+});
+
+EditorView.scrollHandler.of((view, range) => {
+  if (!view.state.field(searchScrollIntent)) return false; // typing, cursor moves, etc.
+  // …safe-zone scroll math…
+});
+```
+
+Two subtleties:
+
+- **Recompute on every transaction.** Don't early-return to "preserve" the previous value across effect-only transactions — the flag would latch `true` after a search nav and a later unrelated `scrollIntoView` effect would inherit it.
+- **`isUserEvent` is prefix-matching with `.` separators.** `isUserEvent("select.search")` matches both `"select.search"` and `"select.search.matches"`. Likewise `"input.replace"` covers `"input.replace.all"`. One check per family is enough.
+
+User events emitted by `@codemirror/search` (v6.x): `findNext` / `findPrevious` / `jumpToMatch` → `select.search`; `replaceNext` → `input.replace`; `replaceAll` → `input.replace.all`. Typing emits `input.type`, paste emits `input.paste`, plain cursor moves emit `select` — none match the gate.
+
+Return values: `false` falls through to CodeMirror's default scroll; `true` means handled (no further scrolling). Use `true` (not `false`) when the match is already inside the safe zone and you want to suppress any scroll, otherwise the default handler will run and undo your no-op.
