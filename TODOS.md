@@ -13,7 +13,7 @@
 
 ## Up Next
 
--
+- Hanging ATX heading hash markers: [`SPECs/heading-hash-margin-spec.md`](SPECs/heading-hash-margin-spec.md) — render `#`/`##`/… in the left margin so heading text aligns flush with body content. Blocked on the `.cm-scroller` clip-path that's part of the selection-rect-bleed fix; see SPEC for design options (A relax + custom selection layer, B sibling overlay, C in-column compromise).
 
 ## Backlog
 
