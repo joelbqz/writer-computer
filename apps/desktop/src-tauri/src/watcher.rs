@@ -91,6 +91,57 @@ pub fn record_write(state: &WorkspaceState, path: &Path) {
     writes.retain(|_, t| t.elapsed() < SELF_WRITE_TTL);
 }
 
+/// Push `path` into the file index if not already present, then refresh the
+/// `dirs_with_markdown` ancestry so the sidebar's "directory contains
+/// markdown" check returns true for newly-populated subtrees.
+fn add_to_index(state: &WorkspaceState, path: &Path, root: &Path) {
+    let mut index = state.file_index.write();
+    if index.iter().any(|f| f.path == path) {
+        return;
+    }
+    let rel = path
+        .strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .to_string();
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    index.push(crate::state::IndexedFile {
+        path: path.to_path_buf(),
+        relative_path: rel,
+        name,
+    });
+    drop(index);
+
+    state::register_ancestors(&mut state.dirs_with_markdown.write(), path, root);
+}
+
+/// Drop a single path from the file index and rebuild `dirs_with_markdown`.
+fn remove_from_index(state: &WorkspaceState, path: &Path, root: &Path) {
+    state.file_index.write().retain(|f| f.path != path);
+    let index = state.file_index.read();
+    *state.dirs_with_markdown.write() = state::rebuild_dirs_from_index(&index, root);
+}
+
+/// Drop every indexed path under `dir` (a removed folder) and rebuild
+/// `dirs_with_markdown`. Needed because FSEvents may report a single
+/// `Remove(Folder)` without per-child Remove events.
+fn remove_subtree_from_index(state: &WorkspaceState, dir: &Path, root: &Path) {
+    let dir_with_sep = {
+        let mut s = dir.to_path_buf();
+        s.push("");
+        s
+    };
+    state
+        .file_index
+        .write()
+        .retain(|f| !f.path.starts_with(&dir_with_sep) && f.path != dir);
+    let index = state.file_index.read();
+    *state.dirs_with_markdown.write() = state::rebuild_dirs_from_index(&index, root);
+}
+
 fn event_kind_str(kind: &EventKind) -> Option<&'static str> {
     match kind {
         EventKind::Create(_) => Some("created"),
@@ -193,17 +244,28 @@ pub fn start_watcher(
                         None => continue,
                     };
 
+                    // FSEvents reports the path as it was at event time; by
+                    // the time we read it the file may already be gone, so
+                    // `path.is_dir()` is unreliable for "is this a directory?".
+                    // Trust the event kind first, fall back to the live stat.
+                    let is_folder_event = matches!(
+                        event.kind,
+                        EventKind::Remove(notify::event::RemoveKind::Folder)
+                    ) || matches!(
+                        event.kind,
+                        EventKind::Create(notify::event::CreateKind::Folder)
+                    );
+                    let is_dir = is_folder_event || path.is_dir();
+
                     let payload = FileChangeEvent {
                         path: path.to_string_lossy().to_string(),
                         kind: kind_str.to_string(),
                     };
 
-                    if path.is_dir()
-                        || (event.kind == EventKind::Remove(notify::event::RemoveKind::Folder))
-                    {
+                    if is_dir {
                         let _ = handle.emit_to(label.clone(), "fs:directory-changed", &payload);
                     } else {
-                        // Check if it's a config file change — reload settings
+                        // `.writer/config` changes reload settings instead.
                         if is_config_file(path) {
                             if let Some(ref mut s) = *state.settings.write() {
                                 s.reload_workspace();
@@ -213,80 +275,50 @@ pub fn start_watcher(
                         }
 
                         let _ = handle.emit_to(label.clone(), "fs:file-changed", &payload);
+                    }
 
-                        // Update file index and dirs_with_markdown on create/delete
-                        let is_md = path.extension().and_then(|e| e.to_str()) == Some("md");
-
-                        match event.kind {
-                            EventKind::Create(_) => {
-                                if is_md {
-                                    let root = state.workspace_root.read().clone();
-                                    if let Some(root) = root {
-                                        let rel = path
-                                            .strip_prefix(&root)
-                                            .unwrap_or(path)
-                                            .to_string_lossy()
-                                            .to_string();
-                                        let name = path
-                                            .file_name()
-                                            .map(|n| n.to_string_lossy().to_string())
-                                            .unwrap_or_default();
-                                        state.file_index.write().push(crate::state::IndexedFile {
-                                            path: path.clone(),
-                                            relative_path: rel,
-                                            name,
-                                        });
-
-                                        // Add ancestors to dirs_with_markdown
-                                        let path_buf = path.to_path_buf();
-                                        state::register_ancestors(
-                                            &mut state.dirs_with_markdown.write(),
-                                            &path_buf,
-                                            &root,
-                                        );
-
-                                        // Notify parent directory so tree updates
-                                        if let Some(parent) = path.parent() {
-                                            let _ = handle.emit_to(
-                                                label.clone(),
-                                                "fs:directory-changed",
-                                                &FileChangeEvent {
-                                                    path: parent.to_string_lossy().to_string(),
-                                                    kind: "modified".to_string(),
-                                                },
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                            EventKind::Remove(_) => {
-                                if is_md {
-                                    state.file_index.write().retain(|f| f.path != *path);
-
-                                    // Rebuild dirs_with_markdown from current index
-                                    let root = state.workspace_root.read().clone();
-                                    if let Some(root) = root {
-                                        let index = state.file_index.read();
-                                        *state.dirs_with_markdown.write() =
-                                            state::rebuild_dirs_from_index(&index, &root);
-                                    }
-
-                                    // Notify parent directory so tree updates
-                                    if let Some(parent) = path.parent() {
-                                        let _ = handle.emit_to(
-                                            label.clone(),
-                                            "fs:directory-changed",
-                                            &FileChangeEvent {
-                                                path: parent.to_string_lossy().to_string(),
-                                                kind: "modified".to_string(),
-                                            },
-                                        );
-                                    }
+                    // Maintain the file index for `.md` files. Existence is
+                    // checked instead of trusting Create vs. Remove because
+                    // FSEvents coalesces both kinds for the same path within
+                    // one watch window — relying on the event kind alone
+                    // leaks phantom entries (Create after Remove) or drops
+                    // legitimate ones (Remove after Create).
+                    let is_md = path.extension().and_then(|e| e.to_str()) == Some("md");
+                    let root = state.workspace_root.read().clone();
+                    if matches!(event.kind, EventKind::Create(_) | EventKind::Remove(_)) {
+                        if is_md {
+                            if let Some(ref root) = root {
+                                if path.exists() {
+                                    add_to_index(&state, path, root);
                                 } else {
-                                    state.file_index.write().retain(|f| f.path != *path);
+                                    remove_from_index(&state, path, root);
                                 }
                             }
-                            _ => {}
+                        } else if matches!(event.kind, EventKind::Remove(_)) && is_folder_event {
+                            // A removed folder takes any indexed `.md`
+                            // descendants with it; FSEvents may not have
+                            // emitted per-child Remove events if the delete
+                            // landed in a single batch.
+                            if let Some(ref root) = root {
+                                remove_subtree_from_index(&state, path, root);
+                            }
+                        }
+
+                        // Refresh the parent directory's listing for any file
+                        // or folder create/remove. Without this, non-`.md`
+                        // file changes and folder deletes never trigger a
+                        // sidebar refresh.
+                        if !is_dir {
+                            if let Some(parent) = path.parent() {
+                                let _ = handle.emit_to(
+                                    label.clone(),
+                                    "fs:directory-changed",
+                                    &FileChangeEvent {
+                                        path: parent.to_string_lossy().to_string(),
+                                        kind: "modified".to_string(),
+                                    },
+                                );
+                            }
                         }
                     }
                 }
@@ -413,5 +445,52 @@ mod tests {
         assert!(is_self_write(&state, &path));
         assert!(is_self_write(&state, &path));
         assert!(is_self_write(&state, &path));
+    }
+
+    #[test]
+    fn add_to_index_is_idempotent() {
+        let state = WorkspaceState::default();
+        let root = PathBuf::from("/ws");
+        let path = root.join("note.md");
+
+        add_to_index(&state, &path, &root);
+        add_to_index(&state, &path, &root);
+
+        assert_eq!(state.file_index.read().len(), 1);
+        assert!(state.dirs_with_markdown.read().contains(&root));
+    }
+
+    #[test]
+    fn remove_subtree_drops_only_matching_descendants() {
+        let state = WorkspaceState::default();
+        let root = PathBuf::from("/ws");
+        let kept = root.join("kept.md");
+        let inside = root.join("sub/inside.md");
+        let inside2 = root.join("sub/nested/x.md");
+        let sibling = root.join("submarine/y.md");
+
+        add_to_index(&state, &kept, &root);
+        add_to_index(&state, &inside, &root);
+        add_to_index(&state, &inside2, &root);
+        add_to_index(&state, &sibling, &root);
+
+        remove_subtree_from_index(&state, &root.join("sub"), &root);
+
+        let paths: Vec<_> = state
+            .file_index
+            .read()
+            .iter()
+            .map(|f| f.path.clone())
+            .collect();
+        assert!(paths.contains(&kept));
+        assert!(paths.contains(&sibling), "prefix-named sibling kept");
+        assert!(!paths.contains(&inside), "direct child removed");
+        assert!(!paths.contains(&inside2), "nested child removed");
+
+        let dirs = state.dirs_with_markdown.read();
+        assert!(dirs.contains(&root));
+        assert!(dirs.contains(&root.join("submarine")));
+        assert!(!dirs.contains(&root.join("sub")));
+        assert!(!dirs.contains(&root.join("sub/nested")));
     }
 }
