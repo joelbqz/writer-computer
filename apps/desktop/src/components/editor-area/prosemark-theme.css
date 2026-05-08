@@ -55,6 +55,27 @@
 
 .cm-editor .cm-scroller {
   overflow: visible !important;
+
+  /* CodeMirror's `drawSelection` paints the multi-line filler rectangle
+     using `lineStyle.paddingLeft/Right` from the first `.cm-line` in the
+     content. With the page inset on `.cm-content` (so list-item bullets
+     stay aligned to the text column), that filler rect spans the entire
+     `.cm-content` box including the page padding gutters. Worse, prosemark/
+     core's softIndent extension applies inline `padding-inline-start` to
+     list lines, so the rect's left edge depends on whichever line is first
+     in the document — list-item text can end up to the left of where the
+     rect starts. Clip the scroller to the text column so the rect's stray
+     extents are simply not painted. Cursor and text already live inside
+     this box, so they're unaffected. See selection-rect-bleeds-past-text-
+     spec.md. */
+  --writer-text-col-inset: max(
+    var(--writer-editor-side-padding, 4rem),
+    calc(
+      (100% - var(--writer-editor-outer-width, calc(734px + 4rem + 4rem))) / 2 +
+        var(--writer-editor-side-padding, 4rem)
+    )
+  );
+  clip-path: inset(0 var(--writer-text-col-inset));
 }
 
 .cm-editor .cm-content {
@@ -81,6 +102,30 @@
   line-height: var(--writer-editor-line-height, 1.8);
   letter-spacing: var(--writer-editor-letter-spacing, -0.03em);
   color: var(--text-secondary);
+}
+
+/* Override CodeMirror's base-theme `.cm-line { padding: 0 2px 0 6px }`
+   side padding. The page inset already lives on `.cm-content`, so the
+   stray 6px / 2px just shifts text relative to cm-content's content area
+   (and shows up as a small offset in `drawSelection`'s computed
+   leftSide/rightSide). */
+.cm-editor .cm-line, .ͼp .cm-horizontal-rule-container {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.cm-line.cm-blockquote-line::before {
+    inset-inline-start: 0;
+}
+.cm-editor .cm-fenced-code-line {
+    margin-left: 0;
+    padding-left: 12px;
+    padding-right:12px;
+}
+
+.cm-editor .cm-fenced-code-line-first {
+    padding-top: 12px;
+    padding-bottom: 12px;
 }
 
 /* Reduce height of blank lines used as block separators */
