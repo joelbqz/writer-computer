@@ -31,24 +31,30 @@ pub struct WorkspaceInfo {
 /// `WorkspaceIgnore`, and walking the tree — all move to a background thread
 /// guarded by the captured epoch, so rapid A→B switches never block the
 /// frontend's `await` on `open_workspace` / `restore_workspace`.
+/// Validate that `path` exists and is a directory, then return its canonical
+/// form. Extracted so the canonicalization round-trip can be unit-tested
+/// without spinning up a Tauri runtime.
+///
+/// macOS aliases `/var → /private/var` (and friends) and FSEvents always
+/// reports the canonical form; storing the canonical root means the
+/// frontend's `path === root` equality check in the file-watcher hook
+/// succeeds for workspaces opened via aliased paths.
+pub(crate) fn canonicalize_workspace_root(path: &str) -> Result<PathBuf, AppError> {
+    let raw_root = PathBuf::from(path);
+    if !raw_root.exists() || !raw_root.is_dir() {
+        return Err(AppError::NotFound(path.to_string()));
+    }
+    raw_root
+        .canonicalize()
+        .map_err(|e| AppError::Io(e.to_string()))
+}
+
 fn prepare_workspace_state(
     app: &tauri::AppHandle,
     label: &str,
     path: &str,
 ) -> Result<WorkspaceInfo, AppError> {
-    let raw_root = PathBuf::from(path);
-    if !raw_root.exists() || !raw_root.is_dir() {
-        return Err(AppError::NotFound(path.to_string()));
-    }
-
-    // Canonicalize so workspace_root and FSEvents-emitted paths share a
-    // representation. macOS aliases `/var → /private/var` (and friends) and
-    // FSEvents always reports the canonical form; without this the frontend's
-    // `path === root` equality check in the file watcher hook fails for any
-    // workspace opened via an aliased path, leaving the sidebar stale.
-    let root = raw_root
-        .canonicalize()
-        .map_err(|e| AppError::Io(e.to_string()))?;
+    let root = canonicalize_workspace_root(path)?;
     let canonical_path = root.to_string_lossy().to_string();
 
     let name = root
@@ -237,13 +243,22 @@ pub(crate) async fn build_restore_bundle(
     // consistent state.
     let workspace = prepare_workspace_state(app, label, path)?;
 
+    // Use the canonical root for every downstream read. `read_directory_impl`
+    // returns child entry paths prefixed with whatever string it was given,
+    // and the frontend keys its `directoryCache` / `expandedDirs` by exact
+    // string equality. If the raw input were `/var/foo` and the canonical
+    // root `/private/var/foo`, the cache would hold un-canonical child paths
+    // under a canonical-root key — and watcher events (always canonical) would
+    // miss them, leaving the sidebar stale.
+    let canonical_root = workspace.root.clone();
+
     let entries_handle = {
         let app = app.clone();
-        let path = path.to_string();
+        let root = canonical_root.clone();
         let label = label.to_string();
         tauri::async_runtime::spawn_blocking(move || {
             let state = app.state::<AppState>().get_or_create(&label);
-            read_directory_impl(&path, Some(&state))
+            read_directory_impl(&root, Some(&state))
         })
     };
     let recents_handle = {
@@ -254,8 +269,8 @@ pub(crate) async fn build_restore_bundle(
     };
     let session_handle = {
         let app = app.clone();
-        let path = path.to_string();
-        tauri::async_runtime::spawn_blocking(move || load_session_impl(&app, &path))
+        let root = canonical_root.clone();
+        tauri::async_runtime::spawn_blocking(move || load_session_impl(&app, &root))
     };
 
     let entries = entries_handle
@@ -490,7 +505,56 @@ pub fn load_session(
 
 #[cfg(test)]
 mod tests {
-    // Workspace commands require tauri::AppHandle which needs a full Tauri runtime.
-    // These are tested via integration tests or manual testing.
-    // Unit-testable logic (recent workspace persistence) is extracted into helper functions.
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn canonicalize_rejects_missing_path() {
+        let err = canonicalize_workspace_root("/this/path/does/not/exist/ever").unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)));
+    }
+
+    #[test]
+    fn canonicalize_rejects_non_directory() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("a-file.md");
+        std::fs::write(&file, "x").unwrap();
+        let err = canonicalize_workspace_root(file.to_str().unwrap()).unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)));
+    }
+
+    #[test]
+    fn canonicalize_round_trips_existing_directory() {
+        let dir = TempDir::new().unwrap();
+        let raw = dir.path().to_string_lossy().to_string();
+        let canonical = canonicalize_workspace_root(&raw).unwrap();
+        assert!(canonical.is_absolute());
+        assert_eq!(canonical, std::fs::canonicalize(&raw).unwrap());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn canonicalize_resolves_var_alias_on_macos() {
+        // macOS exposes `/var` as an alias for `/private/var`. TempDir hands
+        // out paths under whichever the system reports — TMPDIR is normally
+        // `/var/folders/...` (un-canonical) — so canonicalization must collapse
+        // it to `/private/var/folders/...`. This is the exact aliasing class
+        // the spec was written to fix; if it ever stops happening, the
+        // sidebar regression returns.
+        let dir = TempDir::new().unwrap();
+        let raw = dir.path().to_string_lossy().to_string();
+        if let Some(stripped) = raw.strip_prefix("/private") {
+            let aliased = stripped.to_string();
+            assert!(std::path::Path::new(&aliased).exists());
+            let canonical = canonicalize_workspace_root(&aliased).unwrap();
+            assert_eq!(
+                canonical.to_string_lossy(),
+                raw,
+                "aliased input must canonicalize back to the /private/... form"
+            );
+        }
+        // If `raw` doesn't start with `/private`, the test target isn't on
+        // an aliased filesystem; fall through silently rather than skip — the
+        // round-trip test above still covers the non-aliased case.
+    }
 }

@@ -57,18 +57,21 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     });
 
     const info = await tauri.openWorkspace(path);
-    const entries = await tauri.readDirectory(path);
+    // Read the directory and load the session under the canonical root that
+    // Rust returned, not the raw input. Otherwise watcher events (which fire
+    // canonical paths) miss the cache key and the sidebar goes stale on
+    // aliased workspaces (e.g. `/var/...` → `/private/var/...`).
+    const entries = await tauri.readDirectory(info.root);
     const recents = await tauri.getRecentWorkspaces();
     set({
       root: info.root,
       isIndexing: true,
-      directoryCache: new Map([[path, entries]]),
+      directoryCache: new Map([[info.root, entries]]),
       expandedDirs: new Set(),
       recentWorkspaces: recents,
     });
 
-    // Restore session for the new workspace
-    const session = await loadSession(path);
+    const session = await loadSession(info.root);
     if (session && session.tabs.length > 0) {
       await useEditorStore.getState().restoreSession(session.tabs, session.activeIndex);
       return;

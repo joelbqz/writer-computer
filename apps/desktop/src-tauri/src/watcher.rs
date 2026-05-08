@@ -3,7 +3,7 @@ use crate::state::{self, AppState, WorkspaceState};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
 use std::path::Path;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
@@ -142,6 +142,56 @@ fn remove_subtree_from_index(state: &WorkspaceState, dir: &Path, root: &Path) {
     *state.dirs_with_markdown.write() = state::rebuild_dirs_from_index(&index, root);
 }
 
+/// Walk `dir` and merge every `.md` descendant into the file index.
+///
+/// Required for membership-change events that introduce a populated folder
+/// — Create(Folder) of a folder copied from outside the workspace, or
+/// Modify(Name) when a folder is renamed into place. macOS FSEvents does
+/// not re-emit per-child Create events for a renamed inode, so without
+/// this walk every file under the new directory would silently disappear
+/// from search results until the workspace is reopened.
+fn add_subtree_to_index(state: &WorkspaceState, dir: &Path, root: &Path) {
+    let cancel = Arc::new(AtomicBool::new(false));
+    let (found, _) = crate::commands::search::index_workspace_impl(dir, cancel);
+    if found.is_empty() {
+        return;
+    }
+
+    let mut added = Vec::new();
+    {
+        let mut index = state.file_index.write();
+        for file in found {
+            if index.iter().any(|f| f.path == file.path) {
+                continue;
+            }
+            // Recompute relative_path against the workspace root rather than
+            // `dir` so the search index stays consistent with cold-start
+            // entries.
+            let rel = file
+                .path
+                .strip_prefix(root)
+                .unwrap_or(&file.path)
+                .to_string_lossy()
+                .to_string();
+            let path = file.path.clone();
+            index.push(crate::state::IndexedFile {
+                path: file.path,
+                relative_path: rel,
+                name: file.name,
+            });
+            added.push(path);
+        }
+    }
+
+    if added.is_empty() {
+        return;
+    }
+    let mut dirs = state.dirs_with_markdown.write();
+    for p in added {
+        state::register_ancestors(&mut dirs, &p, root);
+    }
+}
+
 fn event_kind_str(kind: &EventKind) -> Option<&'static str> {
     match kind {
         EventKind::Create(_) => Some("created"),
@@ -231,7 +281,23 @@ pub fn start_watcher(
                         continue;
                     }
 
-                    if is_workspace_ignored(&state, path, path.is_dir()) {
+                    // FSEvents reports the path as it was at event time; by
+                    // the time we read it the file may already be gone, so
+                    // `path.is_dir()` is unreliable. Trust the event kind
+                    // first, fall back to the live stat. Computed up here
+                    // because `is_workspace_ignored` needs an accurate
+                    // is_dir to match dir-only gitignore rules (e.g. `dist/`)
+                    // against deleted directories.
+                    let is_folder_event = matches!(
+                        event.kind,
+                        EventKind::Remove(notify::event::RemoveKind::Folder)
+                    ) || matches!(
+                        event.kind,
+                        EventKind::Create(notify::event::CreateKind::Folder)
+                    );
+                    let is_dir = is_folder_event || path.is_dir();
+
+                    if is_workspace_ignored(&state, path, is_dir) {
                         continue;
                     }
 
@@ -243,19 +309,6 @@ pub fn start_watcher(
                         Some(k) => k,
                         None => continue,
                     };
-
-                    // FSEvents reports the path as it was at event time; by
-                    // the time we read it the file may already be gone, so
-                    // `path.is_dir()` is unreliable for "is this a directory?".
-                    // Trust the event kind first, fall back to the live stat.
-                    let is_folder_event = matches!(
-                        event.kind,
-                        EventKind::Remove(notify::event::RemoveKind::Folder)
-                    ) || matches!(
-                        event.kind,
-                        EventKind::Create(notify::event::CreateKind::Folder)
-                    );
-                    let is_dir = is_folder_event || path.is_dir();
 
                     let payload = FileChangeEvent {
                         path: path.to_string_lossy().to_string(),
@@ -298,15 +351,20 @@ pub fn start_watcher(
                     // within one watch window, and Modify(Name) doesn't tell
                     // us which side of the rename this path is.
                     let is_md = path.extension().and_then(|e| e.to_str()) == Some("md");
-                    let root = state.workspace_root.read().clone();
                     let path_exists = path.exists();
-                    if let Some(ref root) = root {
+                    if let Some(ref root) = root_for_filter {
                         if is_md {
                             if path_exists {
                                 add_to_index(&state, path, root);
                             } else {
                                 remove_from_index(&state, path, root);
                             }
+                        } else if path_exists && is_dir {
+                            // A folder entered the watched tree (Create or
+                            // rename-in). FSEvents won't re-emit Create events
+                            // for descendants, so walk now to keep the index
+                            // in sync.
+                            add_subtree_to_index(&state, path, root);
                         } else if !path_exists {
                             // A vanished non-`.md` path could be a renamed-
                             // away folder; FSEvents may not emit per-child
@@ -458,6 +516,43 @@ mod tests {
     }
 
     #[test]
+    fn self_write_entry_is_not_consumed_on_match() {
+        // Regression: an earlier implementation removed the entry on first
+        // match, which dropped the second and third events from the same
+        // save's fan-out and let the frontend reload the file from disk
+        // mid-keystroke.
+        let state = WorkspaceState::default();
+        let path = PathBuf::from("/test/file.md");
+
+        record_write(&state, &path);
+        assert!(is_self_write(&state, &path));
+        assert_eq!(
+            state.recent_writes.read().len(),
+            1,
+            "entry must survive the lookup so subsequent FSEvent fan-out is also suppressed"
+        );
+        assert!(is_self_write(&state, &path));
+        assert_eq!(state.recent_writes.read().len(), 1);
+    }
+
+    #[test]
+    fn self_write_expires_after_ttl() {
+        // The TTL window is what bounds suppression — past it, legitimate
+        // external edits to the same path must be reflected in the editor.
+        let state = WorkspaceState::default();
+        let path = PathBuf::from("/test/file.md");
+
+        // Insert a stale entry directly so the test doesn't have to sleep
+        // through the real TTL.
+        state.recent_writes.write().insert(
+            path.clone(),
+            Instant::now() - SELF_WRITE_TTL - Duration::from_millis(50),
+        );
+
+        assert!(!is_self_write(&state, &path));
+    }
+
+    #[test]
     fn add_to_index_is_idempotent() {
         let state = WorkspaceState::default();
         let root = PathBuf::from("/ws");
@@ -468,6 +563,52 @@ mod tests {
 
         assert_eq!(state.file_index.read().len(), 1);
         assert!(state.dirs_with_markdown.read().contains(&root));
+    }
+
+    #[test]
+    fn add_subtree_walks_real_directory_and_indexes_md_files() {
+        // Regression: a folder rename within the watch tree (`Modify(Name)`
+        // with `path_exists`) must populate the index for every `.md`
+        // descendant. Before this test existed, the appearing side of a
+        // rename was silently no-op'd and search/sidebar drifted from disk.
+        let dir = tempfile::TempDir::new().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let nested = root.join("nested");
+        std::fs::create_dir_all(nested.join("deeper")).unwrap();
+        std::fs::write(nested.join("a.md"), "# a").unwrap();
+        std::fs::write(nested.join("deeper/b.md"), "# b").unwrap();
+        std::fs::write(nested.join("ignored.txt"), "x").unwrap();
+
+        let state = WorkspaceState::default();
+        add_subtree_to_index(&state, &nested, &root);
+
+        let paths: Vec<_> = state
+            .file_index
+            .read()
+            .iter()
+            .map(|f| f.path.clone())
+            .collect();
+        assert!(paths.contains(&nested.join("a.md")));
+        assert!(paths.contains(&nested.join("deeper/b.md")));
+        assert_eq!(paths.len(), 2, "non-md files must not be indexed");
+
+        let dirs = state.dirs_with_markdown.read();
+        assert!(dirs.contains(&nested));
+        assert!(dirs.contains(&nested.join("deeper")));
+        assert!(dirs.contains(&root), "ancestors register up to the root");
+    }
+
+    #[test]
+    fn add_subtree_is_idempotent_against_existing_entries() {
+        // Re-running over the same directory must not duplicate indexed paths.
+        let dir = tempfile::TempDir::new().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        std::fs::write(root.join("a.md"), "# a").unwrap();
+
+        let state = WorkspaceState::default();
+        add_subtree_to_index(&state, &root, &root);
+        add_subtree_to_index(&state, &root, &root);
+        assert_eq!(state.file_index.read().len(), 1);
     }
 
     #[test]
