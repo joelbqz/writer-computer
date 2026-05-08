@@ -277,48 +277,58 @@ pub fn start_watcher(
                         let _ = handle.emit_to(label.clone(), "fs:file-changed", &payload);
                     }
 
-                    // Maintain the file index for `.md` files. Existence is
-                    // checked instead of trusting Create vs. Remove because
-                    // FSEvents coalesces both kinds for the same path within
-                    // one watch window — relying on the event kind alone
-                    // leaks phantom entries (Create after Remove) or drops
-                    // legitimate ones (Remove after Create).
+                    // Treat Create, Remove, and Rename (Modify(Name)) as
+                    // directory-membership changes. Finder's "Move to Trash"
+                    // and `mv file /elsewhere` arrive as Modify(Name(_)) on
+                    // macOS — not Remove — so the previous code missed them
+                    // entirely.
+                    let is_membership_change = matches!(
+                        event.kind,
+                        EventKind::Create(_)
+                            | EventKind::Remove(_)
+                            | EventKind::Modify(notify::event::ModifyKind::Name(_))
+                    );
+                    if !is_membership_change {
+                        continue;
+                    }
+
+                    // Maintain the file index by reading current ground truth
+                    // (`path.exists()`) instead of trusting the event kind.
+                    // FSEvents coalesces Create+Remove for the same path
+                    // within one watch window, and Modify(Name) doesn't tell
+                    // us which side of the rename this path is.
                     let is_md = path.extension().and_then(|e| e.to_str()) == Some("md");
                     let root = state.workspace_root.read().clone();
-                    if matches!(event.kind, EventKind::Create(_) | EventKind::Remove(_)) {
+                    let path_exists = path.exists();
+                    if let Some(ref root) = root {
                         if is_md {
-                            if let Some(ref root) = root {
-                                if path.exists() {
-                                    add_to_index(&state, path, root);
-                                } else {
-                                    remove_from_index(&state, path, root);
-                                }
+                            if path_exists {
+                                add_to_index(&state, path, root);
+                            } else {
+                                remove_from_index(&state, path, root);
                             }
-                        } else if matches!(event.kind, EventKind::Remove(_)) && is_folder_event {
-                            // A removed folder takes any indexed `.md`
-                            // descendants with it; FSEvents may not have
-                            // emitted per-child Remove events if the delete
-                            // landed in a single batch.
-                            if let Some(ref root) = root {
-                                remove_subtree_from_index(&state, path, root);
-                            }
+                        } else if !path_exists {
+                            // A vanished non-`.md` path could be a renamed-
+                            // away folder; FSEvents may not emit per-child
+                            // events for the descendants, so prune anything
+                            // the index still holds under it.
+                            remove_subtree_from_index(&state, path, root);
                         }
+                    }
 
-                        // Refresh the parent directory's listing for any file
-                        // or folder create/remove. Without this, non-`.md`
-                        // file changes and folder deletes never trigger a
-                        // sidebar refresh.
-                        if !is_dir {
-                            if let Some(parent) = path.parent() {
-                                let _ = handle.emit_to(
-                                    label.clone(),
-                                    "fs:directory-changed",
-                                    &FileChangeEvent {
-                                        path: parent.to_string_lossy().to_string(),
-                                        kind: "modified".to_string(),
-                                    },
-                                );
-                            }
+                    // Refresh the parent directory's listing. Without this,
+                    // non-`.md` file changes, folder deletes, and Finder
+                    // moves never trigger a sidebar refresh.
+                    if !is_dir {
+                        if let Some(parent) = path.parent() {
+                            let _ = handle.emit_to(
+                                label.clone(),
+                                "fs:directory-changed",
+                                &FileChangeEvent {
+                                    path: parent.to_string_lossy().to_string(),
+                                    kind: "modified".to_string(),
+                                },
+                            );
                         }
                     }
                 }
