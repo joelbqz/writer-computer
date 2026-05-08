@@ -144,11 +144,14 @@ const { markdown } = await import("@codemirror/lang-markdown");
 const { GFM } = await import("@lezer/markdown");
 const { foldExtension } = await import("@prosemark/core");
 const {
+  DRAG_END_USER_EVENT,
+  buildEndDragDispatch,
   dragFrozenSelectionField,
   startDragEffect,
   endDragEffect,
   rangesTouchInclusive,
   mermaidDecorations,
+  shouldStartDragGate,
 } = await import("../src/components/editor-area/mermaid-decorations");
 
 describe("rangesTouchInclusive", () => {
@@ -332,14 +335,247 @@ describe("mermaidDecorations drag-gate integration", () => {
     expect(fenceDecorationKind(s0)).toBe("replace");
 
     // Simulate the toggleEditMode dispatch: range covering the entire fence,
-    // gate inactive (button mousedown is stopPropagation'd before reaching
-    // the editor's pointerdown handler — but even if it weren't, the
-    // pointerup-driven endDragEffect would clear the gate before the click
-    // event fires).
+    // gate inactive. (Why is the gate inactive at click time? `mousedown`
+    // stopPropagation on the button does NOT stop the corresponding
+    // `pointerdown` — they're separate event types. What suppresses the
+    // gate is shouldStartDragGate's `closest('.cm-mermaid-widget')` skip,
+    // tested separately in the predicate suite below.)
     const s1 = s0.update({
       selection: EditorSelection.single(fenceTo, fenceFrom),
     }).state;
 
     expect(fenceDecorationKind(s1)).toBe("widget");
+  });
+});
+
+// Pointer-handler predicates. These test the filter logic that the ViewPlugin
+// wraps — primary-button gate, isPrimary, in-widget skip, idempotent re-entry,
+// and the end-drag dispatch builder. Pure functions so we don't need a real
+// EditorView (test environment is "node" — no jsdom).
+describe("shouldStartDragGate", () => {
+  function makeState() {
+    return EditorState.create({
+      doc: "hello world",
+      extensions: [dragFrozenSelectionField],
+    });
+  }
+
+  // Minimal stand-in for a non-widget click target. We don't need a full DOM —
+  // shouldStartDragGate only calls `closest()` which we can stub.
+  const NON_WIDGET_TARGET = {
+    closest: (sel: string) => (sel === ".cm-mermaid-widget" ? null : null),
+  } as unknown as Element;
+
+  // Element-like with closest('.cm-mermaid-widget') returning a truthy node —
+  // simulates a click that originated inside a mermaid widget (canvas pan,
+  // Edit-code button, Preview button).
+  const WIDGET_TARGET = {
+    closest: (sel: string) => (sel === ".cm-mermaid-widget" ? ({} as Element) : null),
+  } as unknown as Element;
+
+  test("returns dispatch with startDragEffect for primary button + non-widget target", () => {
+    const dispatch = shouldStartDragGate(makeState(), {
+      isPrimary: true,
+      button: 0,
+      target: NON_WIDGET_TARGET,
+    });
+    expect(dispatch).not.toBeNull();
+    expect(dispatch!.effects).toBeDefined();
+  });
+
+  test("skips non-primary pointer (isPrimary=false)", () => {
+    expect(
+      shouldStartDragGate(makeState(), {
+        isPrimary: false,
+        button: 0,
+        target: NON_WIDGET_TARGET,
+      }),
+    ).toBeNull();
+  });
+
+  test("skips non-left button (button=2 right click)", () => {
+    expect(
+      shouldStartDragGate(makeState(), {
+        isPrimary: true,
+        button: 2,
+        target: NON_WIDGET_TARGET,
+      }),
+    ).toBeNull();
+  });
+
+  test("skips middle-click (button=1 — autoscroll path)", () => {
+    expect(
+      shouldStartDragGate(makeState(), {
+        isPrimary: true,
+        button: 1,
+        target: NON_WIDGET_TARGET,
+      }),
+    ).toBeNull();
+  });
+
+  test("skips when target is inside .cm-mermaid-widget (canvas pan / button click)", () => {
+    expect(
+      shouldStartDragGate(makeState(), {
+        isPrimary: true,
+        button: 0,
+        target: WIDGET_TARGET,
+      }),
+    ).toBeNull();
+  });
+
+  test("skips when gate is already active (idempotent re-entry)", () => {
+    const s0 = makeState();
+    const s1 = s0.update({
+      effects: startDragEffect.of([EditorSelection.range(0, 0)]),
+    }).state;
+    expect(
+      shouldStartDragGate(s1, { isPrimary: true, button: 0, target: NON_WIDGET_TARGET }),
+    ).toBeNull();
+  });
+
+  test("handles non-Element target gracefully (e.g., text node)", () => {
+    // PointerEvent.target can be any EventTarget; only Elements have closest().
+    // The instanceof check should let a non-Element through to the gate-active
+    // check rather than throwing.
+    const dispatch = shouldStartDragGate(makeState(), {
+      isPrimary: true,
+      button: 0,
+      target: {
+        /* not an Element */
+      } as EventTarget,
+    });
+    expect(dispatch).not.toBeNull();
+  });
+});
+
+describe("buildEndDragDispatch", () => {
+  function makeState() {
+    return EditorState.create({
+      doc: "hello world",
+      extensions: [dragFrozenSelectionField],
+    });
+  }
+
+  test("returns null when gate is inactive (idempotent — pointerup/cancel/blur all fire)", () => {
+    expect(buildEndDragDispatch(makeState())).toBeNull();
+  });
+
+  test("returns dispatch with endDragEffect + selection nudge + userEvent tag when gate active", () => {
+    const s0 = makeState();
+    const s1 = s0.update({
+      effects: startDragEffect.of([EditorSelection.range(0, 0)]),
+    }).state;
+    const dispatch = buildEndDragDispatch(s1);
+    expect(dispatch).not.toBeNull();
+    expect(dispatch!.selection).toBe(s1.selection);
+    expect(dispatch!.userEvent).toBe(DRAG_END_USER_EVENT);
+  });
+
+  test("DRAG_END_USER_EVENT is a 'select' sub-event (consumers can opt out)", () => {
+    // The tag is hierarchical: tr.isUserEvent("select") matches it (so
+    // generic select-listeners still fire), but tr.isUserEvent("select.pointer.drag-end")
+    // distinguishes the no-op nudge from a real user-driven select.
+    expect(DRAG_END_USER_EVENT.startsWith("select.")).toBe(true);
+  });
+});
+
+// Multi-block integration: drag through two adjacent mermaid fences. Both
+// must stay in their pre-drag state for the duration of the gate.
+describe("mermaidDecorations multi-block drag-gate integration", () => {
+  const before = "before\n";
+  const fence1 = "```mermaid\ngraph TD;\n  A-->B;\n```";
+  const between = "\nmiddle\n";
+  const fence2 = "```mermaid\ngraph TD;\n  C-->D;\n```";
+  const after = "\nafter";
+  const doc = before + fence1 + between + fence2 + after;
+  const fence1From = before.length;
+  const fence1To = fence1From + fence1.length;
+  const fence2From = fence1To + between.length;
+  const fence2To = fence2From + fence2.length;
+
+  function makeState(selection: { anchor: number; head?: number }) {
+    return EditorState.create({
+      doc,
+      extensions: [markdown({ extensions: [GFM] }), mermaidDecorations()],
+      selection: EditorSelection.single(selection.anchor, selection.head),
+    });
+  }
+
+  function decorationKindAt(
+    state: ReturnType<typeof makeState>,
+    fenceFrom: number,
+    fenceTo: number,
+  ): "replace" | "widget" | "none" {
+    const set = state.field(foldExtension);
+    let kind: "replace" | "widget" | "none" = "none";
+    set.between(0, doc.length, (from, to, deco) => {
+      const spec = (deco as unknown as { spec?: { widget?: unknown } }).spec ?? {};
+      if (!spec.widget) return undefined;
+      if (from === fenceFrom && to === fenceTo) {
+        kind = "replace";
+        return false;
+      }
+      if (from === fenceTo && to === fenceTo) {
+        kind = "widget";
+        return false;
+      }
+      return undefined;
+    });
+    return kind;
+  }
+
+  test("drag spanning both fences leaves both in Preview during gate", () => {
+    // Pre-drag: caret outside both fences.
+    const s0 = makeState({ anchor: 0 });
+    expect(decorationKindAt(s0, fence1From, fence1To)).toBe("replace");
+    expect(decorationKindAt(s0, fence2From, fence2To)).toBe("replace");
+
+    // Snapshot pre-drag selection (touches neither fence). Extend live
+    // selection across both fences — would normally flip both to Edit.
+    const s1 = s0.update({
+      effects: startDragEffect.of(s0.selection.ranges),
+      selection: EditorSelection.single(0, fence2To),
+    }).state;
+
+    expect(decorationKindAt(s1, fence1From, fence1To)).toBe("replace");
+    expect(decorationKindAt(s1, fence2From, fence2To)).toBe("replace");
+
+    // Pointerup: clear gate. Both flip to Edit since live selection now
+    // overlaps both fences.
+    const s2 = s1.update({
+      effects: endDragEffect.of(null),
+      selection: s1.selection,
+    }).state;
+
+    expect(decorationKindAt(s2, fence1From, fence1To)).toBe("widget");
+    expect(decorationKindAt(s2, fence2From, fence2To)).toBe("widget");
+  });
+});
+
+// Loop risk per spec: the endDrag transaction itself must not trigger
+// another endDrag-style dispatch. We model this by replaying the transaction
+// builder against the post-endDrag state and asserting it returns null.
+describe("end-drag dispatch is one-shot (no loop)", () => {
+  test("buildEndDragDispatch returns null on the state produced by a prior endDrag", () => {
+    const s0 = EditorState.create({
+      doc: "hello world",
+      extensions: [dragFrozenSelectionField],
+    });
+    const s1 = s0.update({
+      effects: startDragEffect.of([EditorSelection.range(0, 0)]),
+    }).state;
+    const first = buildEndDragDispatch(s1);
+    expect(first).not.toBeNull();
+
+    // Apply the dispatch; the field is now null.
+    const s2 = s1.update({
+      selection: first!.selection,
+      effects: first!.effects,
+    }).state;
+    expect(s2.field(dragFrozenSelectionField)).toBeNull();
+
+    // Re-running the builder against s2 must short-circuit. This is what
+    // protects pointerup → endDrag dispatch → (would-be) pointerup loop.
+    expect(buildEndDragDispatch(s2)).toBeNull();
   });
 });

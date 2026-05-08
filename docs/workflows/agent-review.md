@@ -49,7 +49,7 @@ Activate only the personas relevant to the changed surface area. Each persona ow
   Owned docs: `CLAUDE.md` (Engineering Guardrails, Architecture sections).
 
 - **QA Engineer**: coverage quality, regression risk, test adequacy and test selection. Validates that tests are legitimate (no hardcoded expected values, no skipped assertions).
-  Owned docs: test files in `apps/desktop/src/`.
+  Owned docs: test files under `apps/desktop/tests/` and any `apps/desktop/src/**/*.test.{ts,tsx}` colocated tests.
 
 Each persona should also load any spec or doc directly relevant to the files being changed, even if not listed above.
 
