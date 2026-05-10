@@ -64,9 +64,17 @@
      core's softIndent extension applies inline `padding-inline-start` to
      list lines, so the rect's left edge depends on whichever line is first
      in the document — list-item text can end up to the left of where the
-     rect starts. Clip the scroller to the text column so the rect's stray
-     extents are simply not painted. Cursor and text already live inside
-     this box, so they're unaffected. See selection-rect-bleeds-past-text-
+     rect starts. We originally clipped the scroller to the text column on
+     both sides; that suppressed the rect's stray extents entirely. Cursor
+     and text already lived inside that box, so they were unaffected.
+
+     Heading-hash hanging needs room on the left for the hash markers to
+     render in the page-padding gutter, so we relax the LEFT clip by the
+     side-padding distance (clamped to 0). The selection rect's between-
+     filler still needs clipping on the left, which we now do at the
+     selection-layer level — see `.cm-selectionLayer` below. The right
+     side stays at the strict text-col-inset.
+     See selection-rect-bleeds-past-text-spec.md and heading-hash-margin-
      spec.md. */
   --writer-text-col-inset: max(
     var(--writer-editor-side-padding, 4rem),
@@ -75,6 +83,29 @@
         var(--writer-editor-side-padding, 4rem)
     )
   );
+  clip-path: inset(
+    0 var(--writer-text-col-inset) 0
+      max(0px, calc(var(--writer-text-col-inset) - var(--writer-editor-side-padding, 4rem)))
+  );
+}
+
+/* Selection-layer counter-clip. CM6 sets `position: absolute; left: 0;
+   top: 0; contain: size style` with no width/height, so a clip-path on the
+   layer alone clips to a 0x0 reference box. Force the layer to size to its
+   positioning context (`.cm-scroller`) so its clip-path actually clips the
+   absolutely-positioned rect children to the inner text column.
+
+   This restores the `selection-rect-bleeds-past-text` fix on the left
+   (which the relaxed scroller clip above no longer covers) without
+   re-introducing the clip-path on `.cm-scroller` that would also hide the
+   hanging heading hash. Right-side bleed remains clipped by the scroller.
+   `pointer-events: none` is preserved by inheritance from CM's defaults;
+   we explicitly set `contain: layout paint` to drop `size` containment so
+   `width/height: 100%` actually applies. */
+.cm-editor .cm-selectionLayer {
+  width: 100%;
+  height: 100%;
+  contain: layout paint;
   clip-path: inset(0 var(--writer-text-col-inset));
 }
 
@@ -181,6 +212,32 @@
   background-size: 20px 20px;
   background-position: center;
   background-repeat: no-repeat;
+}
+
+/* Hang ATX heading hash markers (`#`/`##`/…) in the left margin so the
+   heading text aligns flush with body content. The mark covers the hash
+   chars + the trailing space (matching prosemark's default hide range);
+   absolute positioning takes them out of the inline flow so the heading
+   text starts at the line's left edge regardless of caret state.
+
+   `font-size: inherit !important` overrides prosemark's default hide spec,
+   which adds `.cm-hidden-token { font-size: 0px }` to the same range when
+   the caret is off the heading. Specificity ties (both 0,2,0) and the
+   runtime-injected theme is loaded after this stylesheet, so !important
+   pins the override and keeps the hash visible in the margin in both
+   caret-on and caret-off states. See heading-hash-margin-spec.md. */
+.cm-editor .cm-heading-line {
+  position: relative;
+}
+
+.cm-editor .cm-heading-hash {
+  position: absolute;
+  right: 100%;
+  padding-right: 0.4em;
+  color: var(--text-muted);
+  white-space: pre;
+  pointer-events: auto;
+  font-size: inherit !important;
 }
 
 /* Wiki-link autocomplete tooltip uses the UI font, not the editor font */

@@ -45,6 +45,7 @@ import { tableDecorations } from "./table-decorations";
 import { htmlBlockDecorations, htmlBlockParserExtension } from "./html-block-decorations";
 import { mermaidDecorations } from "./mermaid-decorations";
 import { dragFreezeExtensions } from "./drag-selection-gate";
+import { headingDecorations } from "./heading-decorations";
 import { imageSrcResolver } from "./image-src-resolver";
 import { wikiLinkExtension } from "./wiki-link-extension";
 import {
@@ -578,6 +579,7 @@ function createEditorExtensions(
     tableDecorations(),
     htmlBlockDecorations(),
     mermaidDecorations(),
+    headingDecorations,
     imageSrcResolver(getFilePath),
     wikiLinkExtension(getFilePath, isDisposed),
     markdownFormatting,
