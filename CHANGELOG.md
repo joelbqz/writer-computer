@@ -2,6 +2,7 @@
 
 ## 2026-05-12
 
+- Heading anchor links. Clicking `[See setup](#setup)` smooth-scrolls the current document to the matching heading without touching navigation history. Clicking `[Roadmap](planning/roadmap.md#q3)` opens the target file in the current tab (push to per-tab history) and scrolls to the heading once the doc loads. Slugs follow GFM: lowercase, spaces → `-`, github-slugger's punctuation strip, duplicate-collision suffixes `-2`, `-3`, … in document order. Slug generation is a pure module shared by the section rail's `Copy heading link` and the link resolver — single source of truth, unit-tested. Unresolved anchors still navigate to the target file, scroll to the top, and surface a small auto-dismissing inline warning instead of failing silently. See `SPECs/heading-anchor-links-spec.md`.
 - Add a section-indicator rail to the editor body. A thin column on the left edge of the editor pane renders one short horizontal tick per heading (H1–H3 by default), indented by depth. The tick of the heading currently nearest the top of the viewport brightens. Hovering the rail reveals a text-only outline popover listing every heading; the current heading at each level is bold full-color while the rest are muted. Clicking a tick or row smooth-scrolls to that heading; right-clicking offers `Copy heading link`. Headings are parsed from the file content (skipping fenced code blocks); active tracking is driven by a scroll-event listener using CodeMirror's layout model (`view.lineBlockAt`/`view.documentTop`). See `SPECs/section-indicators-spec.md`.
 
 ## 2026-05-08
