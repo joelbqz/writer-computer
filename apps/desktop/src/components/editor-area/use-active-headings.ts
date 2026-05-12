@@ -10,10 +10,9 @@ const ACTIVE_OFFSET_PX = EDITOR_SAFE_SCROLL_MARGIN + 4;
 
 export interface ActiveHeadings {
   activeIndex: number | null;
-  activeByLevel: Record<number, number>;
 }
 
-const EMPTY: ActiveHeadings = { activeIndex: null, activeByLevel: {} };
+const EMPTY: ActiveHeadings = { activeIndex: null };
 
 function computeActive(
   view: EditorView,
@@ -26,7 +25,6 @@ function computeActive(
   const threshold = scrollerRect.top + ACTIVE_OFFSET_PX;
 
   let activeIndex: number | null = null;
-  const byLevel: Record<number, number> = {};
   for (let i = 0; i < headings.length; i++) {
     const h = headings[i];
     const pos = Math.min(h.pos, docLen);
@@ -34,30 +32,12 @@ function computeActive(
     const screenY = view.documentTop + block.top;
     if (screenY > threshold) break;
     activeIndex = i;
-    for (const key of Object.keys(byLevel)) {
-      if (Number(key) >= h.level) delete byLevel[Number(key)];
-    }
-    byLevel[h.level] = i;
   }
   // Before any heading has scrolled past the threshold we're still on the
   // first heading conceptually — fall back so the rail's first tick lights
   // up at the top of the document.
-  if (activeIndex === null) {
-    activeIndex = 0;
-    byLevel[headings[0].level] = 0;
-  }
-  return { activeIndex, activeByLevel: byLevel };
-}
-
-function shallowEqualActive(a: ActiveHeadings, b: ActiveHeadings) {
-  if (a.activeIndex !== b.activeIndex) return false;
-  const ak = Object.keys(a.activeByLevel);
-  const bk = Object.keys(b.activeByLevel);
-  if (ak.length !== bk.length) return false;
-  for (const k of ak) {
-    if (a.activeByLevel[Number(k)] !== b.activeByLevel[Number(k)]) return false;
-  }
-  return true;
+  if (activeIndex === null) activeIndex = 0;
+  return { activeIndex };
 }
 
 export function useActiveHeadings(
@@ -79,7 +59,7 @@ export function useActiveHeadings(
     const update = () => {
       frame = 0;
       const next = computeActive(view, scroller, headings);
-      if (!shallowEqualActive(stateRef.current, next)) setState(next);
+      if (stateRef.current.activeIndex !== next.activeIndex) setState(next);
     };
     const schedule = () => {
       if (frame) return;
