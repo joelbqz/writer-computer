@@ -1,12 +1,14 @@
-import { useCallback, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { useRef, useState, type CSSProperties, type RefObject } from "react";
 import type { EditorView } from "@codemirror/view";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useDocumentHeadings, type DocumentHeading } from "@/hooks/use-document-headings";
+import { ScrollFade } from "@/components/scroll-fade";
 import { useActiveHeadings } from "./use-active-headings";
 import { useEscKey } from "./use-esc-key";
+import { useMountTransition } from "./use-mount-transition";
 import { showNativeContextMenu } from "./editor-context-menu";
 import { EDITOR_SAFE_SCROLL_MARGIN } from "./editor-scroll-container";
-import { ScrollFade } from "@/components/scroll-fade";
+import "./section-rail.css";
 
 const INACTIVE_WIDTH = 5;
 const ACTIVE_WIDTH = 10;
@@ -14,8 +16,10 @@ const TICK_HEIGHT = 2;
 const TICK_GAP = 6;
 const RAIL_LEFT = 12;
 const RAIL_INNER_WIDTH = ACTIVE_WIDTH + 2;
-const RAIL_ZONE_WIDTH = RAIL_LEFT + RAIL_INNER_WIDTH + 12;
+const RAIL_ZONE_WIDTH = RAIL_LEFT + RAIL_INNER_WIDTH;
 const POPOVER_WIDTH = 260;
+const POPOVER_LEFT = RAIL_LEFT;
+const POPOVER_TRANSITION_MS = 180;
 
 interface SectionRailProps {
   filePath: string;
@@ -42,15 +46,15 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
   const headings = useDocumentHeadings(filePath);
   const { activeIndex } = useActiveHeadings(view, scrollContainerRef, headings);
   const [isOpen, setIsOpen] = useState(false);
-  const close = useCallback(() => setIsOpen(false), []);
-  useEscKey(isOpen, close);
+  const { shouldRender, phase } = useMountTransition(isOpen, POPOVER_TRANSITION_MS);
+  useEscKey(isOpen, () => setIsOpen(false));
 
   const railZoneRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
   // Move-between rail and popover keeps the popover open; leaving to
-  // anywhere else closes. Crucial because the rail zone abuts the popover
-  // with no gap, so we can't rely on a single wrapper to bridge them.
+  // anywhere else closes. Crucial because the popover overlaps the rail
+  // x-range — we still need an explicit relatedTarget check to bridge.
   const handleRailLeave = (event: React.MouseEvent<HTMLDivElement>) => {
     const next = event.relatedTarget;
     if (next instanceof Node && popoverRef.current?.contains(next)) return;
@@ -92,7 +96,7 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
   return (
     <div
       className="pointer-events-none absolute inset-y-0 left-0 z-20"
-      style={{ width: RAIL_ZONE_WIDTH + POPOVER_WIDTH }}
+      style={{ width: POPOVER_LEFT + POPOVER_WIDTH }}
     >
       <div
         ref={railZoneRef}
@@ -139,12 +143,14 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
         </div>
       </div>
 
-      {isOpen && (
+      {shouldRender && (
         <div
           ref={popoverRef}
-          className="pointer-events-auto absolute top-1/2 -translate-y-1/2 overflow-hidden rounded-2xl"
+          className="section-rail-popover pointer-events-auto absolute overflow-hidden rounded-2xl"
+          data-state={phase}
           style={{
-            left: RAIL_ZONE_WIDTH,
+            top: "50%",
+            left: POPOVER_LEFT,
             width: POPOVER_WIDTH,
             background: "var(--surface-card)",
             backdropFilter: "blur(20px)",
@@ -153,6 +159,7 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
             boxShadow: "0 12px 32px rgba(0, 0, 0, 0.18)",
             isolation: "isolate",
           }}
+          onMouseEnter={() => setIsOpen(true)}
           onMouseLeave={handlePopoverLeave}
         >
           <div
@@ -174,18 +181,15 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
                   <li key={`${heading.line}-${i}`}>
                     <button
                       type="button"
-                      className="block w-full cursor-pointer truncate border-0 bg-transparent p-0 text-left"
+                      className={`section-rail-popover-row block w-full cursor-pointer truncate border-0 bg-transparent p-0 text-left${
+                        isActive ? " is-active" : ""
+                      }`}
                       style={{
-                        color: isActive ? "var(--text-primary)" : "var(--text-muted)",
                         fontSize: 13,
                         letterSpacing: "-0.01em",
                         lineHeight: 1.5,
-                        transition: "color 150ms ease",
                       }}
-                      onClick={() => {
-                        handleTickClick(heading);
-                        setIsOpen(false);
-                      }}
+                      onClick={() => handleTickClick(heading)}
                       onContextMenu={(event) => handleContextMenu(event, heading)}
                     >
                       {heading.text}

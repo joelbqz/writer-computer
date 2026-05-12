@@ -83,7 +83,7 @@
   width: 100%;
   max-width: var(--writer-editor-outer-width, calc(734px + 4rem + 4rem));
   margin: 0 auto;
-  padding: 0 var(--writer-editor-side-padding, 4rem) 100px;
+  padding: 0 var(--writer-editor-side-padding, 4rem) 40vh;
   font-family: var(
     --writer-editor-font-family,
     -apple-system-body,

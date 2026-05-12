@@ -35,6 +35,13 @@ function computeActive(
     }
     byLevel[h.level] = i;
   }
+  // Before any heading has scrolled past the threshold we're still on the
+  // first heading conceptually — fall back so the rail's first tick lights
+  // up at the top of the document.
+  if (activeIndex === null) {
+    activeIndex = 0;
+    byLevel[headings[0].level] = 0;
+  }
   return { activeIndex, activeByLevel: byLevel };
 }
 

@@ -1,0 +1,24 @@
+.section-rail-popover {
+  transform-origin: left center;
+  transform: translateY(-50%) translateX(0) scale(1);
+  opacity: 1;
+  transition:
+    transform 180ms ease,
+    opacity 180ms ease;
+  will-change: transform, opacity;
+}
+
+.section-rail-popover[data-state="closed"] {
+  transform: translateY(-50%) translateX(-8px) scale(0.98);
+  opacity: 0;
+}
+
+.section-rail-popover-row {
+  color: var(--text-muted);
+  transition: color 150ms ease;
+}
+
+.section-rail-popover-row.is-active,
+.section-rail-popover-row:hover {
+  color: var(--text-primary);
+}
