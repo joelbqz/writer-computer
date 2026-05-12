@@ -22,6 +22,7 @@ import { getRelativePath } from "@/lib/paths";
 import { pageKind } from "./page-kinds";
 import { buildTabMenuItemsSpec, showNativeContextMenu } from "./editor-context-menu";
 import { useWorkspaceRoot } from "@/hooks/use-workspace";
+import { revealPathInSidebar } from "@/lib/reveal-in-sidebar";
 
 interface EditorTabButtonProps {
   tab: Tab;
@@ -136,8 +137,8 @@ export function EditorTabs() {
             }
           },
           onRevealInSidebar: () => {
-            // Setting the active file highlights it in the sidebar tree
             setActiveTab(tab.id);
+            void revealPathInSidebar(filePath, { showSidebar: true });
           },
           onCopyPath: () => {
             void writeText(relative);
