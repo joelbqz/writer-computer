@@ -130,7 +130,7 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
               // value applies to the property changes that fire in the same
               // render, so flipping to active is instant and flipping back
               // animates.
-              transition: isActive ? "none" : "width 300ms ease-in, opacity 300ms ease-in",
+              transition: isActive ? "none" : "width 200ms ease-in, opacity 200ms ease-in",
             };
             return (
               <button
