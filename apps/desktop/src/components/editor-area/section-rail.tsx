@@ -12,7 +12,7 @@ import "./section-rail.css";
 
 const INACTIVE_WIDTH = 5;
 const ACTIVE_WIDTH = 10;
-const TICK_HEIGHT = 2;
+const TICK_HEIGHT = 1;
 const TICK_GAP = 6;
 const RAIL_LEFT = 12;
 const RAIL_INNER_WIDTH = ACTIVE_WIDTH + 2;
@@ -156,7 +156,6 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
             backdropFilter: "blur(20px)",
             WebkitBackdropFilter: "blur(20px)",
             border: "1px solid var(--line-subtler)",
-            boxShadow: "0 12px 32px rgba(0, 0, 0, 0.18)",
             isolation: "isolate",
           }}
           onMouseEnter={() => setIsOpen(true)}
