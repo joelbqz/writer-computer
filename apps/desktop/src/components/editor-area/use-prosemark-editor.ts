@@ -45,7 +45,7 @@ import { tableDecorations } from "./table-decorations";
 import { htmlBlockDecorations, htmlBlockParserExtension } from "./html-block-decorations";
 import { mermaidDecorations } from "./mermaid-decorations";
 import { dragFreezeExtensions } from "./drag-selection-gate";
-import { headingDecorations } from "./heading-decorations";
+import { clampSelectionToHeadings, headingDecorations } from "./heading-decorations";
 import { imageSrcResolver } from "./image-src-resolver";
 import { wikiLinkExtension } from "./wiki-link-extension";
 import {
@@ -138,15 +138,22 @@ function focusOnRevealExtension(isDisposed: () => boolean): Extension {
 }
 
 function restoreCursorPosition(view: EditorView, cursorPos: number) {
+  // Always dispatch a selection — even a no-op anchor: 0 — so the
+  // `headingSelectionGuard` transactionFilter sees the initial selection and
+  // clamps it out of any no-go zone (e.g., a doc that starts with a heading
+  // would otherwise render the caret at lineFrom, which is the start of the
+  // hash chars). `EditorState.create`'s default selection is at position 0
+  // and isn't a transaction, so the filter never fires for it.
+  let pos: number;
   if (cursorPos > 0) {
-    const pos = Math.min(cursorPos, view.state.doc.length);
-    view.dispatch({ selection: { anchor: pos } });
-    return;
+    pos = Math.min(cursorPos, view.state.doc.length);
+  } else if (view.state.doc.toString() === "# ") {
+    // New-file template from create_file_impl is "# "; land caret after it so the user can type the title immediately.
+    pos = 2;
+  } else {
+    pos = 0;
   }
-  // New-file template from create_file_impl is "# "; land caret after it so the user can type the title immediately.
-  if (view.state.doc.toString() === "# ") {
-    view.dispatch({ selection: { anchor: 2 } });
-  }
+  view.dispatch({ selection: { anchor: pos } });
 }
 
 function restoreScrollPosition(
@@ -701,6 +708,7 @@ export function useProsemarkEditor(
     advanceViewportParse(view, () => disposedRef.current);
 
     restoreCursorPosition(view, file?.cursorPos ?? 0);
+    clampSelectionToHeadings(view);
 
     const scrollContainer = resolveScrollContainer(el, getScrollContainerRef.current);
     if (scrollContainer) {
@@ -780,6 +788,7 @@ export function useProsemarkEditor(
     }
 
     advanceViewportParse(view, () => disposedRef.current);
+    clampSelectionToHeadings(view);
   }, [filePath, reloadVersion]);
 
   return mountRef;
