@@ -9,7 +9,8 @@ const WINDOWS_ABSOLUTE_PATH = /^[A-Za-z]:[\\/]/;
 const EXPLICIT_URL_SCHEME = /^[A-Za-z][A-Za-z\d+.-]*:/;
 
 export type LinkTarget =
-  | { kind: "internal"; path: string }
+  | { kind: "internal"; path: string; anchor?: string }
+  | { kind: "same-doc-anchor"; anchor: string }
   | { kind: "external-url"; url: string }
   | { kind: "external-path"; path: string };
 
@@ -19,6 +20,13 @@ function splitLinkHref(href: string): string {
   const splitIndex =
     hashIndex === -1 ? queryIndex : queryIndex === -1 ? hashIndex : Math.min(hashIndex, queryIndex);
   return splitIndex === -1 ? href : href.slice(0, splitIndex);
+}
+
+function extractAnchor(href: string): string | undefined {
+  const hashIndex = href.indexOf("#");
+  if (hashIndex === -1) return undefined;
+  const anchor = href.slice(hashIndex + 1);
+  return anchor ? decodeLinkPath(anchor) : undefined;
 }
 
 function decodeLinkPath(path: string): string {
@@ -86,7 +94,11 @@ export async function resolveLinkTarget(
   fileExists?: FileExistsFn,
 ): Promise<LinkTarget | null> {
   const trimmed = href.trim();
-  if (!trimmed || trimmed.startsWith("#")) return null;
+  if (!trimmed) return null;
+  if (trimmed.startsWith("#")) {
+    const anchor = extractAnchor(trimmed);
+    return anchor ? { kind: "same-doc-anchor", anchor } : null;
+  }
   if (EXPLICIT_URL_SCHEME.test(trimmed) && !WINDOWS_ABSOLUTE_PATH.test(trimmed)) {
     return { kind: "external-url", url: trimmed };
   }
@@ -94,6 +106,7 @@ export async function resolveLinkTarget(
   const target = splitLinkHref(trimmed);
   if (!target) return null;
 
+  const anchor = extractAnchor(trimmed);
   const decodedTarget = decodeLinkPath(target);
   const resolvedPath = resolvePath(getParentDir(currentFilePath), decodedTarget);
 
@@ -101,7 +114,7 @@ export async function resolveLinkTarget(
   const isMarkdown = extension === "md" || extension === "markdown";
 
   if (isMarkdown && (!workspaceRoot || isPathInsideRoot(resolvedPath, workspaceRoot))) {
-    return { kind: "internal", path: resolvedPath };
+    return { kind: "internal", path: resolvedPath, ...(anchor ? { anchor } : {}) };
   }
 
   // Probe for markdown files when the resolved path has no recognized extension.
@@ -130,7 +143,7 @@ export async function resolveLinkTarget(
       for (const candidate of candidates) {
         if (workspaceRoot && !isPathInsideRoot(candidate, workspaceRoot)) continue;
         if (await fileExists(candidate)) {
-          return { kind: "internal", path: candidate };
+          return { kind: "internal", path: candidate, ...(anchor ? { anchor } : {}) };
         }
       }
     }

@@ -91,12 +91,13 @@ describe("resolveLinkTarget", () => {
     });
   });
 
-  test("strips query and hash from markdown links", async () => {
+  test("strips query from markdown links but preserves anchor", async () => {
     expect(
       await resolveLinkTarget("./guide.md?view=1#intro", "/vault/docs/start.md", "/vault"),
     ).toEqual({
       kind: "internal",
       path: "/vault/docs/guide.md",
+      anchor: "intro",
     });
   });
 
@@ -107,8 +108,37 @@ describe("resolveLinkTarget", () => {
     });
   });
 
-  test("returns null for hash-only links", async () => {
-    expect(await resolveLinkTarget("#intro", "/vault/docs/start.md", "/vault")).toBeNull();
+  test("classifies hash-only links as same-doc-anchor", async () => {
+    expect(await resolveLinkTarget("#intro", "/vault/docs/start.md", "/vault")).toEqual({
+      kind: "same-doc-anchor",
+      anchor: "intro",
+    });
+  });
+
+  test("returns null for a bare hash", async () => {
+    expect(await resolveLinkTarget("#", "/vault/docs/start.md", "/vault")).toBeNull();
+  });
+
+  test("decodes percent-encoded same-doc anchors", async () => {
+    expect(await resolveLinkTarget("#hello%20world", "/vault/docs/start.md", "/vault")).toEqual({
+      kind: "same-doc-anchor",
+      anchor: "hello world",
+    });
+  });
+
+  test("attaches anchor to internal cross-doc markdown links", async () => {
+    expect(await resolveLinkTarget("./guide.md#setup", "/vault/docs/start.md", "/vault")).toEqual({
+      kind: "internal",
+      path: "/vault/docs/guide.md",
+      anchor: "setup",
+    });
+  });
+
+  test("omits anchor field when cross-doc link has no fragment", async () => {
+    expect(await resolveLinkTarget("./guide.md", "/vault/docs/start.md", "/vault")).toEqual({
+      kind: "internal",
+      path: "/vault/docs/guide.md",
+    });
   });
 
   test("classifies explicit URLs as external", async () => {
@@ -242,12 +272,13 @@ describe("resolveLinkTarget", () => {
       });
     });
 
-    test("preserves fragment stripping behavior", async () => {
+    test("attaches anchor when probing extensionless paths", async () => {
       expect(
         await resolveLinkTarget("./guide#heading", "/vault/docs/start.md", "/vault", fileExists),
       ).toEqual({
         kind: "internal",
         path: "/vault/docs/guide.md",
+        anchor: "heading",
       });
     });
 
