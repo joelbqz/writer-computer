@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import type { EditorView } from "@codemirror/view";
 import type { DocumentHeading } from "@/hooks/use-document-headings";
+import { EDITOR_SAFE_SCROLL_MARGIN } from "./editor-scroll-container";
 
-const ACTIVE_OFFSET_PX = 32;
+// Match the scroll-to-heading landing y so clicking a tick / row immediately
+// activates the destination heading instead of keeping the previous one
+// active. A small fudge protects against measurement jitter at the boundary.
+const ACTIVE_OFFSET_PX = EDITOR_SAFE_SCROLL_MARGIN + 4;
 
 export interface ActiveHeadings {
   activeIndex: number | null;
