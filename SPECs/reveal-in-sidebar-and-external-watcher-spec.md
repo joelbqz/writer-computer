@@ -54,19 +54,9 @@ A fix that doesn't depend on guessing the right TTL: **content-hash matching, no
 
 This swaps "timestamp coincidence" for "content equality" and removes the TTL guess. Cost: one extra fs read per watch event during the self-write window (cheap; only checked when the path matches a recent write). Risk: two saves of identical content in a row would be conflated — acceptable, that's idempotent.
 
-#### B. Notify's macOS FSEvents backend coalesces events into batches that exceed our debounce
+#### B. ~~Notify's macOS FSEvents backend coalesces events into batches that exceed our debounce~~ — **ruled out**
 
-`watcher.rs:248`:
-
-```rust
-if pending.is_empty() || last_emit.elapsed() < Duration::from_millis(DEBOUNCE_MS) { continue; }
-```
-
-The condition is `OR`, not `AND`, on the wrong terms. After a flush, the next `recv_timeout` arrival sets `pending` non-empty; but `last_emit.elapsed() < 300ms` is true, so the loop `continue`s. The next `recv_timeout` blocks for another 300ms. In the worst case an event sits in `pending` for up to **600 ms** before processing. Not "missing" per se, but the upper bound is twice what the constant suggests, and it compounds with iCloud-style delayed events to push some changes past the user's patience window.
-
-Fix: change the gate to `pending.is_empty() && last_emit.elapsed() < DEBOUNCE_MS` is wrong too — we want "process if pending and elapsed >= DEBOUNCE." Cleanest: drain `pending` on every `recv_timeout` timeout regardless of `last_emit`. The debounce becomes "wait at most 300 ms after the first pending event, then flush." Same effective behavior, no double-debounce edge case.
-
-Not high impact alone, but a real correctness issue; pair with (A).
+Initial read suggested the `if pending.is_empty() || last_emit.elapsed() < DEBOUNCE_MS` gate at `watcher.rs:248` could double the debounce window to ~600 ms. Closer trace shows it doesn't: `recv_timeout` returns immediately when an event arrives and waits up to `DEBOUNCE_MS` otherwise; after a `continue`, the next `recv_timeout` waits *up to* the remaining debounce window. Worst-case latency from a single event to flush is ~`DEBOUNCE_MS` (300 ms), which is the intended debounce behavior. Leaving this here so a future reader doesn't re-investigate.
 
 #### C. The `fs:directory-changed` `expandedDirs` filter drops legitimate refreshes
 
@@ -128,7 +118,6 @@ Before writing any fix:
 
 3. **Then** pick the fix(es) supported by what the logs showed. The primary expected outcomes:
    - (A) is real → switch to content-hash self-write detection.
-   - (B) is real → flatten the debounce gate.
    - Others either confirm clean or fall out of scope.
 
 This spec deliberately does not pre-commit to a fix until logs are read. It documents the candidates and the repro recipes so the next round is bounded.
@@ -279,7 +268,6 @@ Per CLAUDE.md memory ([`feedback_kebab_case_filenames.md`](../../../../.claude/p
 - [ ] Debug logs added behind `tracing::debug!` macros at the four watcher decision points listed above.
 - [ ] All seven manual repros from the investigation plan run on a dev build, results recorded (in the SPEC, or in a follow-up doc the SPEC links to).
 - [ ] If hypothesis A (TTL too short for delayed-sync FS) confirms: replace timestamp matching with content-hash matching in `is_self_write` / `record_write`. New `cargo test` coverage: a self-write with a 30-second-delayed echo is still suppressed (content matches); an external write 100 ms after a save with **different** content falls through (content differs).
-- [ ] If hypothesis B (double-debounce upper bound) confirms: flatten the gate; coverage is an end-to-end timing observation, no new unit test required.
 - [ ] No regression in the existing test suite: `should_ignore_*`, `self_write_*`, `add_subtree_*`, `remove_subtree_*` (`watcher.rs:451+`) continue to pass.
 
 ### Cross-cutting

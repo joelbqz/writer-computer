@@ -11,10 +11,13 @@ interface FileChangePayload {
   kind: "modified" | "created" | "deleted" | "renamed";
 }
 
+const WATCHER_DEBUG = import.meta.env.DEV;
+
 export function useFileWatcher() {
   useEffect(() => {
     const unlistenFile = listen<FileChangePayload>("fs:file-changed", (event) => {
       const { path, kind } = event.payload;
+      if (WATCHER_DEBUG) console.debug("[watcher] fs:file-changed", kind, path);
       const openFiles = editorApi.getOpenFiles();
       const file = openFiles.get(path);
 
@@ -26,6 +29,7 @@ export function useFileWatcher() {
       void tauri.readFile(path).then((content) => {
         const latest = editorApi.getOpenFiles().get(path);
         if (!latest || content.content === latest.diskContent) return;
+        if (WATCHER_DEBUG) console.debug("[watcher] reload-from-disk", path);
         editorApi.reloadFromDisk(path, content.content);
       });
     });
@@ -42,6 +46,7 @@ export function useFileWatcher() {
 
     const unlistenDir = listen<FileChangePayload>("fs:directory-changed", (event) => {
       const { path } = event.payload;
+      if (WATCHER_DEBUG) console.debug("[watcher] fs:directory-changed", path);
       const { root, expandedDirs, invalidatePath, refreshDirectory } = useWorkspaceStore.getState();
 
       // For visible directories (expanded or root), refresh in-place so the

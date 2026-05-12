@@ -4,12 +4,30 @@ use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 
 const SELF_WRITE_TTL: Duration = Duration::from_secs(2);
 const DEBOUNCE_MS: u64 = 300;
+
+/// Runtime-gated diagnostic logging. Set `WRITER_WATCHER_LOG=1` before
+/// launching to dump every event, filter decision, and emit to stderr —
+/// the SPEC's investigation plan for residual "external change missed"
+/// reports. No-op (single atomic-bool read) when the env var is unset, so
+/// it's safe to leave the call sites in release builds.
+fn watcher_log_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("WRITER_WATCHER_LOG").is_some())
+}
+
+macro_rules! wlog {
+    ($($arg:tt)*) => {
+        if watcher_log_enabled() {
+            eprintln!("[watcher] {}", format!($($arg)*));
+        }
+    };
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FileChangeEvent {
@@ -78,9 +96,17 @@ fn is_config_file(path: &Path) -> bool {
 /// expired entries on its next call.
 fn is_self_write(state: &WorkspaceState, path: &Path) -> bool {
     let writes = state.recent_writes.read();
-    writes
+    let hit = writes
         .get(path)
-        .is_some_and(|written_at| written_at.elapsed() < SELF_WRITE_TTL)
+        .is_some_and(|written_at| written_at.elapsed() < SELF_WRITE_TTL);
+    if hit {
+        wlog!(
+            "self-write suppressed: {} ({} tracked)",
+            path.display(),
+            writes.len()
+        );
+    }
+    hit
 }
 
 pub fn record_write(state: &WorkspaceState, path: &Path) {
@@ -89,6 +115,11 @@ pub fn record_write(state: &WorkspaceState, path: &Path) {
 
     // Clean up stale entries
     writes.retain(|_, t| t.elapsed() < SELF_WRITE_TTL);
+    wlog!(
+        "record_write: {} ({} tracked)",
+        path.display(),
+        writes.len()
+    );
 }
 
 /// Push `path` into the file index if not already present, then refresh the
@@ -238,9 +269,21 @@ pub fn start_watcher(
         loop {
             match rx.recv_timeout(Duration::from_millis(DEBOUNCE_MS)) {
                 Ok(Ok(event)) => {
+                    wlog!(
+                        "recv: kind={:?} paths={:?}",
+                        event.kind,
+                        event
+                            .paths
+                            .iter()
+                            .map(|p| p.display().to_string())
+                            .collect::<Vec<_>>()
+                    );
                     pending.push(event);
                 }
-                Ok(Err(_)) => continue,
+                Ok(Err(err)) => {
+                    wlog!("recv err: {err:?}");
+                    continue;
+                }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
             }
@@ -271,12 +314,14 @@ pub fn start_watcher(
                 for path in &event.paths {
                     if let Some(ref root) = root_for_filter {
                         if should_ignore(path, root) {
+                            wlog!("filter[should_ignore]: {}", path.display());
                             continue;
                         }
                     }
 
                     // `.gitignore` changes defer to a background rebuild.
                     if is_gitignore_path(path) {
+                        wlog!("filter[gitignore-change]: {}", path.display());
                         rebuild_ignore = true;
                         continue;
                     }
@@ -298,6 +343,7 @@ pub fn start_watcher(
                     let is_dir = is_folder_event || path.is_dir();
 
                     if is_workspace_ignored(&state, path, is_dir) {
+                        wlog!("filter[workspace_ignore]: {}", path.display());
                         continue;
                     }
 
@@ -307,7 +353,10 @@ pub fn start_watcher(
 
                     let kind_str = match event_kind_str(&event.kind) {
                         Some(k) => k,
-                        None => continue,
+                        None => {
+                            wlog!("filter[unmapped_kind]: {:?} {}", event.kind, path.display());
+                            continue;
+                        }
                     };
 
                     let payload = FileChangeEvent {
@@ -316,10 +365,15 @@ pub fn start_watcher(
                     };
 
                     if is_dir {
+                        wlog!(
+                            "emit fs:directory-changed kind={kind_str} {}",
+                            path.display()
+                        );
                         let _ = handle.emit_to(label.clone(), "fs:directory-changed", &payload);
                     } else {
                         // `.writer/config` changes reload settings instead.
                         if is_config_file(path) {
+                            wlog!("emit settings:changed {}", path.display());
                             if let Some(ref mut s) = *state.settings.write() {
                                 s.reload_workspace();
                             }
@@ -327,6 +381,7 @@ pub fn start_watcher(
                             continue;
                         }
 
+                        wlog!("emit fs:file-changed kind={kind_str} {}", path.display());
                         let _ = handle.emit_to(label.clone(), "fs:file-changed", &payload);
                     }
 
@@ -379,6 +434,7 @@ pub fn start_watcher(
                     // moves never trigger a sidebar refresh.
                     if !is_dir {
                         if let Some(parent) = path.parent() {
+                            wlog!("emit fs:directory-changed (parent) {}", parent.display());
                             let _ = handle.emit_to(
                                 label.clone(),
                                 "fs:directory-changed",
