@@ -10,8 +10,8 @@ import { showNativeContextMenu } from "./editor-context-menu";
 import { EDITOR_SAFE_SCROLL_MARGIN } from "./editor-scroll-container";
 import "./section-rail.css";
 
-const INACTIVE_WIDTH = 5;
-const ACTIVE_WIDTH = 10;
+const INACTIVE_WIDTH = 7;
+const ACTIVE_WIDTH = 14;
 const TICK_HEIGHT = 1;
 const TICK_GAP = 6;
 const RAIL_LEFT = 12;
