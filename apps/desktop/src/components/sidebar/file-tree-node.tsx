@@ -139,6 +139,7 @@ export const FileTreeNode = memo(function FileTreeNode({
     <button
       type="button"
       role="treeitem"
+      data-tree-path={entry.path}
       aria-selected={isActive}
       aria-expanded={entry.is_dir ? isExpanded : undefined}
       aria-label={entry.is_dir ? `${entry.name} folder` : displayName}
