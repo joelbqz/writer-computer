@@ -126,7 +126,11 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
               height: TICK_HEIGHT,
               background: "currentColor",
               opacity: isActive ? 1 : 0.2,
-              transition: "width 180ms ease, opacity 180ms ease",
+              // Snap on the way in, fade on the way out — the new transition
+              // value applies to the property changes that fire in the same
+              // render, so flipping to active is instant and flipping back
+              // animates.
+              transition: isActive ? "none" : "width 180ms ease, opacity 180ms ease",
             };
             return (
               <button
