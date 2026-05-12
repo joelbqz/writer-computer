@@ -3,6 +3,7 @@
 ## In Progress
 
 - Mermaid canvas widget: [`SPECs/mermaid-canvas-widget-spec.md`](SPECs/mermaid-canvas-widget-spec.md) — render mermaid blocks in a fixed-height canvas-style frame with pan, zoom, and an edit-code toggle.
+- Heading anchor links: [`SPECs/heading-anchor-links-spec.md`](SPECs/heading-anchor-links-spec.md)
 
 ## Done
 
@@ -19,7 +20,6 @@ Previously-triaged work organized by phase. Pull into `Up Next` as capacity open
 
 ### Content features
 
-- Heading anchor links: [`SPECs/heading-anchor-links-spec.md`](SPECs/heading-anchor-links-spec.md)
 - Fuzzy content search and grep: [`SPECs/fuzzy-search-grep-spec.md`](SPECs/fuzzy-search-grep-spec.md)
 - Tags: [`SPECs/tags-spec.md`](SPECs/tags-spec.md)
 - New tab recent files: [`SPECs/new-tab-recent-files-spec.md`](SPECs/new-tab-recent-files-spec.md)
