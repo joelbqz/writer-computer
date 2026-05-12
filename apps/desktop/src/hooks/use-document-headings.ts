@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useFileContent } from "@/hooks/use-tabs";
+import { createHeadingSlugger } from "@/lib/heading-slug";
 
 export interface DocumentHeading {
   level: number;
@@ -14,16 +15,23 @@ export interface DocumentHeadingsOptions {
 }
 
 const DEFAULT_MAX_DEPTH = 3;
+const FULL_DEPTH = 6;
 
-function slugify(text: string): string {
-  return text
-    .trim()
-    .toLowerCase()
-    .replace(/[^\p{Letter}\p{Number}\s-]/gu, "")
-    .replace(/\s+/g, "-");
+export interface ParseDocumentHeadingsOptions {
+  maxDepth?: number;
+  slugDepth?: number;
 }
 
-export function parseDocumentHeadings(content: string, maxDepth: number): DocumentHeading[] {
+// When `slugDepth > maxDepth` the slugger still walks the skipped levels so
+// duplicate counts stay accurate against the doc as a whole (the rail can
+// render H1–H3 while anchor resolution against the full doc still works).
+export function parseDocumentHeadings(
+  content: string,
+  options: ParseDocumentHeadingsOptions = {},
+): DocumentHeading[] {
+  const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
+  const slugDepth = Math.max(maxDepth, options.slugDepth ?? maxDepth);
+  const slugger = createHeadingSlugger();
   const headings: DocumentHeading[] = [];
   let inFence = false;
   let fenceChar: string | null = null;
@@ -51,10 +59,11 @@ export function parseDocumentHeadings(content: string, maxDepth: number): Docume
       const match = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
       if (match) {
         const level = match[1].length;
-        if (level <= maxDepth) {
-          const text = match[2].trim();
-          if (text) {
-            headings.push({ level, text, line: i, pos, slug: slugify(text) });
+        const text = match[2].trim();
+        if (text && level <= slugDepth) {
+          const slug = slugger(text);
+          if (level <= maxDepth) {
+            headings.push({ level, text, line: i, pos, slug });
           }
         }
       }
@@ -64,11 +73,22 @@ export function parseDocumentHeadings(content: string, maxDepth: number): Docume
   return headings;
 }
 
+export function buildSlugIndex(headings: DocumentHeading[]): Map<string, DocumentHeading> {
+  const index = new Map<string, DocumentHeading>();
+  for (const heading of headings) {
+    if (!index.has(heading.slug)) index.set(heading.slug, heading);
+  }
+  return index;
+}
+
 export function useDocumentHeadings(
   filePath: string | null,
   options: DocumentHeadingsOptions = {},
 ): DocumentHeading[] {
   const content = useFileContent(filePath);
   const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
-  return useMemo(() => parseDocumentHeadings(content, maxDepth), [content, maxDepth]);
+  return useMemo(
+    () => parseDocumentHeadings(content, { maxDepth, slugDepth: FULL_DEPTH }),
+    [content, maxDepth],
+  );
 }
