@@ -1,6 +1,7 @@
 import { useActiveTab, useActiveTabId, useOpenTabs } from "@/hooks/use-tabs";
 import { pageKind } from "./page-kinds";
 import { EditorSearchOverlay } from "./editor-search-overlay";
+import { AnchorWarningBanner } from "./anchor-warning-banner";
 
 function EditorArea() {
   const activeTab = useActiveTab();
@@ -23,6 +24,7 @@ function EditorArea() {
       </div>
       {activeTab ? pageKind(activeTab.location).renderFooter?.(activeTab.location) : null}
       <EditorSearchOverlay />
+      <AnchorWarningBanner />
     </div>
   );
 }

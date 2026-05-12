@@ -59,10 +59,14 @@ import {
 import * as editorApi from "@/hooks/editor-api";
 import { useReloadVersion } from "@/hooks/use-tabs";
 import { getWorkspaceRoot } from "@/hooks/workspace-api";
+import { buildSlugIndex, parseDocumentHeadings } from "@/hooks/use-document-headings";
+import type { DocumentHeading } from "@/hooks/use-document-headings";
 import { parseDocument, parseFrontmatter } from "@/lib/frontmatter";
-import { resolveLinkTarget } from "@/lib/paths";
+import { getFileName, resolveLinkTarget } from "@/lib/paths";
+import { consumePendingAnchor, setPendingAnchor } from "@/lib/pending-anchor";
 import { logTimeline, mark } from "@/lib/startup-metrics";
 import * as tauri from "@/lib/tauri";
+import { showAnchorWarning } from "./anchor-warning-store";
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 
@@ -271,7 +275,40 @@ function getRawUrl(view: EditorView, pos: number) {
   return href;
 }
 
-async function followLink(href: string | null, filePath: string) {
+function findHeadingBySlug(content: string, slug: string): DocumentHeading | undefined {
+  return buildSlugIndex(parseDocumentHeadings(content, { maxDepth: 6, slugDepth: 6 })).get(slug);
+}
+
+function scrollHeadingIntoView(
+  view: EditorView,
+  scroller: HTMLElement,
+  heading: DocumentHeading,
+  behavior: ScrollBehavior,
+) {
+  const pos = Math.min(heading.pos, view.state.doc.length);
+  const block = view.lineBlockAt(pos);
+  const screenY = view.documentTop + block.top;
+  const scrollerRect = scroller.getBoundingClientRect();
+  const delta = screenY - scrollerRect.top - EDITOR_SAFE_SCROLL_MARGIN;
+  const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+  const next = Math.max(0, Math.min(scroller.scrollTop + delta, max));
+  scroller.scrollTo({ top: next, behavior });
+}
+
+function scrollSameDocAnchor(view: EditorView, filePath: string, anchor: string) {
+  const file = editorApi.getOpenFile(filePath);
+  const content = file?.content ?? view.state.doc.toString();
+  const heading = findHeadingBySlug(content, anchor);
+  if (!heading) {
+    showAnchorWarning(`Heading "#${anchor}" not found in this document`);
+    return;
+  }
+  const scroller = findOuterScroller(view);
+  if (!scroller) return;
+  scrollHeadingIntoView(view, scroller, heading, "smooth");
+}
+
+async function followLink(href: string | null, view: EditorView, filePath: string) {
   if (!href) return;
 
   const target = await resolveLinkTarget(href, filePath, getWorkspaceRoot(), (path) =>
@@ -279,7 +316,17 @@ async function followLink(href: string | null, filePath: string) {
   );
   if (!target) return;
 
+  if (target.kind === "same-doc-anchor") {
+    scrollSameDocAnchor(view, filePath, target.anchor);
+    return;
+  }
+
   if (target.kind === "internal") {
+    if (target.anchor && target.path === filePath) {
+      scrollSameDocAnchor(view, filePath, target.anchor);
+      return;
+    }
+    if (target.anchor) setPendingAnchor(target.path, target.anchor);
     await editorApi.navigateToFile(target.path);
     return;
   }
@@ -303,7 +350,7 @@ function linkNavigationExtension(getFilePath: () => string, isDisposed: () => bo
         if (htmlAnchor instanceof HTMLAnchorElement) {
           event.preventDefault();
           event.stopPropagation();
-          void followLink(htmlAnchor.getAttribute("href"), getFilePath()).catch((error) => {
+          void followLink(htmlAnchor.getAttribute("href"), view, getFilePath()).catch((error) => {
             if (!isDisposed()) console.error("[editor] Failed to open link:", error);
           });
           return true;
@@ -321,7 +368,7 @@ function linkNavigationExtension(getFilePath: () => string, isDisposed: () => bo
 
         event.preventDefault();
         event.stopPropagation();
-        void followLink(href, getFilePath()).catch((error) => {
+        void followLink(href, view, getFilePath()).catch((error) => {
           if (!isDisposed()) console.error("[editor] Failed to open link:", error);
         });
         return true;
@@ -381,7 +428,7 @@ function editorBodyContextMenuExtension(
             },
             onOpenLink: hasLink
               ? () => {
-                  void followLink(linkHref, filePath);
+                  void followLink(linkHref, view, filePath);
                 }
               : undefined,
             onCopyLink: hasLink
@@ -705,7 +752,21 @@ export function useProsemarkEditor(
         getScrollContainerRef.current,
       );
       if (scrollContainer) {
-        restoreScrollPosition(scrollContainer, file?.scrollPos ?? 0, () => disposedRef.current);
+        const pendingAnchor = consumePendingAnchor(filePath);
+        if (pendingAnchor !== undefined) {
+          const heading = findHeadingBySlug(content, pendingAnchor);
+          if (heading) {
+            requestAnimationFrame(() => {
+              if (disposedRef.current) return;
+              scrollHeadingIntoView(view, scrollContainer, heading, "auto");
+            });
+          } else {
+            scrollContainer.scrollTo({ top: 0, behavior: "auto" });
+            showAnchorWarning(`Heading "#${pendingAnchor}" not found in ${getFileName(filePath)}`);
+          }
+        } else {
+          restoreScrollPosition(scrollContainer, file?.scrollPos ?? 0, () => disposedRef.current);
+        }
       }
     }
 
