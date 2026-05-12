@@ -1,7 +1,9 @@
+import type { EditorView } from "@codemirror/view";
 import { ProseMarkEditor } from "./prosemark-editor";
 import { FrontmatterPanel } from "./frontmatter-panel";
 import { EditorScrollContainer } from "./editor-scroll-container";
 import { EditorSearchOverview } from "./editor-search-overview";
+import { SectionRail } from "./section-rail";
 import { useCloseEditorSearchWhenInactive } from "./use-close-editor-search-when-inactive";
 import { useEditorSettingsRef } from "./use-editor-settings";
 import { useIsFileLoading } from "@/hooks/use-tabs";
@@ -27,6 +29,7 @@ export const EditorPane = memo(function EditorPane({ path, isActive }: EditorPan
   const isLoading = useIsFileLoading(path);
   const editorSettingsRef = useEditorSettingsRef();
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const [editorView, setEditorView] = useState<EditorView | null>(null);
   useCloseEditorSearchWhenInactive(isActive);
 
   const getScrollContainer = useCallback(() => scrollContainerRef.current, []);
@@ -69,9 +72,11 @@ export const EditorPane = memo(function EditorPane({ path, isActive }: EditorPan
             filePath={path}
             getScrollContainer={getScrollContainer}
             autoFocus={isActive}
+            onViewChange={setEditorView}
           />
         </div>
       </EditorScrollContainer>
+      <SectionRail filePath={path} view={editorView} scrollContainerRef={scrollContainerRef} />
       {isActive && <EditorSearchOverview scrollContainerRef={scrollContainerRef} />}
     </div>
   );

@@ -6,6 +6,7 @@
 
 ## Done
 
+- Section indicators: [`SPECs/section-indicators-spec.md`](SPECs/section-indicators-spec.md) — left-edge rail of heading ticks with active-heading tracking, hover outline popover, click-to-scroll, and right-click `Copy heading link`.
 - Mermaid drag-selection edit-mode flip: [`SPECs/mermaid-drag-selection-edit-mode-flip-spec.md`](SPECs/mermaid-drag-selection-edit-mode-flip-spec.md) — freeze `editMode` for the duration of a pointer drag-selection so the widget doesn't flip into source view mid-drag.
 
 ## Up Next
@@ -26,7 +27,6 @@ Previously-triaged work organized by phase. Pull into `Up Next` as capacity open
 
 ### Visual and media polish
 
-- Section indicators: [`SPECs/section-indicators-spec.md`](SPECs/section-indicators-spec.md)
 - Inline media preview: [`SPECs/inline-media-preview-spec.md`](SPECs/inline-media-preview-spec.md)
 - Obsidian image embed: [`SPECs/obsidian-image-embed-spec.md`](SPECs/obsidian-image-embed-spec.md)
 

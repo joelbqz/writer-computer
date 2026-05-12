@@ -576,6 +576,7 @@ export function useProsemarkEditor(
   filePath: string,
   getScrollContainer?: () => HTMLElement | null,
   autoFocus = false,
+  onViewChange?: (view: EditorView | null) => void,
 ) {
   const viewRef = useRef<EditorView | null>(null);
   const scrollCleanupRef = useRef<(() => void) | null>(null);
@@ -583,6 +584,7 @@ export function useProsemarkEditor(
   const filePathRef = useRef(filePath);
   const getScrollContainerRef = useRef(getScrollContainer);
   const autoFocusRef = useRef(autoFocus);
+  const onViewChangeRef = useRef(onViewChange);
   const prevPathRef = useRef<string | null>(null);
   const prevReloadVersionRef = useRef<number>(0);
   const setupCompartmentRef = useRef<Compartment | null>(null);
@@ -594,6 +596,7 @@ export function useProsemarkEditor(
   filePathRef.current = filePath;
   getScrollContainerRef.current = getScrollContainer;
   autoFocusRef.current = autoFocus;
+  onViewChangeRef.current = onViewChange;
 
   // Stable ref callback — only handles mount/unmount.
   const mountRef = useCallback((el: HTMLDivElement | null) => {
@@ -607,6 +610,7 @@ export function useProsemarkEditor(
         view.destroy();
       }
       viewRef.current = null;
+      onViewChangeRef.current?.(null);
       return;
     }
 
@@ -633,6 +637,7 @@ export function useProsemarkEditor(
     viewRef.current = view;
     prevPathRef.current = currentPath;
     prevReloadVersionRef.current = file?.reloadVersion ?? 0;
+    onViewChangeRef.current?.(view);
 
     mark("editor-ready");
     logTimeline();

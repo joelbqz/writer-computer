@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-05-12
+
+- Add a section-indicator rail to the editor body. A thin column on the left edge of the editor pane renders one short horizontal tick per heading (H1–H3 by default), indented by depth. The tick of the heading currently nearest the top of the viewport brightens. Hovering the rail reveals a text-only outline popover listing every heading; the current heading at each level is bold full-color while the rest are muted. Clicking a tick or row smooth-scrolls to that heading; right-clicking offers `Copy heading link`. Headings are parsed from the file content (skipping fenced code blocks); active tracking is driven by a scroll-event listener using CodeMirror's layout model (`view.lineBlockAt`/`view.documentTop`). See `SPECs/section-indicators-spec.md`.
+
 ## 2026-05-08
 
 - Fix the editor selection rendering as a single giant rectangle that bled past the text column and overlapped block widgets (mermaid canvas, table, html block) for any multi-line selection. CodeMirror's `drawSelection` paints the multi-line filler rectangle using `lineStyle.paddingLeft/Right` from the first `.cm-line` it queries, so with the page inset on `.cm-content` the rect spans the entire `.cm-content` box including the page padding gutters; and `@prosemark/core`'s `softIndentExtension` applies inline `padding-inline-start` per list line, so the rect's left edge can shift with whichever line is first in the document and list-item text bleeds outside it. Fix adds `clip-path: inset(0 X)` on `.cm-scroller`, where `X` resolves to the live text-column inset (`max(side-padding, (100% − outer-width) / 2 + side-padding)`). The wrong-bounded rect from drawSelection is still painted, but the parts that extend into the page-padding gutters are simply not displayed. Cursor, text, widgets, and search match highlights already live inside the clipped column, so nothing else changes. CSS-only, single declaration. See `SPECs/selection-rect-bleeds-past-text-spec.md`.
