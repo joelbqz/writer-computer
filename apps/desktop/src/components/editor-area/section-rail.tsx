@@ -13,6 +13,7 @@ import "./section-rail.css";
 
 const INACTIVE_WIDTH = 7;
 const ACTIVE_WIDTH = 14;
+const INACTIVE_TICK_SCALE = INACTIVE_WIDTH / ACTIVE_WIDTH;
 const TICK_HEIGHT = 1;
 const TICK_GAP = 6;
 const RAIL_LEFT = 12;
@@ -121,17 +122,18 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
           {headings.map((heading, i) => {
             const isActive = i === activeIndex;
             const tickStyle: CSSProperties = {
-              width: isActive ? ACTIVE_WIDTH : INACTIVE_WIDTH,
+              width: ACTIVE_WIDTH,
               height: TICK_HEIGHT,
               background: "currentColor",
               opacity: isActive ? 1 : 0.35,
-              transition: isActive ? "none" : "width 300ms ease-in, opacity 300ms ease-in",
+              transform: isActive ? "scaleX(1)" : `scaleX(${INACTIVE_TICK_SCALE})`,
+              transition: isActive ? "none" : "transform 300ms ease-in, opacity 300ms ease-in",
             };
             return (
               <button
                 key={`${heading.line}-${i}`}
                 type="button"
-                className="block cursor-default border-0 bg-transparent p-0"
+                className="section-rail-tick block cursor-default border-0 bg-transparent p-0"
                 style={tickStyle}
                 title={heading.text}
                 onClick={() => handleTickClick(heading)}
