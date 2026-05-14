@@ -356,9 +356,15 @@ const dragSelectionPlugin = ViewPlugin.fromClass(
 
 /**
  * The full drag-freeze bundle. Mount once at the editor's top-level extension
- * list. The overlay is wrapped in `Prec.high` so that, at ranges where it
- * does contribute a decoration, it takes precedence over prosemark's atomic
- * (`Decoration.replace`) decisions for the duration of the drag.
+ * list. The overlays are `Prec.high` so their decorations are processed
+ * before prosemark's `hideExtension` / `foldExtension` contributions. For
+ * atomic `Decoration.replace` (the block hides — heading marks, fenced
+ * blocks) precedence directly decides which decoration wins at overlapping
+ * ranges. For `Decoration.mark` (the inline hides — `cm-hidden-token` on
+ * backticks, etc.) all contributing sources still apply; precedence here
+ * just affects nest order in the rendered DOM, which is enough because the
+ * relevant CSS — `font-size: 0` / `opacity: 0` — kicks in regardless of
+ * which span level it lands on.
  */
 const dragFreezeExtensions: Extension = [
   dragFrozenSelectionField,
@@ -372,6 +378,8 @@ const dragFreezeExtensions: Extension = [
 export {
   DRAG_END_USER_EVENT,
   buildEndDragDispatch,
+  diffDecorationSet,
+  diffFoldDecorationsByProximity,
   dragFreezeExtensions,
   dragFrozenSelectionField,
   dragSelectionPlugin,
