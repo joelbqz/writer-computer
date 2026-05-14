@@ -13,6 +13,7 @@ import {
   closeEditorSearch,
   useEditorSearchStore,
 } from "./editor-search-store";
+import { SurfaceCard } from "@/components/surface-card";
 
 interface MatchInfo {
   current: number;
@@ -145,11 +146,11 @@ export function EditorSearchOverlay() {
   }
 
   return (
-    <div
+    <SurfaceCard
       role="dialog"
       aria-label="Find in document"
       data-search-overlay
-      className="pointer-events-auto absolute bottom-2 right-3 z-40 w-[min(560px,calc(100%-1.5rem))] overflow-hidden rounded-2xl border border-[var(--line-subtler)] bg-[var(--surface-card)] p-2 backdrop-blur-md"
+      className="pointer-events-auto absolute bottom-2 right-3 z-40 w-[min(560px,calc(100%-1.5rem))] overflow-hidden p-2"
     >
       <div className="flex items-center gap-1.5">
         <div className="relative min-w-0 flex-1">
@@ -229,7 +230,7 @@ export function EditorSearchOverlay() {
           </button>
         </div>
       )}
-    </div>
+    </SurfaceCard>
   );
 }
 

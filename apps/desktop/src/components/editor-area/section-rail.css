@@ -1,4 +1,4 @@
-.section-rail-popover {
+.section-rail-ticks {
   transform-origin: left center;
   transform: translateY(-50%) translateX(0) scale(1);
   opacity: 1;
@@ -8,17 +8,37 @@
   will-change: transform, opacity;
 }
 
+.section-rail-ticks[data-open="true"] {
+  transform: translateY(-50%) translateX(8px) scale(1.05);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.section-rail-popover {
+  transform-origin: left center;
+  transform: translateY(-50%) translateX(4px) scale(1);
+  opacity: 1;
+  transition:
+    transform 180ms ease,
+    opacity 180ms ease;
+  will-change: transform, opacity;
+}
+
 .section-rail-popover[data-state="closed"] {
-  transform: translateY(-50%) translateX(-8px) scale(0.98);
+  transform: translateY(-50%) translateX(0) scale(0.95);
   opacity: 0;
 }
 
 .section-rail-popover-row {
   color: var(--text-muted);
-  transition: color 150ms ease;
+  transition: color 300ms ease;
 }
 
-.section-rail-popover-row.is-active,
 .section-rail-popover-row:hover {
   color: var(--text-primary);
+  transition: none;
+}
+
+.section-rail-popover-row.is-active {
+  color: var(--accent);
 }

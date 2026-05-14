@@ -212,33 +212,40 @@ input {
   z-index: 100;
 }
 
+/* Floating card surface — shared by `<SurfaceCard>` (section-rail popover,
+   editor search overlay) and cmdk's library-rendered `[cmdk-dialog]`. The
+   `::before` layer paints `--bg-base` at 55% so the card reads opaque enough
+   while the backdrop-blur still picks up editor content behind. Establish a
+   stacking context (`isolation: isolate`) so the under-layer stays inside. */
+.surface-card,
+[cmdk-dialog] {
+  background: var(--surface-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--line-subtler);
+  border-radius: 16px;
+  isolation: isolate;
+}
+
+.surface-card::before,
+[cmdk-dialog]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--bg-base) 55%, transparent);
+  z-index: -1;
+  pointer-events: none;
+}
+
 [cmdk-dialog] {
   position: fixed;
   top: 16%;
   left: 50%;
   transform: translateX(-50%);
   width: min(560px, 90vw);
-  background: var(--surface-card);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--line-subtler);
-  border-radius: 16px;
   z-index: 101;
   overflow: hidden;
-  /* Establish a stacking context so the opacity layer below stays inside. */
-  isolation: isolate;
-}
-
-/* Paint a partially-opaque bg-base layer behind the tinted `--surface-card`
-   so the dialog reads as a card rather than fully see-through translucent
-   chrome, while still letting the backdrop-blur of editor content come
-   through. Adjust the percentage to dial translucency. */
-[cmdk-dialog]::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: color-mix(in srgb, var(--bg-base) 55%, transparent);
-  z-index: -1;
 }
 
 [cmdk-input] {

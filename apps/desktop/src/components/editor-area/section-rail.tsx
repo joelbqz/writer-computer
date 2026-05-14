@@ -3,6 +3,7 @@ import type { EditorView } from "@codemirror/view";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useDocumentHeadings, type DocumentHeading } from "@/hooks/use-document-headings";
 import { ScrollFade } from "@/components/scroll-fade";
+import { SurfaceCard } from "@/components/surface-card";
 import { useActiveHeadings } from "./use-active-headings";
 import { useEscKey } from "./use-esc-key";
 import { useMountTransition } from "./use-mount-transition";
@@ -106,15 +107,13 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
         onMouseLeave={handleRailLeave}
       >
         <div
-          className="absolute top-1/2 flex -translate-y-1/2 flex-col"
+          className="section-rail-ticks absolute top-1/2 flex flex-col"
+          data-open={isOpen ? "true" : "false"}
           style={{
             left: RAIL_LEFT,
             width: RAIL_INNER_WIDTH,
             gap: TICK_GAP,
             color: "var(--text-primary, currentColor)",
-            opacity: isOpen ? 0 : 1,
-            pointerEvents: isOpen ? "none" : "auto",
-            transition: "opacity 150ms ease",
           }}
           aria-label="Document sections"
           role="navigation"
@@ -125,14 +124,14 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
               width: isActive ? ACTIVE_WIDTH : INACTIVE_WIDTH,
               height: TICK_HEIGHT,
               background: "currentColor",
-              opacity: isActive ? 1 : 0.2,
-              transition: "width 150ms ease-in, opacity 150ms ease-in",
+              opacity: isActive ? 1 : 0.35,
+              transition: isActive ? "none" : "width 300ms ease-in, opacity 300ms ease-in",
             };
             return (
               <button
                 key={`${heading.line}-${i}`}
                 type="button"
-                className="block cursor-pointer border-0 bg-transparent p-0"
+                className="block cursor-default border-0 bg-transparent p-0"
                 style={tickStyle}
                 title={heading.text}
                 onClick={() => handleTickClick(heading)}
@@ -144,30 +143,18 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
       </div>
 
       {shouldRender && (
-        <div
+        <SurfaceCard
           ref={popoverRef}
-          className="section-rail-popover pointer-events-auto absolute overflow-hidden rounded-2xl"
+          className="section-rail-popover pointer-events-auto absolute overflow-hidden"
           data-state={phase}
           style={{
             top: "50%",
             left: POPOVER_LEFT,
             width: POPOVER_WIDTH,
-            background: "var(--surface-card)",
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
-            border: "1px solid var(--line-subtler)",
-            isolation: "isolate",
           }}
           onMouseEnter={() => setIsOpen(true)}
           onMouseLeave={handlePopoverLeave}
         >
-          <div
-            className="pointer-events-none absolute inset-0 rounded-2xl"
-            style={{
-              background: "color-mix(in srgb, var(--bg-base) 55%, transparent)",
-              zIndex: -1,
-            }}
-          />
           <ScrollFade
             axis="vertical"
             fadeSize="20px"
@@ -180,7 +167,7 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
                   <li key={`${heading.line}-${i}`}>
                     <button
                       type="button"
-                      className={`section-rail-popover-row block w-full cursor-pointer truncate border-0 bg-transparent p-0 text-left${
+                      className={`section-rail-popover-row block w-full cursor-default truncate border-0 bg-transparent p-0 text-left${
                         isActive ? " is-active" : ""
                       }`}
                       style={{
@@ -198,7 +185,7 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
               })}
             </ul>
           </ScrollFade>
-        </div>
+        </SurfaceCard>
       )}
     </div>
   );
