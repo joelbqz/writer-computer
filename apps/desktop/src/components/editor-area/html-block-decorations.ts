@@ -3,6 +3,7 @@ import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 import { foldExtension, foldableSyntaxFacet } from "@prosemark/core";
 import type { BlockParser, BlockContext, Line, MarkdownConfig } from "@lezer/markdown";
 import DOMPurify from "dompurify";
+import { dragFrozenSelectionField, rangesTouchInclusive } from "./drag-selection-gate";
 
 const ALLOWED_TAGS = [
   "div",
@@ -185,7 +186,17 @@ function isInteractiveHtmlTarget(target: EventTarget | null) {
 
 const htmlBlockFoldExtension = foldableSyntaxFacet.of({
   nodePath: "HTMLBlock",
-  buildDecorations: (state, node) => {
+  // `keepDecorationOnUnfold: true` makes prosemark always delegate the
+  // decoration choice to us instead of short-circuiting when the live
+  // selection touches the block. Without it, the drag-freeze override below
+  // would be bypassed and the block would unfurl mid-drag the moment the
+  // extending selection enters the block.
+  keepDecorationOnUnfold: true,
+  buildDecorations: (state, node, selectionTouchesRange) => {
+    const frozen = state.field(dragFrozenSelectionField, false);
+    const touches = frozen ? rangesTouchInclusive(frozen, node) : selectionTouchesRange;
+    if (touches) return undefined;
+
     const text = state.doc.sliceString(node.from, node.to);
 
     const trimmed = text.trimStart();

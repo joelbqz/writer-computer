@@ -1,16 +1,18 @@
 import { Decoration, EditorView, ViewPlugin, ViewUpdate, WidgetType } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
-import {
-  EditorSelection,
-  EditorState,
-  SelectionRange,
-  StateEffect,
-  StateField,
-  Transaction,
-} from "@codemirror/state";
+import { EditorSelection } from "@codemirror/state";
 import { foldableSyntaxFacet } from "@prosemark/core";
 import { renderMermaid } from "./mermaid-renderer";
 import { MERMAID_CANVAS_HEIGHT, mountMermaidCanvas } from "./mermaid-canvas";
+import {
+  DRAG_END_USER_EVENT,
+  buildEndDragDispatch,
+  dragFrozenSelectionField,
+  endDragEffect,
+  rangesTouchInclusive,
+  shouldStartDragGate,
+  startDragEffect,
+} from "./drag-selection-gate";
 
 // Outer widget padding (top + bottom). The CSS rule below splits this evenly
 // across top/bottom so `estimatedHeight` matches the rendered box.
@@ -190,169 +192,6 @@ function parseFencedCode(
   return { info, source };
 }
 
-/**
- * Drag-selection gate.
- *
- * The prosemark `foldExtension` rebuilds decorations on every transaction with
- * `tr.selection` — including the per-mousemove transactions emitted by a
- * pointer drag-selection. Without a gate, the mermaid widget would flip
- * between Preview and Edit mode mid-drag the instant the extending selection
- * touches the fence range, jolting the layout under the user's cursor.
- *
- * On `pointerdown` we snapshot the current selection ranges; while the
- * snapshot is non-null, `buildDecorations` evaluates the editMode predicate
- * against the *frozen* snapshot instead of the live selection. On
- * `pointerup`/`pointercancel`/blur we clear the snapshot and dispatch a
- * no-op `selection: state.selection` to nudge `foldExtension` to recompute
- * with the now-live selection.
- *
- * TODO(consolidation): the field, effects, and ViewPlugin below are
- * domain-neutral — `dragFrozenSelectionField` doesn't mention mermaid. If a
- * second block widget (table, image, future) needs the same "freeze
- * decoration choice across a pointer drag" behaviour, extract this section
- * into `editor-area/drag-selection-gate.ts` and have both decoration modules
- * import the shared field. Don't pre-extract — wait for the second consumer.
- */
-const startDragEffect = StateEffect.define<readonly SelectionRange[]>();
-const endDragEffect = StateEffect.define<null>();
-
-const dragFrozenSelectionField = StateField.define<readonly SelectionRange[] | null>({
-  create() {
-    return null;
-  },
-  update(value, tr) {
-    for (const e of tr.effects) {
-      if (e.is(startDragEffect)) return e.value;
-      if (e.is(endDragEffect)) return null;
-    }
-    if (value && tr.docChanged) {
-      // Map snapshot through doc changes so it stays valid if the document
-      // mutates mid-drag (rare, but cheap to keep correct).
-      return value.map((r) => r.map(tr.changes));
-    }
-    return value;
-  },
-});
-
-function rangesTouchInclusive(
-  ranges: readonly SelectionRange[],
-  node: { from: number; to: number },
-): boolean {
-  for (const r of ranges) {
-    if (r.from <= node.to && node.from <= r.to) return true;
-  }
-  return false;
-}
-
-/**
- * Annotation tag for the no-op selection nudge that paired with
- * `endDragEffect` to force `foldExtension` to rebuild. Tagged as a "select"
- * sub-event so any `transactionExtender`/`updateListener` keying off
- * `tr.isUserEvent("select")` for real user selection changes can opt out via
- * `tr.isUserEvent("select.pointer.drag-end")`.
- */
-const DRAG_END_USER_EVENT = "select.pointer.drag-end";
-
-/**
- * Pure predicate for the `pointerdown` listener. Returns the dispatch spec
- * to start the drag gate, or null to skip. Extracted so the filter logic
- * (primary-button-only, isPrimary, in-widget skip, idempotent re-entry) is
- * testable without mounting a real `EditorView`.
- *
- * The `.cm-mermaid-widget` skip is **load-bearing**, not redundant: the
- * canvas viewport's own `pointerdown` (`mermaid-canvas.ts:160`) calls
- * `e.preventDefault()` but does NOT `stopPropagation`, so canvas-internal
- * pointerdowns DO bubble to `contentDOM`. The Edit-code button only stops
- * `mousedown`, not `pointerdown` — so without this skip, every Edit-code
- * click would activate the gate and freeze `editMode` for the very toggle
- * the click is about to dispatch.
- */
-function shouldStartDragGate(
-  state: EditorState,
-  event: { isPrimary: boolean; button: number; target: EventTarget | null },
-): { effects: StateEffect<readonly SelectionRange[]> } | null {
-  if (!event.isPrimary || event.button !== 0) return null;
-  // Duck-type for `closest` rather than `instanceof Element` so this is
-  // testable in a node environment (jsdom isn't pulled in for the unit
-  // suite). Production targets always satisfy the duck check.
-  const target = event.target as { closest?: (sel: string) => Element | null } | null;
-  if (target && typeof target.closest === "function" && target.closest(".cm-mermaid-widget")) {
-    return null;
-  }
-  if (state.field(dragFrozenSelectionField, false) !== null) return null;
-  return { effects: startDragEffect.of(state.selection.ranges) };
-}
-
-/**
- * Pure builder for the dispatch that ends a drag. Returns null when the gate
- * is already inactive (idempotent — `pointerup`/`pointercancel`/`blur` may
- * all fire for one drag, only the first should dispatch).
- *
- * The `selection: state.selection` is the load-bearing trick: prosemark's
- * `foldExtension` only rebuilds when `tr.docChanged || tr.selection` (see
- * `node_modules/@prosemark/core/dist/main.js:315`). Without the no-op
- * selection set, clearing the field would not retrigger
- * `buildDecorations`, so the widget would stay frozen in its pre-release
- * shape until the next genuine selection or doc change. If prosemark ever
- * tightens this to "selection actually changed," this trick breaks
- * silently — the test in `mermaid.test.ts` for the post-pointerup flip is
- * the canary.
- */
-function buildEndDragDispatch(state: EditorState): {
-  selection: typeof state.selection;
-  effects: StateEffect<null>;
-  userEvent: string;
-} | null {
-  if (state.field(dragFrozenSelectionField, false) === null) return null;
-  return {
-    selection: state.selection,
-    effects: endDragEffect.of(null),
-    userEvent: DRAG_END_USER_EVENT,
-  };
-}
-
-const dragSelectionPlugin = ViewPlugin.fromClass(
-  class {
-    private readonly onWindowPointerUp: (e: PointerEvent) => void;
-    private readonly onWindowPointerCancel: (e: PointerEvent) => void;
-    private readonly onContentPointerDown: (e: PointerEvent) => void;
-    private readonly onContentBlur: () => void;
-
-    constructor(private readonly view: EditorView) {
-      this.onContentPointerDown = (e: PointerEvent) => {
-        const dispatch = shouldStartDragGate(this.view.state, e);
-        if (dispatch) this.view.dispatch(dispatch);
-      };
-      this.onWindowPointerUp = () => this.endDrag();
-      this.onWindowPointerCancel = () => this.endDrag();
-      this.onContentBlur = () => this.endDrag();
-
-      this.view.contentDOM.addEventListener("pointerdown", this.onContentPointerDown);
-      this.view.contentDOM.addEventListener("blur", this.onContentBlur);
-      window.addEventListener("pointerup", this.onWindowPointerUp);
-      window.addEventListener("pointercancel", this.onWindowPointerCancel);
-    }
-
-    private endDrag(): void {
-      const dispatch = buildEndDragDispatch(this.view.state);
-      if (dispatch) {
-        this.view.dispatch({
-          selection: dispatch.selection,
-          effects: dispatch.effects,
-          annotations: Transaction.userEvent.of(dispatch.userEvent),
-        });
-      }
-    }
-
-    destroy(): void {
-      this.view.contentDOM.removeEventListener("pointerdown", this.onContentPointerDown);
-      this.view.contentDOM.removeEventListener("blur", this.onContentBlur);
-      window.removeEventListener("pointerup", this.onWindowPointerUp);
-      window.removeEventListener("pointercancel", this.onWindowPointerCancel);
-    }
-  },
-);
-
 const mermaidFoldExtension = foldableSyntaxFacet.of({
   nodePath: "FencedCode",
   // Without `keepDecorationOnUnfold`, `@prosemark/core`'s foldExtension
@@ -524,16 +363,15 @@ const foldTreeSync = ViewPlugin.fromClass(
 );
 
 export function mermaidDecorations() {
-  return [
-    dragFrozenSelectionField,
-    dragSelectionPlugin,
-    mermaidFoldExtension,
-    mermaidTheme,
-    foldTreeSync,
-  ];
+  // `dragFrozenSelectionField` is also part of `dragFreezeExtensions` (mounted
+  // once globally in `use-prosemark-editor.ts`). Including it here makes the
+  // mermaid spec self-contained: callers/tests that wire `mermaidDecorations()`
+  // into a state without the global gate still get the field they need. State
+  // fields dedupe by identity, so the duplicate is a no-op in production.
+  return [dragFrozenSelectionField, mermaidFoldExtension, mermaidTheme, foldTreeSync];
 }
 
-// Exported for tests.
+// Re-exported for tests — actual definitions live in `./drag-selection-gate`.
 export {
   DRAG_END_USER_EVENT,
   buildEndDragDispatch,

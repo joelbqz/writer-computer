@@ -1,6 +1,7 @@
 import { Decoration, EditorView, ViewPlugin, ViewUpdate, WidgetType } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
 import { foldableSyntaxFacet, selectAllDecorationsOnSelectExtension } from "@prosemark/core";
+import { dragFrozenSelectionField, rangesTouchInclusive } from "./drag-selection-gate";
 
 type Alignment = "left" | "center" | "right";
 
@@ -96,7 +97,17 @@ class TableWidget extends WidgetType {
 
 const tableFoldExtension = foldableSyntaxFacet.of({
   nodePath: "Table",
-  buildDecorations: (state, node) => {
+  // `keepDecorationOnUnfold: true` makes prosemark always delegate the
+  // decoration choice to us instead of short-circuiting when the live
+  // selection touches the table range. Without it, the drag-freeze override
+  // below would be bypassed and the table would unfurl mid-drag the moment
+  // the extending selection enters the table.
+  keepDecorationOnUnfold: true,
+  buildDecorations: (state, node, selectionTouchesRange) => {
+    const frozen = state.field(dragFrozenSelectionField, false);
+    const touches = frozen ? rangesTouchInclusive(frozen, node) : selectionTouchesRange;
+    if (touches) return undefined;
+
     const text = state.doc.sliceString(node.from, node.to);
     const parsed = parseMarkdownTable(text);
     if (!parsed) return undefined;

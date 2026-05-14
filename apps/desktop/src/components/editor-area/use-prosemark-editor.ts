@@ -44,6 +44,7 @@ import {
 import { tableDecorations } from "./table-decorations";
 import { htmlBlockDecorations, htmlBlockParserExtension } from "./html-block-decorations";
 import { mermaidDecorations } from "./mermaid-decorations";
+import { dragFreezeExtensions } from "./drag-selection-gate";
 import { imageSrcResolver } from "./image-src-resolver";
 import { wikiLinkExtension } from "./wiki-link-extension";
 import {
@@ -475,6 +476,12 @@ function createEditorExtensions(
     linkNavigationExtension(getFilePath, isDisposed),
     editorBodyContextMenuExtension(getFilePath, isDisposed),
     setupCompartment.of(prosemarkBasicSetup()),
+    // Freeze unfurl/fold decisions while a pointer drag is in flight, so the
+    // text doesn't reflow under the cursor as the live selection sweeps
+    // across markdown nodes. Must come after `prosemarkBasicSetup()` so the
+    // high-precedence `frozenHideDecorationsField` overlay runs *after*
+    // prosemark's `hideExtension` provider.
+    dragFreezeExtensions,
     drawSelection(),
     prosemarkBaseThemeSetup(),
     search({ literal: true, createPanel: invisibleSearchPanel }),

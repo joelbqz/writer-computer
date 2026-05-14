@@ -19,6 +19,7 @@ import { getFileStem } from "@/lib/paths";
 import { getWorkspaceRoot } from "@/hooks/workspace-api";
 import * as editorApi from "@/hooks/editor-api";
 import { canonicalWikiTarget, parseWikiLink, resolveWikiLink } from "@/lib/wiki-links";
+import { getEffectiveSelectionRanges } from "./drag-selection-gate";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -98,7 +99,9 @@ const wikiLinkEditingMark = Decoration.mark({ class: "cm-wiki-link-editing" });
 function buildDecorations(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
   const { doc } = view.state;
-  const sel = view.state.selection.main;
+  // Use the drag-frozen snapshot when a pointer drag is in progress, so the
+  // link doesn't flip between rendered and raw mid-drag.
+  const ranges = getEffectiveSelectionRanges(view.state);
 
   for (const { from, to } of view.visibleRanges) {
     const text = doc.sliceString(from, to);
@@ -109,7 +112,7 @@ function buildDecorations(view: EditorView): DecorationSet {
       const end = start + match[0].length;
       if (isInsideCode(view.state, start)) continue;
 
-      const cursorInside = sel.from >= start && sel.to <= end;
+      const cursorInside = ranges.some((r) => r.from >= start && r.to <= end);
 
       if (cursorInside) {
         // Editing: show raw [[...]] with subtle link color
