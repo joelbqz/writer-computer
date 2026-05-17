@@ -1,6 +1,9 @@
 import { Decoration, EditorView, ViewPlugin, ViewUpdate, WidgetType } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
-import { foldableSyntaxFacet, selectAllDecorationsOnSelectExtension } from "@prosemark/core";
+import {
+  foldableSyntaxFacet,
+  selectAllDecorationsOnSelectExtension,
+} from "@/lib/prosemark-core/main";
 import { dragFrozenSelectionField, rangesTouchInclusive } from "./drag-selection-gate";
 
 type Alignment = "left" | "center" | "right";

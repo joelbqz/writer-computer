@@ -21,6 +21,9 @@ catalogs:
     '@codemirror/language-data':
       specifier: ^6.5.2
       version: 6.5.2
+    '@codemirror/lint':
+      specifier: ^6.9.2
+      version: 6.9.5
     '@codemirror/search':
       specifier: ^6.7.0
       version: 6.7.0
@@ -36,15 +39,18 @@ catalogs:
     '@hugeicons/react':
       specifier: ^1.1.6
       version: 1.1.6
+    '@lezer/common':
+      specifier: ^1.4.0
+      version: 1.5.1
     '@lezer/highlight':
       specifier: ^1.2.3
       version: 1.2.3
     '@lezer/markdown':
       specifier: ^1.6.1
       version: 1.6.3
-    '@prosemark/core':
-      specifier: ^0.0.5
-      version: 0.0.5
+    '@lezer/yaml':
+      specifier: ^1.0.4
+      version: 1.0.4
     '@tailwindcss/vite':
       specifier: ^4.2.2
       version: 4.2.2
@@ -69,6 +75,9 @@ catalogs:
     dompurify:
       specifier: ^3.3.3
       version: 3.3.3
+    node-emoji:
+      specifier: ^2.2.0
+      version: 2.2.0
     react-resizable-panels:
       specifier: ^4.7.4
       version: 4.7.4
@@ -114,6 +123,9 @@ importers:
       '@codemirror/language-data':
         specifier: 'catalog:'
         version: 6.5.2
+      '@codemirror/lint':
+        specifier: 'catalog:'
+        version: 6.9.5
       '@codemirror/search':
         specifier: 'catalog:'
         version: 6.7.0
@@ -129,15 +141,18 @@ importers:
       '@hugeicons/react':
         specifier: 'catalog:'
         version: 1.1.6(react@19.2.4)
+      '@lezer/common':
+        specifier: 'catalog:'
+        version: 1.5.1
       '@lezer/highlight':
         specifier: 'catalog:'
         version: 1.2.3
       '@lezer/markdown':
         specifier: 'catalog:'
         version: 1.6.3
-      '@prosemark/core':
+      '@lezer/yaml':
         specifier: 'catalog:'
-        version: 0.0.5(@codemirror/autocomplete@6.20.1)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language-data@6.5.2)(@codemirror/language@6.12.2)(@codemirror/lint@6.9.5)(@codemirror/search@6.7.0)(@codemirror/state@6.6.0)(@codemirror/view@6.40.0)(@lezer/highlight@1.2.3)
+        version: 1.0.4
       '@tailwindcss/vite':
         specifier: 'catalog:'
         version: 4.2.2(@voidzero-dev/vite-plus-core@0.1.13(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(typescript@5.8.3)(yaml@2.8.3))
@@ -168,6 +183,9 @@ importers:
       dompurify:
         specifier: 'catalog:'
         version: 3.3.3
+      node-emoji:
+        specifier: 'catalog:'
+        version: 2.2.0
       react:
         specifier: ^19.1.0
         version: 19.2.4
@@ -1137,20 +1155,6 @@ packages:
   '@promptbook/utils@0.69.5':
     resolution: {integrity: sha512-xm5Ti/Hp3o4xHrsK9Yy3MS6KbDxYbq485hDsFvxqaNA7equHLPdo8H8faTitTeb14QCDfLW4iwCxdVYu5sn6YQ==}
 
-  '@prosemark/core@0.0.5':
-    resolution: {integrity: sha512-RmSIyvrwxrFXmhx0TTHtMfSH3Cv3e2bl+Oj0v+nz1hvganIfLD8nQ01J9NS+Xj+JWKqpeZzIF8e7Xr6v+D9VTw==}
-    peerDependencies:
-      '@codemirror/autocomplete': ^6.20.0
-      '@codemirror/commands': ^6.10.1
-      '@codemirror/lang-markdown': ^6.5.0
-      '@codemirror/language': ^6.11.3
-      '@codemirror/language-data': ^6.5.2
-      '@codemirror/lint': ^6.9.2
-      '@codemirror/search': ^6.5.11
-      '@codemirror/state': ^6.5.2
-      '@codemirror/view': ^6.39.4
-      '@lezer/highlight': ^1.2.0
-
   '@puppeteer/browsers@2.13.0':
     resolution: {integrity: sha512-46BZJYJjc/WwmKjsvDFykHtXrtomsCIrwYQPOP7VfMJoZY2bsDF9oROBABR3paDjDcmkUye1Pb1BqdcdiipaWA==}
     engines: {node: '>=18'}
@@ -2090,9 +2094,6 @@ packages:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
     engines: {node: '>= 14'}
 
-  ajv@8.18.0:
-    resolution: {integrity: sha512-PlXPeEWMXMZ7sPYOHqmDyCJzcfNrUr3fGNKtezX14ykXOEIvyK81d+qydx89KY5O71FKMPaQ2vBfBFI5NHR63A==}
-
   ansi-colors@4.1.3:
     resolution: {integrity: sha512-/6w/C21Pm1A7aZitlI5Ni/2J6FFQN8i1Cvz3kHABAAbw93v/NlvKdVOqz7CCWz/3iv/JplRSEEZ83XION15ovw==}
     engines: {node: '>=6'}
@@ -2596,14 +2597,8 @@ packages:
   fast-deep-equal@2.0.1:
     resolution: {integrity: sha512-bCK/2Z4zLidyB4ReuIsvALH6w31YfAQDmXMqMx6FyfHqvBxtjC0eRumeSu4Bs3XtXwpyIywtSTrVT99BxY1f9w==}
 
-  fast-deep-equal@3.1.3:
-    resolution: {integrity: sha512-f3qQ9oQy9j2AhBe/H9VC91wLmKBCCU/gDOnKNAYG5hswO7BLKj09Hc5HYNz9cGI++xlpDCIgDaitVs03ATR84Q==}
-
   fast-fifo@1.3.2:
     resolution: {integrity: sha512-/d9sfos4yxzpwkDkuN7k2SqFKtYNmCTzgfEpz82x34IM9/zc8KGxQoXg1liNC/izpRM/MBdt44Nmx41ZWqk+FQ==}
-
-  fast-uri@3.1.0:
-    resolution: {integrity: sha512-iPeeDKJSWf4IEOasVVrknXpaBV0IApz/gp7S2bb7Z4Lljbl2MGJRqInZiUrQwV16cpzw/D3S5j5Julj/gT52AA==}
 
   fast-xml-builder@1.1.4:
     resolution: {integrity: sha512-f2jhpN4Eccy0/Uz9csxh3Nu6q4ErKxf0XIsasomfOihuSUa3/xw6w8dnOtCDgEItQFJG8KyXPzQXzcODDrrbOg==}
@@ -2894,9 +2889,6 @@ packages:
   json-parse-even-better-errors@3.0.2:
     resolution: {integrity: sha512-fi0NG4bPjCHunUJffmLd0gxssIgkNmArMvis4iNah6Owg1MCJjWhEcDLmsK6iGkJq3tHwbDkTlce70/tmXN4cQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
-
-  json-schema-traverse@1.0.0:
-    resolution: {integrity: sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug==}
 
   json5@2.2.3:
     resolution: {integrity: sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==}
@@ -3371,10 +3363,6 @@ packages:
 
   require-directory@2.1.1:
     resolution: {integrity: sha512-fGxEI7+wsG9xrvdjsrlmL22OMTTiHRwAMroiEeMgq8gzoLC/PQr7RsRDSTLUg/bZAZtF+TVIkHc6/4RIKrui+Q==}
-    engines: {node: '>=0.10.0'}
-
-  require-from-string@2.0.2:
-    resolution: {integrity: sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==}
     engines: {node: '>=0.10.0'}
 
   resolve-pkg-maps@1.0.0:
@@ -4794,24 +4782,6 @@ snapshots:
     dependencies:
       spacetrim: 0.11.59
 
-  '@prosemark/core@0.0.5(@codemirror/autocomplete@6.20.1)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language-data@6.5.2)(@codemirror/language@6.12.2)(@codemirror/lint@6.9.5)(@codemirror/search@6.7.0)(@codemirror/state@6.6.0)(@codemirror/view@6.40.0)(@lezer/highlight@1.2.3)':
-    dependencies:
-      '@codemirror/autocomplete': 6.20.1
-      '@codemirror/commands': 6.10.3
-      '@codemirror/lang-markdown': 6.5.0
-      '@codemirror/language': 6.12.2
-      '@codemirror/language-data': 6.5.2
-      '@codemirror/lint': 6.9.5
-      '@codemirror/search': 6.7.0
-      '@codemirror/state': 6.6.0
-      '@codemirror/view': 6.40.0
-      '@lezer/common': 1.5.1
-      '@lezer/highlight': 1.2.3
-      '@lezer/markdown': 1.6.3
-      '@lezer/yaml': 1.0.4
-      ajv: 8.18.0
-      node-emoji: 2.2.0
-
   '@puppeteer/browsers@2.13.0':
     dependencies:
       debug: 4.4.3(supports-color@8.1.1)
@@ -5617,13 +5587,6 @@ snapshots:
 
   agent-base@7.1.4: {}
 
-  ajv@8.18.0:
-    dependencies:
-      fast-deep-equal: 3.1.3
-      fast-uri: 3.1.0
-      json-schema-traverse: 1.0.0
-      require-from-string: 2.0.2
-
   ansi-colors@4.1.3: {}
 
   ansi-regex@5.0.1: {}
@@ -6160,11 +6123,7 @@ snapshots:
 
   fast-deep-equal@2.0.1: {}
 
-  fast-deep-equal@3.1.3: {}
-
   fast-fifo@1.3.2: {}
-
-  fast-uri@3.1.0: {}
 
   fast-xml-builder@1.1.4:
     dependencies:
@@ -6455,8 +6414,6 @@ snapshots:
   jsesc@3.1.0: {}
 
   json-parse-even-better-errors@3.0.2: {}
-
-  json-schema-traverse@1.0.0: {}
 
   json5@2.2.3: {}
 
@@ -6953,8 +6910,6 @@ snapshots:
       minimatch: 3.1.5
 
   require-directory@2.1.1: {}
-
-  require-from-string@2.0.2: {}
 
   resolve-pkg-maps@1.0.0: {}
 

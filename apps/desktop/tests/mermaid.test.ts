@@ -142,7 +142,7 @@ describe("computeToggleSelection", () => {
 const { EditorState, EditorSelection } = await import("@codemirror/state");
 const { markdown } = await import("@codemirror/lang-markdown");
 const { GFM } = await import("@lezer/markdown");
-const { foldExtension } = await import("@prosemark/core");
+const { foldExtension } = await import("../src/lib/prosemark-core/main");
 const {
   DRAG_END_USER_EVENT,
   buildEndDragDispatch,

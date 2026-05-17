@@ -1,6 +1,6 @@
 import { EditorSelection } from "@codemirror/state";
 import { Decoration, EditorView, WidgetType } from "@codemirror/view";
-import { foldExtension, foldableSyntaxFacet } from "@prosemark/core";
+import { foldExtension, foldableSyntaxFacet } from "@/lib/prosemark-core/main";
 import type { BlockParser, BlockContext, Line, MarkdownConfig } from "@lezer/markdown";
 import DOMPurify from "dompurify";
 import { dragFrozenSelectionField, rangesTouchInclusive } from "./drag-selection-gate";

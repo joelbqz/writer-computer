@@ -40,7 +40,7 @@ import {
   prosemarkBasicSetup,
   prosemarkBaseThemeSetup,
   prosemarkMarkdownSyntaxExtensions,
-} from "@prosemark/core";
+} from "@/lib/prosemark-core/main";
 import { tableDecorations } from "./table-decorations";
 import { htmlBlockDecorations, htmlBlockParserExtension } from "./html-block-decorations";
 import { mermaidDecorations } from "./mermaid-decorations";

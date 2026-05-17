@@ -9,7 +9,7 @@ import {
   Transaction,
 } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView, ViewPlugin } from "@codemirror/view";
-import { foldExtension, hideExtension } from "@prosemark/core";
+import { foldExtension, hideExtension } from "@/lib/prosemark-core/main";
 
 /**
  * Pointer-drag selection gate.

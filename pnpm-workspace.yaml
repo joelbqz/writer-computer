@@ -10,14 +10,17 @@ catalog:
   "@codemirror/lang-markdown": ^6.5.0
   "@codemirror/language": ^6.12.2
   "@codemirror/language-data": ^6.5.2
+  "@codemirror/lint": ^6.9.2
   "@codemirror/search": ^6.7.0
   "@codemirror/state": ^6.6.0
   "@codemirror/view": ^6.40.0
   "@hugeicons/core-free-icons": ^4.1.1
   "@hugeicons/react": ^1.1.6
+  "@lezer/common": ^1.4.0
   "@lezer/highlight": ^1.2.3
   "@lezer/markdown": ^1.6.1
-  "@prosemark/core": ^0.0.5
+  "@lezer/yaml": ^1.0.4
+  node-emoji: ^2.2.0
   "@tailwindcss/vite": ^4.2.2
   "@tauri-apps/plugin-clipboard-manager": ^2.3.2
   "@tauri-apps/plugin-dialog": ^2.6.0

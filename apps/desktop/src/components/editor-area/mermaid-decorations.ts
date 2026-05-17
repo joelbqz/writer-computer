@@ -1,7 +1,7 @@
 import { Decoration, EditorView, ViewPlugin, ViewUpdate, WidgetType } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
 import { EditorSelection } from "@codemirror/state";
-import { foldableSyntaxFacet } from "@prosemark/core";
+import { foldableSyntaxFacet } from "@/lib/prosemark-core/main";
 import { renderMermaid } from "./mermaid-renderer";
 import { MERMAID_CANVAS_HEIGHT, mountMermaidCanvas } from "./mermaid-canvas";
 import {
