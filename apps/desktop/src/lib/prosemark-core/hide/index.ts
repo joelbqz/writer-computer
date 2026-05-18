@@ -12,6 +12,15 @@ const renderedLinkDecoration = Decoration.mark({
 const inlineCodeDecoration = Decoration.mark({
   class: "cm-inline-code",
 });
+const strongEmphasisDecoration = Decoration.mark({
+  class: "cm-strong-emphasis",
+});
+const emphasisDecoration = Decoration.mark({
+  class: "cm-emphasis",
+});
+const strikethroughDecoration = Decoration.mark({
+  class: "cm-strikethrough",
+});
 
 const defaultHidableSpecs: HidableNodeSpec[] = [
   {
@@ -28,7 +37,19 @@ const defaultHidableSpecs: HidableNodeSpec[] = [
     block: true,
   },
   {
-    nodeName: ["StrongEmphasis", "Emphasis"],
+    // Same shape as the `InlineCode` spec below: a `nodeDecoration` wrapper
+    // on the parent range plus `subNodeNameToHide` for the inner marks.
+    // The wrapper gives the bold span a stable inline-block-style click
+    // target so position resolution behaves the same way `cm-inline-code`
+    // does, instead of CodeMirror resolving clicks into the zero-width
+    // hidden-mark spans on the bare emphasized text.
+    nodeName: "StrongEmphasis",
+    nodeDecoration: strongEmphasisDecoration,
+    subNodeNameToHide: "EmphasisMark",
+  },
+  {
+    nodeName: "Emphasis",
+    nodeDecoration: emphasisDecoration,
     subNodeNameToHide: "EmphasisMark",
   },
   {
@@ -45,6 +66,7 @@ const defaultHidableSpecs: HidableNodeSpec[] = [
   },
   {
     nodeName: "Strikethrough",
+    nodeDecoration: strikethroughDecoration,
     subNodeNameToHide: "StrikethroughMark",
   },
   {

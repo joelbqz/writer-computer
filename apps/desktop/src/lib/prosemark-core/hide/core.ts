@@ -31,10 +31,6 @@ const buildDecorations = (state: EditorState) => {
 
   syntaxTree(state).iterate({
     enter: (node) => {
-      const selectionTouchesNodeRange = state.selection.ranges.some((range) =>
-        rangeTouchesRange(node, range),
-      );
-
       for (const spec of specs) {
         // Check spec
         if (spec.nodeName instanceof Function) {
@@ -46,6 +42,14 @@ const buildDecorations = (state: EditorState) => {
             continue;
           }
         } else if (node.type.name !== spec.nodeName) {
+          continue;
+        }
+
+        // Context filter (e.g. by parent type) for specs whose `nodeName`
+        // alone can't disambiguate — `CodeMark` appears under both
+        // `InlineCode` and `FencedCode`, and we want different hide behavior
+        // for each.
+        if (spec.predicate && !spec.predicate(state, node)) {
           continue;
         }
 
@@ -61,7 +65,11 @@ const buildDecorations = (state: EditorState) => {
           decorations.push(spec.nodeDecoration.range(node.from, node.to));
         }
 
-        if (selectionTouchesNodeRange) {
+        const hideZone = spec.hideZone ? spec.hideZone(state, node) : node;
+        const selectionTouchesHideZone = state.selection.ranges.some((range) =>
+          rangeTouchesRange(hideZone, range),
+        );
+        if (selectionTouchesHideZone) {
           continue;
         }
 
@@ -126,6 +134,11 @@ export const hideExtension = StateField.define<DecorationSet>({
 
 export interface HidableNodeSpec {
   nodeName: string | string[] | ((nodeName: string) => boolean);
+  // Context filter — when set, the spec only applies if it returns true.
+  // Use to disambiguate node types that appear under different parents and
+  // want different hide behavior (e.g. `CodeMark` in `InlineCode` vs
+  // `FencedCode`).
+  predicate?: (state: EditorState, node: SyntaxNodeRef) => boolean;
   nodeDecoration?: Decoration;
   subNodeNameToHide?: string | string[];
   onHide?: (
@@ -135,6 +148,12 @@ export interface HidableNodeSpec {
   block?: boolean;
   keepSpace?: boolean;
   unhideZone?: (state: EditorState, node: SyntaxNodeRef) => RangeLike;
+  // Custom zone used for the selection-touch check that decides whether to
+  // hide. Defaults to the node range. Set to a tighter zone when the node's
+  // own range overlaps zero-width spans the caret can land in from a click —
+  // e.g. EmphasisMark, where a click at the visible boundary would otherwise
+  // unfurl and visually shift the caret.
+  hideZone?: (state: EditorState, node: SyntaxNodeRef) => RangeLike;
 }
 
 const checkSpec = (spec: HidableNodeSpec) => {
