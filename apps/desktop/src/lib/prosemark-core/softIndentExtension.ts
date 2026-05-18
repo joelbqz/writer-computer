@@ -108,9 +108,22 @@ export const softIndentExtension = ViewPlugin.fromClass(
           if (!matches) continue;
           const nonContent = matches[0];
 
-          // Get indent width
+          // Get indent width.
+          //
+          // Use `side: -1` so we measure the position right BEFORE
+          // `line.from + nonContent.length` — i.e. the trailing edge of the
+          // bullet/space prefix — instead of the START of whatever follows.
+          // Default `side: 1` walks into the next span and, for lines like
+          // `- **Bold**…` where the next span is a `cm-emphasis` wrapper
+          // containing a `font-size: 0` `cm-hidden-token`, the returned
+          // bounding rect collapses (browsers report zero-size text as a
+          // zero-rect at the origin in some engines) and `indentWidth` falls
+          // to 0 or worse goes negative. `!indentWidth` then skips the line
+          // and the wrapped portion of the list item renders flush-left
+          // outside the bullet. Reading the position from the left side
+          // anchors the measurement on the always-rendered `- ` text node.
           const indentWidth =
-            (view.coordsAtPos(line.from + nonContent.length)?.left ?? 0) -
+            (view.coordsAtPos(line.from + nonContent.length, -1)?.left ?? 0) -
             (view.coordsAtPos(line.from)?.left ?? 0);
           if (!indentWidth) continue;
 

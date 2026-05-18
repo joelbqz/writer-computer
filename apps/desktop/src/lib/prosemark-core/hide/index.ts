@@ -12,9 +12,6 @@ const renderedLinkDecoration = Decoration.mark({
 const inlineCodeDecoration = Decoration.mark({
   class: "cm-inline-code",
 });
-const strongEmphasisDecoration = Decoration.mark({
-  class: "cm-strong-emphasis",
-});
 const emphasisDecoration = Decoration.mark({
   class: "cm-emphasis",
 });
@@ -38,17 +35,15 @@ const defaultHidableSpecs: HidableNodeSpec[] = [
   },
   {
     // Same shape as the `InlineCode` spec below: a `nodeDecoration` wrapper
-    // on the parent range plus `subNodeNameToHide` for the inner marks.
-    // The wrapper gives the bold span a stable inline-block-style click
-    // target so position resolution behaves the same way `cm-inline-code`
-    // does, instead of CodeMirror resolving clicks into the zero-width
-    // hidden-mark spans on the bare emphasized text.
-    nodeName: "StrongEmphasis",
-    nodeDecoration: strongEmphasisDecoration,
-    subNodeNameToHide: "EmphasisMark",
-  },
-  {
-    nodeName: "Emphasis",
+    // on the parent range plus `subNodeNameToHide` for the inner marks. The
+    // wrapper gives the emphasized span a stable inline click target so
+    // position resolution behaves the same way `cm-inline-code` does,
+    // instead of CodeMirror resolving clicks into the zero-width
+    // hidden-mark spans on the bare emphasized text. Bold and italic share
+    // a single combined spec and a single wrapper class so the rendered DOM
+    // (and resulting line-wrap / hanging-indent behavior under
+    // `softIndentExtension`) is identical for both.
+    nodeName: ["StrongEmphasis", "Emphasis"],
     nodeDecoration: emphasisDecoration,
     subNodeNameToHide: "EmphasisMark",
   },
