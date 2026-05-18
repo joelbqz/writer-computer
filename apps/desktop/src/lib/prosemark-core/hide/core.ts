@@ -3,6 +3,7 @@ import { type EditorState, Facet, type Range, StateField } from "@codemirror/sta
 import { syntaxTree } from "@codemirror/language";
 import type { SyntaxNodeRef } from "@lezer/common";
 import { type RangeLike, rangeTouchesRange } from "../utils";
+import { unfurlFreezeFacet } from "../unfurlFreeze";
 
 const hideTheme = EditorView.theme({
   ".cm-hidden-token": {
@@ -109,6 +110,12 @@ export const hideExtension = StateField.define<DecorationSet>({
   },
 
   update(deco, tr) {
+    // Freeze: skip selection-driven rebuilds while a drag is in flight. Doc
+    // changes still re-map positions so coordinates stay valid; only the
+    // selection-touch recomputation is suppressed.
+    if (tr.state.facet(unfurlFreezeFacet)) {
+      return tr.docChanged ? deco.map(tr.changes) : deco;
+    }
     if (tr.docChanged || tr.selection || syntaxTree(tr.startState) !== syntaxTree(tr.state)) {
       return buildDecorations(tr.state);
     }

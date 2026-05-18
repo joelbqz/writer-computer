@@ -13,6 +13,7 @@ import {
   EditorView,
 } from "@codemirror/view";
 import { eventHandlersWithClass, type RangeLike, selectionTouchesRange } from "../utils";
+import { unfurlFreezeFacet } from "../unfurlFreeze";
 
 import type { SyntaxNodeRef } from "@lezer/common";
 import { syntaxTree } from "@codemirror/language";
@@ -77,6 +78,12 @@ export const foldExtension = StateField.define<DecorationSet>({
   },
 
   update(deco, tr) {
+    // Freeze: skip selection-driven rebuilds while a drag is in flight. Doc
+    // changes still re-map positions so coordinates stay valid; only the
+    // selection-touch recomputation is suppressed.
+    if (tr.state.facet(unfurlFreezeFacet)) {
+      return tr.docChanged ? deco.map(tr.changes) : deco;
+    }
     if (tr.docChanged || tr.selection || syntaxTree(tr.startState) !== syntaxTree(tr.state)) {
       return buildDecorations(tr.state);
     }

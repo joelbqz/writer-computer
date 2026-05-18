@@ -1,52 +1,39 @@
 import {
   EditorState,
   Extension,
-  Prec,
-  Range,
   SelectionRange,
   StateEffect,
   StateField,
   Transaction,
 } from "@codemirror/state";
-import { Decoration, DecorationSet, EditorView, ViewPlugin } from "@codemirror/view";
-import { foldExtension, hideExtension } from "@/lib/prosemark-core/main";
+import { EditorView, ViewPlugin } from "@codemirror/view";
+import { unfurlFreezeFacet } from "@/lib/prosemark-core/main";
 
 /**
  * Pointer-drag selection gate.
  *
- * The core problem: many of the editor's decorations (prosemark's syntax-mark
- * hider, our wiki-link / mermaid / html-block / table fold widgets) are
- * selection-aware — they recompute on every selection change. During a mouse
- * drag-selection, CodeMirror emits one selection-extending transaction per
- * mousemove. Without a gate, every intermediate selection unfurls/hides
- * markdown under the cursor, the text reflows, and the drag target slips out
- * from under the mouse.
+ * Many editor decorations (prosemark's syntax-mark hider, our wiki-link /
+ * mermaid / html-block / table fold widgets) are selection-aware — they
+ * recompute on every selection change. During a mouse drag-selection,
+ * CodeMirror emits one selection-extending transaction per mousemove. Without
+ * a gate, every intermediate selection unfurls/hides markdown under the
+ * cursor, the text reflows, and the drag target slips out from under the
+ * mouse.
  *
- * The gate freezes the *decoration choice* for the duration of a pointer drag:
+ * The gate snapshots `state.selection.ranges` into `dragFrozenSelectionField`
+ * on `pointerdown` and clears it on `pointerup` / `pointercancel` / blur.
+ * Behaviors driven off it:
  *
- *  - On `pointerdown` we snapshot `state.selection.ranges` into
- *    `dragFrozenSelectionField`. Consumers read this field via
- *    `getEffectiveSelectionRanges` (or directly) and decide unfurl based on
- *    the snapshot, not the live selection.
- *  - For prosemark's `hideExtension` (whose internals we can't reach), we
- *    snapshot its current `DecorationSet` into `frozenHideDecorationsField`,
- *    and contribute the *difference* between snapshot and live (the
- *    decorations prosemark dropped mid-drag) via `frozenHideDecorationsOverlay`.
- *    Only contributing the diff is important: prosemark always re-emits each
- *    node's `nodeDecoration` (e.g. `cm-inline-code`) regardless of selection,
- *    so overlaying the whole snapshot would duplicate those wrapper marks and
- *    render them as nested spans — visibly doubled padding around inline code,
- *    etc. The diff narrows the overlay to exactly the hides prosemark removed.
- *  - On `pointerup` / `pointercancel` / blur we clear both, and dispatch a
- *    no-op `selection: state.selection` so prosemark's `tr.selection`-gated
- *    fold/hide state fields recompute against the now-live selection.
- *
- * Limitation: the diff overlay can re-apply hides that prosemark drops
- * mid-drag, but it can't *remove* hides prosemark adds mid-drag. So if the
- * user clicks *inside* an already-unfurled node and drags past it, prosemark
- * will hide that node once the selection leaves — one layout shift instead of
- * the dozens you'd see today. The common case (drag from plain text across
- * inline markdown) is fully frozen.
+ *  - **Prosemark hide/fold**: a derived `unfurlFreezeFacet` contribution
+ *    flips `true` while the field is non-null. Prosemark's hide/fold
+ *    `StateField`s short-circuit their `update` when the facet is `true`,
+ *    so neither selection-touch additions nor removals fire mid-drag. The
+ *    end-drag dispatch sets `selection: state.selection` so the unfreeze
+ *    transaction itself triggers a fresh rebuild against the live selection
+ *    — "always unfurl on mouseup."
+ *  - **Our own decorations** (heading, wiki-link, table, html-block,
+ *    mermaid): read the snapshot directly via `getEffectiveSelectionRanges`
+ *    or `rangesTouchInclusive` to compute against the pre-drag selection.
  */
 
 const startDragEffect = StateEffect.define<readonly SelectionRange[]>();
@@ -69,162 +56,6 @@ const dragFrozenSelectionField = StateField.define<readonly SelectionRange[] | n
     return value;
   },
 });
-
-/**
- * Snapshot of prosemark's `hideExtension` DecorationSet at pointerdown. Kept in
- * a field so it survives the (selection-changing) transactions that fire
- * during a drag. Cleared on `endDragEffect`. Stays `Decoration.none` outside a
- * drag so the diff-based overlay below contributes nothing.
- */
-const frozenHideDecorationsField = StateField.define<DecorationSet>({
-  create() {
-    return Decoration.none;
-  },
-  update(value, tr) {
-    for (const e of tr.effects) {
-      if (e.is(startDragEffect)) {
-        return tr.startState.field(hideExtension, false) ?? Decoration.none;
-      }
-      if (e.is(endDragEffect)) return Decoration.none;
-    }
-    return tr.docChanged ? value.map(tr.changes) : value;
-  },
-});
-
-/**
- * Decorations that exist in `snapshot` but not in `live`. The snapshot is
- * prosemark's pre-drag DecorationSet; live is its current one. Subtracting
- * gives us exactly the hide-style decorations prosemark dropped because the
- * selection now touches their node — the things we need to re-apply to keep
- * the rendering frozen.
- *
- * Why subtract instead of overlaying the whole snapshot? Prosemark always
- * emits a `nodeDecoration` (e.g. `Decoration.mark({class: "cm-inline-code"})`)
- * regardless of selection. If we overlaid the snapshot wholesale, that
- * wrapper would be contributed twice — once by prosemark, once by us — and
- * CodeMirror would render nested spans with doubled padding, causing visible
- * gaps around inline code. Subtracting keeps the overlay narrow: only the
- * decorations prosemark actually stopped emitting.
- *
- * Identity check works because prosemark allocates each `Decoration` instance
- * once at module load (e.g. `hideInlineDecoration`, the per-spec
- * `nodeDecoration`) and reuses the same instance for every range, so
- * `snap.value === live.value` is a reliable "same decoration."
- */
-function diffDecorationSet(snapshot: DecorationSet, live: DecorationSet): DecorationSet {
-  if (snapshot.size === 0) return Decoration.none;
-  const liveIndex = new Map<string, Set<Decoration>>();
-  const liveCursor = live.iter();
-  while (liveCursor.value !== null) {
-    const key = `${liveCursor.from},${liveCursor.to}`;
-    let bucket = liveIndex.get(key);
-    if (!bucket) {
-      bucket = new Set();
-      liveIndex.set(key, bucket);
-    }
-    bucket.add(liveCursor.value);
-    liveCursor.next();
-  }
-
-  const result: Range<Decoration>[] = [];
-  const snapCursor = snapshot.iter();
-  while (snapCursor.value !== null) {
-    const key = `${snapCursor.from},${snapCursor.to}`;
-    const bucket = liveIndex.get(key);
-    if (!bucket || !bucket.has(snapCursor.value)) {
-      result.push(snapCursor.value.range(snapCursor.from, snapCursor.to));
-    }
-    snapCursor.next();
-  }
-  return result.length === 0 ? Decoration.none : Decoration.set(result, true);
-}
-
-const frozenHideDecorationsOverlay = EditorView.decorations.compute(
-  [frozenHideDecorationsField, hideExtension],
-  (state) => {
-    const snapshot = state.field(frozenHideDecorationsField);
-    if (snapshot.size === 0) return Decoration.none;
-    const live = state.field(hideExtension, false) ?? Decoration.none;
-    return diffDecorationSet(snapshot, live);
-  },
-);
-
-/**
- * Snapshot of prosemark's `foldExtension` DecorationSet at pointerdown. Mirrors
- * `frozenHideDecorationsField` but for the fold pipeline (lists, tasks, dashes,
- * emojis, horizontal rules — every `foldableSyntaxFacet` consumer that lacks
- * `keepDecorationOnUnfold`). When the live selection touches one of those
- * nodes prosemark short-circuits and emits no decoration at all, so the raw
- * markdown pops back in. Snapshotting plus a near-range diff lets us re-emit
- * the fold for the duration of the drag.
- */
-const frozenFoldDecorationsField = StateField.define<DecorationSet>({
-  create() {
-    return Decoration.none;
-  },
-  update(value, tr) {
-    for (const e of tr.effects) {
-      if (e.is(startDragEffect)) {
-        return tr.startState.field(foldExtension, false) ?? Decoration.none;
-      }
-      if (e.is(endDragEffect)) return Decoration.none;
-    }
-    return tr.docChanged ? value.map(tr.changes) : value;
-  },
-});
-
-/**
- * Range-proximity diff used for the fold overlay. Fold specs allocate fresh
- * `Decoration` instances per `buildDecorations` call (e.g. `new BulletPoint()`),
- * so identity comparison is useless here. Instead, we include a snapshot
- * decoration only when the live set has no decoration within one position of
- * its range.
- *
- * The `±1` slack is the load-bearing bit. It exists for `imageExtension`,
- * which has `keepDecorationOnUnfold: true` and returns *different*
- * decorations depending on selection: a `Decoration.replace([from, to])` when
- * the selection is outside, and a `Decoration.widget` at `[to, to]` when it
- * touches. A strict range match would treat those as distinct and overlay the
- * snapshot's replace on top of the live widget — rendering two image widgets
- * stacked. The proximity check sees the boundary widget as "near" the
- * snapshot's range and skips it, deferring to live. The image still flips
- * mid-drag, but it doesn't double up. Lists, tasks, dashes, emojis, etc. —
- * which prosemark fully drops on selection touch — sit alone in their range
- * and pass the proximity check, so the snapshot is added back and they stay
- * folded for the rest of the drag.
- */
-function diffFoldDecorationsByProximity(
-  snapshot: DecorationSet,
-  live: DecorationSet,
-): DecorationSet {
-  if (snapshot.size === 0) return Decoration.none;
-  const result: Range<Decoration>[] = [];
-  const snapCursor = snapshot.iter();
-  while (snapCursor.value !== null) {
-    const from = snapCursor.from;
-    const to = snapCursor.to;
-    let conflict = false;
-    live.between(from - 1, to + 1, () => {
-      conflict = true;
-      return false;
-    });
-    if (!conflict) {
-      result.push(snapCursor.value.range(from, to));
-    }
-    snapCursor.next();
-  }
-  return result.length === 0 ? Decoration.none : Decoration.set(result, true);
-}
-
-const frozenFoldDecorationsOverlay = EditorView.decorations.compute(
-  [frozenFoldDecorationsField, foldExtension],
-  (state) => {
-    const snapshot = state.field(frozenFoldDecorationsField);
-    if (snapshot.size === 0) return Decoration.none;
-    const live = state.field(foldExtension, false) ?? Decoration.none;
-    return diffFoldDecorationsByProximity(snapshot, live);
-  },
-);
 
 function rangesTouchInclusive(
   ranges: readonly SelectionRange[],
@@ -291,11 +122,11 @@ function shouldStartDragGate(
  * fire for one drag, only the first should dispatch).
  *
  * The `selection: state.selection` is the load-bearing trick: prosemark's
- * `foldExtension` only rebuilds when `tr.docChanged || tr.selection` (see
- * `node_modules/@prosemark/core/dist/main.js:315`). Without the no-op
- * selection set, clearing the field would not retrigger `buildDecorations`,
- * so widgets would stay frozen in their pre-release shape until the next
- * genuine selection or doc change. If prosemark ever tightens this to
+ * `hideExtension`/`foldExtension` only rebuild when `tr.docChanged ||
+ * tr.selection`. The unfreeze transaction itself clears the field (so the
+ * facet flips to `false` in `tr.state`) and re-asserts selection so the
+ * normal rebuild branch runs against live ranges — that's the "always unfurl
+ * on mouseup" half of the contract. If prosemark ever tightens this to
  * "selection actually changed," this trick breaks silently — the test in
  * `mermaid.test.ts` for the post-pointerup flip is the canary.
  */
@@ -356,30 +187,20 @@ const dragSelectionPlugin = ViewPlugin.fromClass(
 
 /**
  * The full drag-freeze bundle. Mount once at the editor's top-level extension
- * list. The overlays are `Prec.high` so their decorations are processed
- * before prosemark's `hideExtension` / `foldExtension` contributions. For
- * atomic `Decoration.replace` (the block hides — heading marks, fenced
- * blocks) precedence directly decides which decoration wins at overlapping
- * ranges. For `Decoration.mark` (the inline hides — `cm-hidden-token` on
- * backticks, etc.) all contributing sources still apply; precedence here
- * just affects nest order in the rendered DOM, which is enough because the
- * relevant CSS — `font-size: 0` / `opacity: 0` — kicks in regardless of
- * which span level it lands on.
+ * list.
  */
 const dragFreezeExtensions: Extension = [
   dragFrozenSelectionField,
-  frozenHideDecorationsField,
-  frozenFoldDecorationsField,
-  Prec.high(frozenHideDecorationsOverlay),
-  Prec.high(frozenFoldDecorationsOverlay),
   dragSelectionPlugin,
+  unfurlFreezeFacet.compute(
+    [dragFrozenSelectionField],
+    (state) => state.field(dragFrozenSelectionField, false) !== null,
+  ),
 ];
 
 export {
   DRAG_END_USER_EVENT,
   buildEndDragDispatch,
-  diffDecorationSet,
-  diffFoldDecorationsByProximity,
   dragFreezeExtensions,
   dragFrozenSelectionField,
   dragSelectionPlugin,

@@ -486,9 +486,9 @@ function createEditorExtensions(
     setupCompartment.of(prosemarkBasicSetup()),
     // Freeze unfurl/fold decisions while a pointer drag is in flight, so the
     // text doesn't reflow under the cursor as the live selection sweeps
-    // across markdown nodes. Must come after `prosemarkBasicSetup()` so the
-    // high-precedence `frozenHideDecorationsField` overlay runs *after*
-    // prosemark's `hideExtension` provider.
+    // across markdown nodes. Drives prosemark's `unfurlFreezeFacet` from a
+    // pointerdown selection snapshot; the unfreeze on pointerup re-asserts
+    // selection so a single rebuild runs against the final live ranges.
     dragFreezeExtensions,
     drawSelection(),
     prosemarkBaseThemeSetup(),
