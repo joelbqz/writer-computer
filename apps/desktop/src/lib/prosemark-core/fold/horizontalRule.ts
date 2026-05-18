@@ -33,6 +33,7 @@ const horizontalRuleTheme = EditorView.theme({
   },
   ".cm-horizontal-rule-container hr": {
     width: "100%",
+    opacity: "0.2",
   },
 });
 

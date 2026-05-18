@@ -11,8 +11,8 @@ import { showNativeContextMenu } from "./editor-context-menu";
 import { EDITOR_SAFE_SCROLL_MARGIN } from "./editor-scroll-container";
 import "./section-rail.css";
 
-const INACTIVE_WIDTH = 7;
-const ACTIVE_WIDTH = 14;
+const INACTIVE_WIDTH = 10;
+const ACTIVE_WIDTH = 20;
 const INACTIVE_TICK_SCALE = INACTIVE_WIDTH / ACTIVE_WIDTH;
 const TICK_HEIGHT = 1;
 const TICK_GAP = 6;
@@ -127,7 +127,7 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
               background: "currentColor",
               opacity: isActive ? 1 : 0.35,
               transform: isActive ? "scaleX(1)" : `scaleX(${INACTIVE_TICK_SCALE})`,
-              transition: isActive ? "none" : "transform 300ms ease-in, opacity 300ms ease-in",
+              transition: "transform 300ms ease-in, opacity 300ms ease-in",
             };
             return (
               <button
