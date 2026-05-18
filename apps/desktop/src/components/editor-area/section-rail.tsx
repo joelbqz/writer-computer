@@ -136,6 +136,7 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
                 className="section-rail-tick block cursor-default border-0 bg-transparent p-0"
                 style={tickStyle}
                 title={heading.text}
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={() => handleTickClick(heading)}
                 onContextMenu={(event) => handleContextMenu(event, heading)}
               />
@@ -177,6 +178,7 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
                         letterSpacing: "-0.01em",
                         lineHeight: 1.5,
                       }}
+                      onMouseDown={(event) => event.preventDefault()}
                       onClick={() => handleTickClick(heading)}
                       onContextMenu={(event) => handleContextMenu(event, heading)}
                     >
