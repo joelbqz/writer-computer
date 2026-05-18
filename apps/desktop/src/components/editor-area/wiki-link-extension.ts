@@ -2,6 +2,7 @@ import {
   Decoration,
   type DecorationSet,
   EditorView,
+  tooltips,
   type ViewUpdate,
   ViewPlugin,
   WidgetType,
@@ -254,15 +255,12 @@ const wikiLinkTheme = EditorView.baseTheme({
   ".cm-wiki-link-editing": {
     color: "var(--pm-link-color, #7cacf8)",
   },
-  // Autocomplete tooltip styling — matches the command palette's feel
+  // Inner-list styling for the autocomplete tooltip. The card chrome
+  // (background, blur, border, radius) is inherited from `.surface-card,
+  // [cmdk-dialog], .cm-tooltip.cm-tooltip-autocomplete` in App.css so the
+  // wiki-link popover matches cmd+f, cmd+p, and the section-rail outline.
   ".cm-tooltip-autocomplete": {
-    backgroundColor: "var(--surface-palette) !important",
-    border: "1px solid var(--line-subtle) !important",
-    borderRadius: "12px",
-    boxShadow: "0 24px 60px rgba(0, 0, 0, 0.32)",
     overflow: "hidden",
-    backdropFilter: "blur(20px)",
-    WebkitBackdropFilter: "blur(20px)",
     padding: "4px",
   },
   ".cm-tooltip-autocomplete ul": {
@@ -276,7 +274,7 @@ const wikiLinkTheme = EditorView.baseTheme({
   },
   ".cm-tooltip-autocomplete ul li[aria-selected]": {
     backgroundColor: "var(--surface-selected) !important",
-    color: "inherit",
+    color: "var(--text-primary) !important",
   },
   ".cm-completionDetail": {
     color: "var(--text-muted, #888) !important",
@@ -297,6 +295,13 @@ export function wikiLinkExtension(
     wikiLinkDecorations,
     wikiLinkClickHandler(getFilePath, isDisposed),
     wikiLinkTheme,
+    // Append the autocomplete tooltip to `document.body` so it escapes
+    // `EditorScrollContainer`'s `mask-image`, which establishes a
+    // compositing context that neutralizes `backdrop-filter` on any
+    // descendant. Without this, the popover's blur is a no-op and editor
+    // text bleeds straight through the card in light mode. `position`
+    // already defaults to `"fixed"` on non-iOS.
+    tooltips({ parent: document.body }),
     autocompletion({
       override: [wikiLinkCompletions],
       icons: false,

@@ -238,6 +238,36 @@ input {
   pointer-events: none;
 }
 
+/* CodeMirror autocomplete tooltip (wiki-link suggestions). Mirrors the
+   surface-card chrome but can't share the rule directly because
+   `--surface-card` is set to `transparent` in light mode (so settings-panel
+   static cards stay flat). The blur depends on the wiki-link extension
+   appending the tooltip to `document.body` via `tooltips({ parent:
+   document.body })`, otherwise `EditorScrollContainer`'s `mask-image`
+   ancestor neutralizes `backdrop-filter`. `!important` is required on
+   background/border/radius because `@codemirror/view`'s baseTheme injects
+   `&light .cm-tooltip { backgroundColor: #f5f5f5; border: 1px solid #bbb }`
+   after our stylesheet with higher specificity. */
+.cm-tooltip.cm-tooltip-autocomplete {
+  background: transparent !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--line-subtler) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.32);
+  isolation: isolate;
+}
+
+.cm-tooltip.cm-tooltip-autocomplete::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--bg-base) 70%, transparent);
+  z-index: -1;
+  pointer-events: none;
+}
+
 [cmdk-dialog] {
   position: fixed;
   top: 16%;
