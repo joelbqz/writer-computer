@@ -1,40 +1,36 @@
 import { Decoration, EditorView, ViewPlugin, ViewUpdate, WidgetType } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
-import { EditorSelection } from "@codemirror/state";
 import { foldableSyntaxFacet } from "@/lib/prosemark-core/main";
 import { renderMermaid } from "./mermaid-renderer";
-import { MERMAID_CANVAS_HEIGHT, mountMermaidCanvas } from "./mermaid-canvas";
+import { MERMAID_CANVAS_HEIGHT, MermaidCanvasHandle, mountMermaidCanvas } from "./mermaid-canvas";
 import { openMermaidFullscreen } from "./mermaid-fullscreen";
 import "./mermaid-canvas.css";
-import {
-  DRAG_END_USER_EVENT,
-  buildEndDragDispatch,
-  dragFrozenSelectionField,
-  endDragEffect,
-  rangesTouchInclusive,
-  shouldStartDragGate,
-  startDragEffect,
-} from "./drag-selection-gate";
 
 // Outer widget padding (top + bottom). `mermaid-canvas.css` splits this
 // evenly across top/bottom so `estimatedHeight` matches the rendered box.
 const WIDGET_VERTICAL_PADDING = 16;
 
+// Map keyed by wrapper DOM element so `updateDOM` and `destroy` can find the
+// live canvas handle without round-tripping through CodeMirror state. Weak so
+// disposed wrappers don't leak.
+const widgetHandles = new WeakMap<HTMLElement, MermaidCanvasHandle>();
+
 /**
- * Mermaid widget. Identity is just `source` + `editMode`. No position fields,
- * no eq() side-effect — fence positions are looked up live at click time from
- * the syntax tree, so there's no stale-state class of bug.
+ * Mermaid widget. Identity is `(body, fenceText)` — the body drives the SVG
+ * cache and the fence text drives the inline editor's content. The Edit-code
+ * toggle lives entirely inside the canvas frame, so it never participates in
+ * widget identity and a toggle never triggers a CodeMirror rebuild.
  */
 class MermaidWidget extends WidgetType {
   constructor(
-    readonly source: string,
-    readonly editMode: boolean,
+    readonly body: string,
+    readonly fenceText: string,
   ) {
     super();
   }
 
   eq(other: MermaidWidget): boolean {
-    return this.source === other.source && this.editMode === other.editMode;
+    return this.body === other.body && this.fenceText === other.fenceText;
   }
 
   // Fixed height regardless of diagram size, so the heightmap settles on a
@@ -53,29 +49,43 @@ class MermaidWidget extends WidgetType {
     host.tabIndex = 0;
     wrapper.append(host);
 
-    const onToggleEdit = () => toggleEditMode(view, host, this.editMode);
-    const ariaLabel = `Mermaid diagram: ${this.source.split("\n")[0]}`;
-    const onExpand = () => openMermaidFullscreen(this.source, ariaLabel);
+    const ariaLabel = `Mermaid diagram: ${this.body.split("\n")[0]}`;
+    const onExpand = () => openMermaidFullscreen(this.body, ariaLabel);
+    const onSourceChange = (next: string) => writeFenceText(view, host, next);
 
     // Synchronous render. beautiful-mermaid is sync and the SVG cache makes
     // repeat calls O(map lookup), so the wrapper paints with its final SVG in
     // the same frame it enters the DOM — no IntersectionObserver, no async
     // gap that can leave the user stuck on a placeholder.
-    const result = renderMermaid(this.source);
-    if (result.svg) {
-      mountMermaidCanvas(host, {
-        svgHtml: result.svg,
-        ariaLabel,
-        editMode: this.editMode,
-        onToggleEdit,
-        onExpand,
-      });
-    } else if (result.error) {
-      host.classList.add("cm-mermaid-error");
-      host.textContent = `Diagram error: ${result.error}`;
-    }
+    const result = renderMermaid(this.body);
+    const handle = mountMermaidCanvas(host, {
+      svgHtml: result.svg ?? "",
+      ariaLabel,
+      source: this.fenceText,
+      onSourceChange,
+      onExpand,
+    });
+    if (result.error) handle.updateSource("", this.fenceText, result.error);
+    widgetHandles.set(wrapper, handle);
 
     return wrapper;
+  }
+
+  // Called when the new widget isn't `eq` to the old one but CM is willing to
+  // reuse the existing DOM. Returning `true` keeps the DOM (and the nested
+  // editor's focus, selection, scroll, history) intact across source changes.
+  updateDOM(dom: HTMLElement, _view: EditorView): boolean {
+    const handle = widgetHandles.get(dom);
+    if (!handle) return false;
+    const result = renderMermaid(this.body);
+    handle.updateSource(result.svg ?? "", this.fenceText, result.error);
+    return true;
+  }
+
+  destroy(dom: HTMLElement): void {
+    const handle = widgetHandles.get(dom);
+    handle?.destroy();
+    widgetHandles.delete(dom);
   }
 
   ignoreEvent(): boolean {
@@ -87,39 +97,10 @@ class MermaidWidget extends WidgetType {
 }
 
 /**
- * Compute the dispatch payload for an edit/preview toggle click.
- *
- * Preview → edit: select the entire fence range. `selectionTouchesRange` in
- * `@prosemark/core` is overlap-based with inclusive bounds, so any selection
- * overlapping the fence flips the syntax facet into edit mode and the source
- * appears above the canvas.
- *
- * Edit → preview: caret to fenceTo+1 (clamped to docLength) so the selection
- * no longer overlaps the fence range.
- */
-export function computeToggleSelection(
-  editMode: boolean,
-  fenceFrom: number,
-  fenceTo: number,
-  docLength: number,
-): { anchor: number; head?: number } {
-  if (editMode) {
-    return { anchor: Math.min(fenceTo + 1, docLength) };
-  }
-  // Reverse anchor (anchor=fenceTo, head=fenceFrom) matches the convention
-  // used by `selectAllDecorationsOnSelectExtension` in @prosemark/core.
-  return { anchor: fenceTo, head: fenceFrom };
-}
-
-/**
  * Find the FencedCode node enclosing the position of `host` in the document.
  *
- * `posAtDOM` for a `Decoration.widget` at `node.to` returns exactly `node.to`,
- * and `resolveInner(node.to, 1)` resolves to the node *starting* at that
- * offset (a sibling, not the fence). We try side=-1 first (which prefers the
- * node *ending* at the boundary, the common case for an edit-mode widget),
- * and fall back to side=1 for the replace-mode case where the widget covers
- * `[node.from, node.to]`.
+ * `posAtDOM` for a Decoration.replace widget that covers `[node.from, node.to]`
+ * resolves at the boundary; we try side=-1 first and fall back to side=1.
  */
 function findEnclosingFencedCode(view: EditorView, host: HTMLElement) {
   const pos = view.posAtDOM(host);
@@ -133,32 +114,27 @@ function findEnclosingFencedCode(view: EditorView, host: HTMLElement) {
 }
 
 /**
- * Toggle the edit/preview state for the fence containing `host`.
+ * Dispatch a transaction on the outer view replacing the *entire fence*
+ * (opening marker, info string, body, closing marker) with `next`. Position
+ * is resolved live from the syntax tree at call time, so it stays correct
+ * even as text above the fence shifts.
  *
- * Resolves the FencedCode range live from the syntax tree at click time —
- * no positions captured on the widget, no eq() side-effect — so the dispatch
- * always uses current offsets even after above-fence text has shifted.
- *
- * Scroll is preserved across the dispatch via `view.scrollSnapshot()`. The
- * heightmap shift between `Decoration.replace` (canvas only) and
- * `Decoration.widget` (source + canvas) would otherwise jump the viewport.
+ * If the user breaks the fence syntax mid-edit (e.g. they delete the closing
+ * ```), the parser stops recognizing it as a FencedCode on the next rebuild
+ * and the widget collapses to raw markdown — that's the natural consequence
+ * of editing the full fence, and the user can recover by completing the
+ * fence again.
  */
-function toggleEditMode(view: EditorView, host: HTMLElement, editMode: boolean): void {
+function writeFenceText(view: EditorView, host: HTMLElement, next: string): void {
   const fence = findEnclosingFencedCode(view, host);
   if (!fence) return;
-
-  const sel = computeToggleSelection(editMode, fence.from, fence.to, view.state.doc.length);
+  if (view.state.doc.sliceString(fence.from, fence.to) === next) return;
   view.dispatch({
-    selection:
-      sel.head !== undefined
-        ? EditorSelection.single(sel.anchor, sel.head)
-        : { anchor: sel.anchor },
-    effects: view.scrollSnapshot(),
+    changes: { from: fence.from, to: fence.to, insert: next },
+    // No `selection` field: leave the outer selection where it was. The
+    // widget owns its own focus (inside the nested editor) and we don't
+    // want to scroll the outer viewport.
   });
-  // `view.focus()` would call `contentDOM.focus()` without `preventScroll`,
-  // letting the browser auto-scroll to bring the caret into view. Anchor the
-  // viewport with `preventScroll: true` instead.
-  view.contentDOM.focus({ preventScroll: true });
 }
 
 /**
@@ -199,38 +175,22 @@ function parseFencedCode(
 
 const mermaidFoldExtension = foldableSyntaxFacet.of({
   nodePath: "FencedCode",
-  // Without `keepDecorationOnUnfold`, `@prosemark/core`'s foldExtension
-  // returns early as soon as the live selection touches the fence range and
-  // never calls `buildDecorations` (see node_modules/@prosemark/core/dist/
-  // main.js:300). That short-circuit is what would let the source flip into
-  // view mid-drag — and it would also pre-empt our drag gate. With this flag
-  // set, prosemark always delegates the decoration choice to us, so we own
-  // the entire Preview/Edit decision and can hold it stable across a drag.
   keepDecorationOnUnfold: true,
-  buildDecorations: (state, node, selectionTouchesRange) => {
+  buildDecorations: (state, node) => {
     const parsed = parseFencedCode(state, node);
     if (!parsed) return undefined;
 
     if (!parsed.info.trim().toLowerCase().startsWith("mermaid")) return undefined;
 
-    const source = parsed.source.trim();
-    if (!source) return undefined;
+    const body = parsed.source.trim();
+    if (!body) return undefined;
 
-    // While a pointer drag-selection is active, evaluate editMode against the
-    // pre-drag selection snapshot so the widget doesn't flip mid-drag. The
-    // gate is cleared on pointerup, at which point the live selection is used.
-    const frozen = state.field(dragFrozenSelectionField, false);
-    const editMode = frozen ? rangesTouchInclusive(frozen, node) : selectionTouchesRange;
-
-    const widget = new MermaidWidget(source, editMode);
-
-    if (editMode) {
-      // Selection overlaps the fence: show raw source, render the canvas as
-      // a block widget below.
-      return Decoration.widget({ widget, block: true }).range(node.to);
-    }
-
-    // Selection outside: replace the entire fence with the rendered canvas.
+    const fenceText = state.doc.sliceString(node.from, node.to);
+    const widget = new MermaidWidget(body, fenceText);
+    // Always replace the entire fence with the rendered canvas. Editing
+    // happens inside the canvas (a nested editor panel), not by exposing
+    // the underlying markdown via selection — so there's no preview/edit
+    // decoration switch.
     return Decoration.replace({ widget, block: true, inclusiveStart: true }).range(
       node.from,
       node.to,
@@ -257,21 +217,5 @@ const foldTreeSync = ViewPlugin.fromClass(
 );
 
 export function mermaidDecorations() {
-  // `dragFrozenSelectionField` is also part of `dragFreezeExtensions` (mounted
-  // once globally in `use-prosemark-editor.ts`). Including it here makes the
-  // mermaid spec self-contained: callers/tests that wire `mermaidDecorations()`
-  // into a state without the global gate still get the field they need. State
-  // fields dedupe by identity, so the duplicate is a no-op in production.
-  return [dragFrozenSelectionField, mermaidFoldExtension, foldTreeSync];
+  return [mermaidFoldExtension, foldTreeSync];
 }
-
-// Re-exported for tests — actual definitions live in `./drag-selection-gate`.
-export {
-  DRAG_END_USER_EVENT,
-  buildEndDragDispatch,
-  dragFrozenSelectionField,
-  endDragEffect,
-  rangesTouchInclusive,
-  shouldStartDragGate,
-  startDragEffect,
-};

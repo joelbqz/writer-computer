@@ -104,8 +104,6 @@ describe("renderMermaid", () => {
 });
 
 const { MERMAID_CANVAS_HEIGHT } = await import("../src/components/editor-area/mermaid-canvas");
-const { computeToggleSelection } =
-  await import("../src/components/editor-area/mermaid-decorations");
 
 describe("mermaid canvas frame", () => {
   test("MERMAID_CANVAS_HEIGHT is a positive fixed integer height", () => {
@@ -114,35 +112,11 @@ describe("mermaid canvas frame", () => {
   });
 });
 
-describe("computeToggleSelection", () => {
-  // Mock fence positions; only the relative ordering matters
-  // (fenceFrom < fenceTo < docLength).
-  const fenceFrom = 10;
-  const fenceTo = 46;
-  const docLength = 200;
-
-  test("preview → edit returns a reverse range covering the whole fence", () => {
-    expect(computeToggleSelection(false, fenceFrom, fenceTo, docLength)).toEqual({
-      anchor: fenceTo,
-      head: fenceFrom,
-    });
-  });
-
-  test("edit → preview moves caret just past the closing fence", () => {
-    expect(computeToggleSelection(true, fenceFrom, fenceTo, docLength)).toEqual({
-      anchor: fenceTo + 1,
-    });
-  });
-
-  test("edit → preview clamps to document length when fence is at EOF", () => {
-    expect(computeToggleSelection(true, fenceFrom, 199, 199)).toEqual({ anchor: 199 });
-  });
-});
-
 const { EditorState, EditorSelection } = await import("@codemirror/state");
 const { markdown } = await import("@codemirror/lang-markdown");
 const { GFM } = await import("@lezer/markdown");
 const { foldExtension } = await import("../src/lib/prosemark-core/main");
+const { mermaidDecorations } = await import("../src/components/editor-area/mermaid-decorations");
 const {
   DRAG_END_USER_EVENT,
   buildEndDragDispatch,
@@ -150,9 +124,8 @@ const {
   startDragEffect,
   endDragEffect,
   rangesTouchInclusive,
-  mermaidDecorations,
   shouldStartDragGate,
-} = await import("../src/components/editor-area/mermaid-decorations");
+} = await import("../src/components/editor-area/drag-selection-gate");
 
 describe("rangesTouchInclusive", () => {
   test("returns true for an overlap with shared boundary", () => {
@@ -231,15 +204,11 @@ describe("dragFrozenSelectionField", () => {
   });
 });
 
-// Integration: exercise the full mermaid decoration pipeline (markdown parser
-// + prosemark foldExtension + mermaidFoldExtension) and verify the gate
-// suppresses the Preview→Edit flip while the drag snapshot is active.
-describe("mermaidDecorations drag-gate integration", () => {
-  // Doc layout:
-  //   "before\n```mermaid\ngraph TD;\n  A-->B;\n```\nafter"
-  //    0      7          18         28        37  41
-  // Fence (FencedCode node) covers `[7, 40]` approximately. We don't need the
-  // exact offsets — we use markers to derive them.
+// The mermaid canvas now always replaces the entire fence with the rendered
+// widget, regardless of selection. Editing happens in a nested CodeMirror
+// instance inside the widget, not via selection-driven mode flipping — so
+// the decoration kind no longer depends on drag-gate or selection state.
+describe("mermaidDecorations always replaces the fence", () => {
   const before = "before\n";
   const fence = "```mermaid\ngraph TD;\n  A-->B;\n```";
   const after = "\nafter";
@@ -255,11 +224,6 @@ describe("mermaidDecorations drag-gate integration", () => {
     });
   }
 
-  // Returns the merged decoration spans inside the foldExtension's set that
-  // overlap the fence range. Replace decorations span [fenceFrom, fenceTo]
-  // (Preview); widget decorations are zero-width at fenceTo with source
-  // visible above (Edit). We iterate the full doc to bypass any inclusive/
-  // exclusive ambiguity with `between` on coincident boundaries.
   function fenceDecorationKind(state: ReturnType<typeof makeState>): "replace" | "widget" | "none" {
     const set = state.field(foldExtension);
     let kind: "replace" | "widget" | "none" = "none";
@@ -279,79 +243,19 @@ describe("mermaidDecorations drag-gate integration", () => {
     return kind;
   }
 
-  test("caret outside fence → Preview (replace)", () => {
-    const state = makeState({ anchor: 0 });
-    expect(fenceDecorationKind(state)).toBe("replace");
+  test("caret outside fence → replace", () => {
+    expect(fenceDecorationKind(makeState({ anchor: 0 }))).toBe("replace");
   });
 
-  test("selection overlapping fence → Edit (widget)", () => {
-    const state = makeState({ anchor: fenceFrom + 5, head: fenceFrom + 5 });
-    expect(fenceDecorationKind(state)).toBe("widget");
+  test("selection overlapping fence → still replace (no mode flip)", () => {
+    expect(fenceDecorationKind(makeState({ anchor: fenceFrom + 5 }))).toBe("replace");
   });
 
-  test("drag gate freezes Preview when live selection extends into fence", () => {
-    // Pre-drag: caret outside fence (Preview).
-    const s0 = makeState({ anchor: 0 });
-    expect(fenceDecorationKind(s0)).toBe("replace");
-
-    // Snapshot the pre-drag selection, then extend the live selection into
-    // the fence — what would normally happen on every drag-extend mousemove.
-    const s1 = s0.update({
-      effects: startDragEffect.of(s0.selection.ranges),
-      selection: EditorSelection.single(0, fenceFrom + 5),
-    }).state;
-
-    // Gate active + frozen ranges don't touch fence → stays in Preview.
-    expect(fenceDecorationKind(s1)).toBe("replace");
-
-    // Pointerup: clear gate + nudge selection so foldExtension rebuilds.
-    const s2 = s1.update({
-      effects: endDragEffect.of(null),
-      selection: s1.selection,
-    }).state;
-
-    // Now the live selection wins → flips to Edit.
-    expect(fenceDecorationKind(s2)).toBe("widget");
-  });
-
-  test("drag gate freezes Edit when live selection leaves fence mid-drag", () => {
-    // Pre-drag: caret inside fence (Edit).
-    const s0 = makeState({ anchor: fenceFrom + 5 });
-    expect(fenceDecorationKind(s0)).toBe("widget");
-
-    // Snapshot pre-drag (selection touches fence). Extend selection out
-    // past the fence — would normally collapse the widget back to Preview.
-    const s1 = s0.update({
-      effects: startDragEffect.of(s0.selection.ranges),
-      selection: EditorSelection.single(fenceFrom + 5, doc.length),
-    }).state;
-
-    // Gate active + frozen ranges still touch fence → stays in Edit.
-    expect(fenceDecorationKind(s1)).toBe("widget");
-  });
-
-  test("click-Edit-code dispatch (gate inactive) flips Preview → Edit", () => {
-    const s0 = makeState({ anchor: 0 });
-    expect(fenceDecorationKind(s0)).toBe("replace");
-
-    // Simulate the toggleEditMode dispatch: range covering the entire fence,
-    // gate inactive. (Why is the gate inactive at click time? `mousedown`
-    // stopPropagation on the button does NOT stop the corresponding
-    // `pointerdown` — they're separate event types. What suppresses the
-    // gate is shouldStartDragGate's `closest('.cm-mermaid-widget')` skip,
-    // tested separately in the predicate suite below.)
-    const s1 = s0.update({
-      selection: EditorSelection.single(fenceTo, fenceFrom),
-    }).state;
-
-    expect(fenceDecorationKind(s1)).toBe("widget");
+  test("range selection covering whole fence → still replace", () => {
+    expect(fenceDecorationKind(makeState({ anchor: fenceTo, head: fenceFrom }))).toBe("replace");
   });
 });
 
-// Pointer-handler predicates. These test the filter logic that the ViewPlugin
-// wraps — primary-button gate, isPrimary, in-widget skip, idempotent re-entry,
-// and the end-drag dispatch builder. Pure functions so we don't need a real
-// EditorView (test environment is "node" — no jsdom).
 describe("shouldStartDragGate", () => {
   function makeState() {
     return EditorState.create({
@@ -479,82 +383,6 @@ describe("buildEndDragDispatch", () => {
   });
 });
 
-// Multi-block integration: drag through two adjacent mermaid fences. Both
-// must stay in their pre-drag state for the duration of the gate.
-describe("mermaidDecorations multi-block drag-gate integration", () => {
-  const before = "before\n";
-  const fence1 = "```mermaid\ngraph TD;\n  A-->B;\n```";
-  const between = "\nmiddle\n";
-  const fence2 = "```mermaid\ngraph TD;\n  C-->D;\n```";
-  const after = "\nafter";
-  const doc = before + fence1 + between + fence2 + after;
-  const fence1From = before.length;
-  const fence1To = fence1From + fence1.length;
-  const fence2From = fence1To + between.length;
-  const fence2To = fence2From + fence2.length;
-
-  function makeState(selection: { anchor: number; head?: number }) {
-    return EditorState.create({
-      doc,
-      extensions: [markdown({ extensions: [GFM] }), mermaidDecorations()],
-      selection: EditorSelection.single(selection.anchor, selection.head),
-    });
-  }
-
-  function decorationKindAt(
-    state: ReturnType<typeof makeState>,
-    fenceFrom: number,
-    fenceTo: number,
-  ): "replace" | "widget" | "none" {
-    const set = state.field(foldExtension);
-    let kind: "replace" | "widget" | "none" = "none";
-    set.between(0, doc.length, (from, to, deco) => {
-      const spec = (deco as unknown as { spec?: { widget?: unknown } }).spec ?? {};
-      if (!spec.widget) return undefined;
-      if (from === fenceFrom && to === fenceTo) {
-        kind = "replace";
-        return false;
-      }
-      if (from === fenceTo && to === fenceTo) {
-        kind = "widget";
-        return false;
-      }
-      return undefined;
-    });
-    return kind;
-  }
-
-  test("drag spanning both fences leaves both in Preview during gate", () => {
-    // Pre-drag: caret outside both fences.
-    const s0 = makeState({ anchor: 0 });
-    expect(decorationKindAt(s0, fence1From, fence1To)).toBe("replace");
-    expect(decorationKindAt(s0, fence2From, fence2To)).toBe("replace");
-
-    // Snapshot pre-drag selection (touches neither fence). Extend live
-    // selection across both fences — would normally flip both to Edit.
-    const s1 = s0.update({
-      effects: startDragEffect.of(s0.selection.ranges),
-      selection: EditorSelection.single(0, fence2To),
-    }).state;
-
-    expect(decorationKindAt(s1, fence1From, fence1To)).toBe("replace");
-    expect(decorationKindAt(s1, fence2From, fence2To)).toBe("replace");
-
-    // Pointerup: clear gate. Both flip to Edit since live selection now
-    // overlaps both fences.
-    const s2 = s1.update({
-      effects: endDragEffect.of(null),
-      selection: s1.selection,
-    }).state;
-
-    expect(decorationKindAt(s2, fence1From, fence1To)).toBe("widget");
-    expect(decorationKindAt(s2, fence2From, fence2To)).toBe("widget");
-  });
-});
-
-// Loop risk per spec: the endDrag transaction itself must not trigger
-// another endDrag-style dispatch. We model this by replaying the transaction
-// builder against the post-endDrag state and asserting it returns null.
 describe("end-drag dispatch is one-shot (no loop)", () => {
   test("buildEndDragDispatch returns null on the state produced by a prior endDrag", () => {
     const s0 = EditorState.create({

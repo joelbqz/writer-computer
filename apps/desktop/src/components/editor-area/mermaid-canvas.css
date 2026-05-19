@@ -19,8 +19,8 @@
 
 .cm-mermaid-canvas:focus,
 .cm-mermaid-canvas:focus-visible,
-dialog.cm-mermaid-fullscreen:focus,
-dialog.cm-mermaid-fullscreen:focus-visible {
+.cm-mermaid-fullscreen:focus,
+.cm-mermaid-fullscreen:focus-visible {
   outline: none;
 }
 
@@ -31,6 +31,80 @@ dialog.cm-mermaid-fullscreen:focus-visible {
   cursor: grab;
   touch-action: none;
   user-select: none;
+}
+
+/* Inline source editor: hidden by default, slides in on `.is-editing`.
+   Sits absolutely on the left half of the canvas; the viewport shrinks to
+   make room (via the `.is-editing .cm-mermaid-canvas-viewport` rule below). */
+.cm-mermaid-canvas-editor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 45%;
+  border-right: 1px solid var(--border-color);
+  background-color: var(--surface-card);
+  overflow: hidden;
+  display: none;
+}
+
+.cm-mermaid-canvas.is-editing .cm-mermaid-canvas-editor {
+  display: block;
+}
+
+.cm-mermaid-canvas.is-editing .cm-mermaid-canvas-viewport {
+  left: 45%;
+}
+
+/* Inner CodeMirror fills the editor panel. */
+.cm-mermaid-canvas-editor .cm-editor {
+  height: 100%;
+}
+.cm-mermaid-canvas-editor .cm-scroller {
+  height: 100%;
+}
+
+/* Override the outer prosemark `.cm-editor .cm-content` rule, which sets a
+   ~4rem side inset + 40vh trailing pad meant for the document column. Inside
+   the small mermaid editor panel those values waste most of the horizontal
+   space and trail empty scroll below. The extra `.cm-mermaid-canvas` ancestor
+   bumps specificity past the prosemark rule. */
+.cm-mermaid-canvas .cm-mermaid-canvas-editor .cm-content {
+  padding: 8px 0;
+  max-width: none;
+  margin: 0;
+}
+.cm-mermaid-canvas .cm-mermaid-canvas-editor .cm-line {
+  padding: 0 8px;
+}
+
+/* Restore native scrolling on the inner scroller. The outer prosemark theme
+   forces `overflow: visible !important` + a `clip-path` inset (it relies on
+   an ancestor `EditorScrollContainer` to scroll the document column). Inside
+   the fixed-height mermaid panel we need the scroller itself to scroll, and
+   we don't want the document-column clip-path. The `!important` is required
+   to beat the outer rule's `!important` even at higher specificity. */
+.cm-mermaid-canvas .cm-mermaid-canvas-editor .cm-scroller {
+  overflow: auto !important;
+  clip-path: none;
+}
+
+/* Reset the selection-layer clip from the outer theme so the inner editor's
+   drawSelection rectangles aren't clipped to the document column width. */
+.cm-mermaid-canvas .cm-mermaid-canvas-editor .cm-selectionLayer {
+  clip-path: none;
+  width: auto;
+  height: auto;
+  contain: none;
+}
+
+/* The outer theme re-paints the browser-native `::selection` background as a
+   fallback for text drawSelection's rects don't cover. Inside the nested
+   editor that fallback shows as a single bounding rectangle on top of the
+   per-line drawn rects — the "double selection" effect. Drop the native
+   background here so only drawSelection's layer is visible. */
+.cm-mermaid-canvas .cm-mermaid-canvas-editor .cm-content ::selection {
+  background-color: transparent;
 }
 
 .cm-mermaid-canvas-viewport.is-dragging {
@@ -142,10 +216,12 @@ dialog.cm-mermaid-fullscreen:focus-visible {
   padding: 0;
 }
 
-/* Errors render inside the canvas frame (the .cm-mermaid-canvas class is
-   kept on the host) — this just centres the error text and switches its
-   colour so the frame border + fixed height stay intact. */
-.cm-mermaid-canvas.cm-mermaid-error {
+/* Render errors inside the canvas stage so the surrounding frame + zoom
+   controls + (when open) the inline editor panel stay mounted. The user
+   can then fix the source in-place. */
+.cm-mermaid-canvas-error-msg {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -156,25 +232,30 @@ dialog.cm-mermaid-fullscreen:focus-visible {
   text-align: center;
 }
 
-/* Fullscreen dialog: take the whole viewport and host a fresh canvas inside.
-   Controls inside the fullscreen canvas stay visible regardless of
-   hover/focus so the user has obvious affordances on first paint. */
-dialog.cm-mermaid-fullscreen {
-  width: 100vw;
-  height: 100vh;
-  max-width: 100vw;
-  max-height: 100vh;
-  margin: 0;
-  padding: 0;
-  border: none;
-  background-color: var(--bg-base);
-  color: inherit;
+/* Fullscreen overlay: fixed-position div that fills the viewport and hosts
+   a fresh canvas. Plain div (not <dialog>) so layering and event handling
+   stay under our control. Controls inside the fullscreen canvas stay
+   visible regardless of hover/focus so the user has obvious affordances
+   on first paint.
+
+   Enter/exit animation: backdrop fades, canvas scales 0.95 → 1 and fades.
+   The base rule below is the closed state; `.is-open` (added one frame
+   after mount, removed before teardown) is the open state. JS waits for
+   the canvas's `transitionend` before removing the overlay from the DOM
+   so the exit animation has time to play. */
+.cm-mermaid-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background-color: color-mix(in srgb, var(--bg-base) 92%, transparent);
+  backdrop-filter: blur(4px);
   overflow: hidden;
+  opacity: 0;
+  transition: opacity 180ms ease-out;
 }
 
-dialog.cm-mermaid-fullscreen::backdrop {
-  background-color: color-mix(in srgb, var(--bg-base) 70%, transparent);
-  backdrop-filter: blur(4px);
+.cm-mermaid-fullscreen.is-open {
+  opacity: 1;
 }
 
 .cm-mermaid-fullscreen-canvas {
@@ -182,6 +263,29 @@ dialog.cm-mermaid-fullscreen::backdrop {
   height: 100%;
   border: none;
   border-radius: 0;
+  background-color: transparent;
+  transform: scale(0.95);
+  opacity: 0;
+  transition:
+    transform 180ms ease-out,
+    opacity 180ms ease-out;
+}
+
+.cm-mermaid-fullscreen.is-open .cm-mermaid-fullscreen-canvas {
+  transform: scale(1);
+  opacity: 1;
+}
+
+/* Inset the button clusters further from the edges in fullscreen so they
+   don't crowd the viewport corners. */
+.cm-mermaid-fullscreen-canvas .cm-mermaid-canvas-top {
+  top: 16px;
+  right: 16px;
+}
+
+.cm-mermaid-fullscreen-canvas .cm-mermaid-canvas-zoom {
+  bottom: 16px;
+  right: 16px;
 }
 
 .cm-mermaid-fullscreen-canvas .cm-mermaid-canvas-icon-btn,
