@@ -18,10 +18,10 @@ const blockquotePrefixPattern = /^(?:> )*/;
 const leadingWhitespacePattern = /^(?:> )*(\s*)/;
 
 // Extra indent added on top of literal leading whitespace, as a fraction of
-// that whitespace's width. `1` means each nesting step gets `2 ×` the raw
-// indent (literal + same again on top), making the visual step easier to
+// that whitespace's width. `2` means each nesting step gets `3 ×` the raw
+// indent (literal + 2× more on top), making the visual step easier to
 // read without changing the underlying markdown.
-const NEST_INDENT_MULTIPLIER = 1;
+const NEST_INDENT_MULTIPLIER = 2;
 
 const softIndentRefresh = Annotation.define<number>();
 const MAX_REFRESH_ROUNDS = 1;
