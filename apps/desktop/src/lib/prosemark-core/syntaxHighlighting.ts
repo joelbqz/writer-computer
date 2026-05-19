@@ -96,7 +96,9 @@ export const baseTheme = EditorView.theme({
   },
   ".cm-rendered-list-mark": {
     color: "var(--pm-muted-color)",
-    margin: "0 0.2em",
+    display: "inline-block",
+    width: "1ch",
+    textAlign: "center",
   },
   ".cm-blockquote-line": {
     position: "relative",

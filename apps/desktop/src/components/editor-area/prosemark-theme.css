@@ -189,17 +189,23 @@
   display: none;
 }
 
-/* Task checkboxes — replace native checkbox with hugeicon-style rounded square */
+/* Task checkboxes — replace native checkbox with hugeicon-style rounded square.
+   Keep the visual box at 18px, but pad the inline width so the total matches
+   the 5 chars (`- [ ]`) being replaced, avoiding layout shift when the caret
+   toggles between rendered and raw states. `ch` overestimates these narrow
+   chars in our proportional font, so 4ch lands closer to the raw width than
+   the literal 5ch the widget replaces. */
 .cm-editor .cm-checkbox {
   appearance: none;
   -webkit-appearance: none;
+  box-sizing: content-box;
   width: 18px;
   height: 18px;
   border: 1.5px solid var(--text-muted);
   border-radius: 5px;
   cursor: pointer;
   vertical-align: -3px;
-  margin-right: 2px;
+  margin-right: calc(4ch - 18px);
   transition:
     background-color 0.15s,
     border-color 0.15s;
