@@ -10,9 +10,18 @@ import {
 interface IndentData {
   lineNumber: number;
   indentWidth: number;
+  extraIndent: number;
 }
 
 const softIndentPattern = /^(> )*(\s*)?(([-*+]?|\d[.)])\s)?(\[.\]\s)?/;
+const blockquotePrefixPattern = /^(?:> )*/;
+const leadingWhitespacePattern = /^(?:> )*(\s*)/;
+
+// Extra indent added on top of literal leading whitespace, as a fraction of
+// that whitespace's width. `1` means each nesting step gets `2 ×` the raw
+// indent (literal + same again on top), making the visual step easier to
+// read without changing the underlying markdown.
+const NEST_INDENT_MULTIPLIER = 1;
 
 const softIndentRefresh = Annotation.define<number>();
 const MAX_REFRESH_ROUNDS = 1;
@@ -122,14 +131,35 @@ export const softIndentExtension = ViewPlugin.fromClass(
           // and the wrapped portion of the list item renders flush-left
           // outside the bullet. Reading the position from the left side
           // anchors the measurement on the always-rendered `- ` text node.
-          const indentWidth =
-            (view.coordsAtPos(line.from + nonContent.length, -1)?.left ?? 0) -
-            (view.coordsAtPos(line.from)?.left ?? 0);
+          const lineLeft = view.coordsAtPos(line.from)?.left ?? 0;
+          const prefixEndLeft =
+            view.coordsAtPos(line.from + nonContent.length, -1)?.left ?? lineLeft;
+          const indentWidth = prefixEndLeft - lineLeft;
           if (!indentWidth) continue;
+
+          // Amplify ONLY the leading whitespace (after any `> ` blockquote
+          // prefix), so the visual nesting step is more pronounced than what
+          // the raw spaces alone would give. Top-level items (no leading
+          // whitespace) are unaffected.
+          let extraIndent = 0;
+          const blockquoteLen = blockquotePrefixPattern.exec(nonContent)?.[0].length ?? 0;
+          const whitespaceLen = leadingWhitespacePattern.exec(nonContent)?.[1].length ?? 0;
+          if (whitespaceLen > 0) {
+            const blockquoteEndLeft =
+              blockquoteLen > 0
+                ? (view.coordsAtPos(line.from + blockquoteLen)?.left ?? lineLeft)
+                : lineLeft;
+            const whitespaceEndLeft =
+              view.coordsAtPos(line.from + blockquoteLen + whitespaceLen, -1)?.left ??
+              blockquoteEndLeft;
+            const leadingWhitespaceWidth = whitespaceEndLeft - blockquoteEndLeft;
+            extraIndent = leadingWhitespaceWidth * NEST_INDENT_MULTIPLIER;
+          }
 
           indents.push({
             lineNumber: i,
             indentWidth,
+            extraIndent,
           });
         }
       }
@@ -140,9 +170,9 @@ export const softIndentExtension = ViewPlugin.fromClass(
       const builder = new RangeSetBuilder<Decoration>();
       const styles = new Map<number, string>();
 
-      for (const { lineNumber, indentWidth } of indents) {
+      for (const { lineNumber, indentWidth, extraIndent } of indents) {
         const line = view.state.doc.line(lineNumber);
-        const style = `padding-inline-start: ${(indentWidth + 6).toString()}px; text-indent: -${indentWidth.toString()}px;`;
+        const style = `padding-inline-start: ${(indentWidth + 6 + extraIndent).toString()}px; text-indent: -${indentWidth.toString()}px;`;
         styles.set(lineNumber, style);
 
         const deco = Decoration.line({
