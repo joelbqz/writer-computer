@@ -15,11 +15,25 @@ class Checkbox extends WidgetType {
   }
 
   toDOM() {
-    const el = document.createElement("input");
-    el.type = "checkbox";
-    el.className = "cm-checkbox";
-    el.checked = this.value;
-    return el;
+    // Wrapper carries an invisible copy of the raw 5 chars (`- [ ]`) so its
+    // inline width matches the raw text exactly. The visual checkbox is
+    // absolutely positioned on top so the column where body text starts
+    // doesn't shift when the caret toggles between rendered and raw.
+    const wrapper = document.createElement("span");
+    wrapper.className = "cm-checkbox-wrapper";
+
+    const spacer = document.createElement("span");
+    spacer.className = "cm-checkbox-spacer";
+    spacer.textContent = "- [ ]";
+    wrapper.appendChild(spacer);
+
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.className = "cm-checkbox";
+    input.checked = this.value;
+    wrapper.appendChild(input);
+
+    return wrapper;
   }
 
   ignoreEvent(_event: Event) {

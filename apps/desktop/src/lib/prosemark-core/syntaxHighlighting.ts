@@ -95,9 +95,16 @@ export const baseTheme = EditorView.theme({
     color: "var(--pm-link-color)",
   },
   ".cm-rendered-list-mark": {
+    position: "relative",
     color: "var(--pm-muted-color)",
-    display: "inline-block",
-    width: "1ch",
+  },
+  ".cm-rendered-list-mark-spacer": {
+    visibility: "hidden",
+  },
+  ".cm-rendered-list-mark-dot": {
+    position: "absolute",
+    left: "0",
+    right: "0",
     textAlign: "center",
   },
   ".cm-blockquote-line": {

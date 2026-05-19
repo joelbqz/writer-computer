@@ -7,10 +7,24 @@ class BulletPoint extends WidgetType {
   }
 
   toDOM() {
-    const span = document.createElement("span");
-    span.className = "cm-rendered-list-mark";
-    span.innerHTML = "•";
-    return span;
+    // The wrapper carries an invisible copy of the raw char (`-`) so its inline
+    // width matches the raw text exactly. The dot is layered on top via
+    // absolute positioning so the column doesn't shift when the caret toggles
+    // between rendered and raw.
+    const wrapper = document.createElement("span");
+    wrapper.className = "cm-rendered-list-mark";
+
+    const spacer = document.createElement("span");
+    spacer.className = "cm-rendered-list-mark-spacer";
+    spacer.textContent = "-";
+    wrapper.appendChild(spacer);
+
+    const dot = document.createElement("span");
+    dot.className = "cm-rendered-list-mark-dot";
+    dot.textContent = "•";
+    wrapper.appendChild(dot);
+
+    return wrapper;
   }
 
   ignoreEvent(_event: Event) {
