@@ -98,13 +98,14 @@
   contain: none;
 }
 
-/* The outer theme re-paints the browser-native `::selection` background as a
-   fallback for text drawSelection's rects don't cover. Inside the nested
-   editor that fallback shows as a single bounding rectangle on top of the
-   per-line drawn rects — the "double selection" effect. Drop the native
-   background here so only drawSelection's layer is visible. */
-.cm-mermaid-canvas .cm-mermaid-canvas-editor .cm-content ::selection {
-  background-color: transparent;
+/* The inner source editor mounts `drawSelection()`. Keep the browser-native
+   `::selection` layer invisible in this nested editor so only CodeMirror's
+   `.cm-selectionBackground` rects render. */
+.cm-mermaid-canvas .cm-mermaid-canvas-editor .cm-content::selection,
+.cm-mermaid-canvas .cm-mermaid-canvas-editor .cm-content ::selection,
+.cm-mermaid-canvas .cm-mermaid-canvas-editor .cm-line::selection,
+.cm-mermaid-canvas .cm-mermaid-canvas-editor .cm-line ::selection {
+  background-color: transparent !important;
 }
 
 .cm-mermaid-canvas-viewport.is-dragging {
