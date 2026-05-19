@@ -33,9 +33,9 @@
   user-select: none;
 }
 
-/* Inline source editor: hidden by default, slides in on `.is-editing`.
-   Sits absolutely on the left half of the canvas; the viewport shrinks to
-   make room (via the `.is-editing .cm-mermaid-canvas-viewport` rule below). */
+/* Inline source editor: hidden by default and revealed instantly on
+   `.is-editing`. Sits absolutely on the left half of the canvas; the viewport
+   shrinks to make room via the `.is-editing .cm-mermaid-canvas-viewport` rule. */
 .cm-mermaid-canvas-editor {
   position: absolute;
   top: 0;
