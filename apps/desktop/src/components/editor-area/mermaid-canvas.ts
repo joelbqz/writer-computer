@@ -1,6 +1,6 @@
 // Fixed-height canvas frame for mermaid diagrams: drag-pan, wheel/button zoom,
 // fit-to-viewport reset. With `source` + `onSourceChange` it also embeds a
-// nested CodeMirror on the left of the same container; toggling "Edit code"
+// nested CodeMirror on the left of the same container; toggling the code icon
 // reveals the inline source editor while the rendered diagram stays in the
 // right half. The canvas frame is mounted by the CodeMirror MermaidWidget
 // once the SVG has been rendered.
@@ -25,6 +25,9 @@ const FIT_MARGIN_PX = 16;
 // Debounce so a quick burst of keystrokes results in a single outer dispatch
 // + diagram re-render, not one per character.
 const SOURCE_CHANGE_DEBOUNCE_MS = 150;
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+const CODE_ICON_PATHS = ["m16 18 6-6-6-6", "m8 6-6 6 6 6", "m13 4-2 16"] as const;
 
 export type MermaidCanvasOptions = {
   svgHtml: string;
@@ -93,6 +96,16 @@ export function mountMermaidCanvas(
   let sourceChangeTimer: ReturnType<typeof setTimeout> | null = null;
   let editButton: HTMLButtonElement | null = null;
 
+  const updateEditButton = (): void => {
+    if (!editButton) return;
+    const title = editing ? "Preview" : "Edit code";
+    setCodeButtonIcon(editButton);
+    editButton.title = title;
+    editButton.setAttribute("aria-label", title);
+    editButton.setAttribute("aria-pressed", String(editing));
+    editButton.classList.toggle("is-active", editing);
+  };
+
   const flushSourceChange = (): void => {
     sourceChangeTimer = null;
     if (!innerView || !opts.onSourceChange) return;
@@ -114,11 +127,7 @@ export function mountMermaidCanvas(
     if (editing && !innerView && editingEnabled) {
       innerView = createInnerEditor(editorPanel, currentSource, scheduleSourceChange);
     }
-    if (editButton) {
-      editButton.textContent = editing ? "Preview" : "Edit code";
-      editButton.title = editing ? "Return to preview" : "Edit code";
-      editButton.setAttribute("aria-label", editButton.title);
-    }
+    updateEditButton();
     // Wait one frame so the new flex/absolute layout has settled, then refit
     // the diagram into the (possibly resized) viewport.
     requestAnimationFrame(fitToViewport);
@@ -127,8 +136,9 @@ export function mountMermaidCanvas(
   };
 
   if (editingEnabled) {
-    editButton = makeButton("Edit code", "Edit code");
-    editButton.classList.add("cm-mermaid-canvas-edit");
+    editButton = makeButton("", "Edit code");
+    editButton.classList.add("cm-mermaid-canvas-edit", "cm-mermaid-canvas-icon-btn");
+    updateEditButton();
     editButton.addEventListener("click", () => setEditing(!editing));
     topCluster.append(editButton);
   }
@@ -431,6 +441,26 @@ function decorateSvg(svg: SVGSVGElement | null, ariaLabel: string): void {
   // style properties below, which merge with whatever's already there.
   svg.setAttribute("role", "img");
   svg.setAttribute("aria-label", ariaLabel);
+}
+
+function setCodeButtonIcon(button: HTMLButtonElement): void {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("class", "cm-mermaid-canvas-button-icon");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+
+  for (const d of CODE_ICON_PATHS) {
+    const path = document.createElementNS(SVG_NS, "path");
+    path.setAttribute("d", d);
+    svg.append(path);
+  }
+
+  button.replaceChildren(svg);
 }
 
 // Minimal stream-mode highlighter for mermaid source. Lezer doesn't ship a

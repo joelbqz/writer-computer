@@ -89,8 +89,9 @@
   clip-path: none;
 }
 
-/* Reset the selection-layer clip from the outer theme so the inner editor's
-   drawSelection rectangles aren't clipped to the document column width. */
+/* Reset the outer prosemark theme's `.cm-selectionLayer` clip/contain
+   hack, which was scoped to the outer document column and would clip
+   drawSelection's painted rects inside the inner panel. */
 .cm-mermaid-canvas .cm-mermaid-canvas-editor .cm-selectionLayer {
   clip-path: none;
   width: auto;
@@ -184,8 +185,25 @@
 }
 
 .cm-mermaid-canvas-edit {
-  padding: 5px 10px;
-  font-size: 12px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.cm-mermaid-canvas-edit.is-active {
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border-color));
+  background-color: color-mix(in srgb, var(--accent) 6%, var(--surface-card));
+  color: color-mix(in srgb, var(--accent) 26%, var(--text-secondary));
+}
+
+.cm-mermaid-canvas-button-icon {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2;
+  flex: none;
 }
 
 .cm-mermaid-canvas-icon-btn {
