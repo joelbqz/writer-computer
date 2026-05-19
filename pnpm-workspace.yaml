@@ -20,7 +20,6 @@ catalog:
   "@lezer/highlight": ^1.2.3
   "@lezer/markdown": ^1.6.1
   "@lezer/yaml": ^1.0.4
-  node-emoji: ^2.2.0
   "@tailwindcss/vite": ^4.2.2
   "@tauri-apps/plugin-clipboard-manager": ^2.3.2
   "@tauri-apps/plugin-dialog": ^2.6.0
@@ -30,6 +29,8 @@ catalog:
   beautiful-mermaid: ^1.1.3
   cmdk: ^1.1.1
   dompurify: ^3.3.3
+  motion: ^12.39.0
+  node-emoji: ^2.2.0
   react-resizable-panels: ^4.7.4
   tailwindcss: ^4.2.2
   typescript: ^5

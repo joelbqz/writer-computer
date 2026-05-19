@@ -35,6 +35,7 @@
     "beautiful-mermaid": "catalog:",
     "cmdk": "catalog:",
     "dompurify": "catalog:",
+    "motion": "catalog:",
     "node-emoji": "catalog:",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
