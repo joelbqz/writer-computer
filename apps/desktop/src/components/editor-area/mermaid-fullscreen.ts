@@ -1,6 +1,6 @@
 // Fullscreen overlay for the mermaid canvas. Mounts a fixed-position div at
-// the document body, renders a fresh copy of the canvas (pan + zoom controls)
-// inside it, and tears the node down on close. Esc, the ✕ button, or a
+// the document body, renders a fresh copy of the canvas (pan + zoom + reset
+// controls) inside it, and tears the node down on close. Esc, the ✕ button, or a
 // backdrop click dismiss. Implemented as a plain div (not a `<dialog>`) so
 // styling, layering, and event handling stay under our control and don't
 // depend on the user agent's modal-dialog quirks.

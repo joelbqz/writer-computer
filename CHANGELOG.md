@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-05-19
+
+- Make Mermaid canvas trackpad pinch zoom more responsive while leaving Cmd-wheel, keyboard, and button zoom increments unchanged.
+- Add a reset button to Mermaid canvas controls, shared by inline widgets and the fullscreen overlay. It sits above the zoom-in/out buttons, mirrors the existing `0` keyboard shortcut, and restores the fit-to-viewport pan/zoom state after exploratory navigation.
+
 ## 2026-05-18
 
 - Replace the Mermaid canvas "Edit code" / "Preview" text pill with a 28px square code icon toggle that matches the zoom and fullscreen controls. The toggle keeps the same glyph in both states and uses a subtle pressed visual state while source editing is open.

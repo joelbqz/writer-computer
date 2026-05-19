@@ -12,6 +12,8 @@ without leaving the document.
 - One-click way to view a mermaid diagram at full viewport size.
 - Reuse the existing canvas pan/zoom controls inside the fullscreen view —
   no second control surface to learn or maintain.
+- Include the same reset-to-fit control as the inline canvas so users can
+  recover from exploratory panning/zooming without closing the overlay.
 - Close via `Esc`, a close button, or backdrop click.
 - Theme-aware: dialog background, border, and controls follow the same CSS
   custom properties as the in-editor canvas.
@@ -34,7 +36,7 @@ without leaving the document.
   button, or a click on the backdrop dismisses.
 - Backdrop: `--bg-base` at 92% opacity with a 4px blur, so the document
   underneath stays faintly visible as a contextual anchor.
-- Inside the overlay, controls (close, zoom) are persistently visible (no
+- Inside the overlay, controls (close, reset, zoom) are persistently visible (no
   hover-to-reveal) — the fullscreen view is a deliberate, focused view,
   so the affordances should be obvious on first paint.
 

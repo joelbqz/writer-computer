@@ -1,5 +1,5 @@
 // Fixed-height canvas frame for mermaid diagrams: drag-pan, wheel/button zoom,
-// fit-to-viewport reset. With `source` + `onSourceChange` it also embeds a
+// reset-to-fit. With `source` + `onSourceChange` it also embeds a
 // nested CodeMirror on the left of the same container; toggling the code icon
 // reveals the inline source editor while the rendered diagram stays in the
 // right half. The canvas frame is mounted by the CodeMirror MermaidWidget
@@ -20,6 +20,9 @@ const ZOOM_MAX = 4;
 const BUTTON_ZOOM_FACTOR = 1.2;
 const KEY_ZOOM_FACTOR = 1.15;
 const WHEEL_ZOOM_SENSITIVITY = 0.0015;
+// WebKit reports trackpad pinch as a synthetic Ctrl-wheel event with small
+// pixel deltas; give that path a higher multiplier so pinch feels responsive.
+const PINCH_ZOOM_SENSITIVITY = 0.0035;
 const KEY_PAN_STEP = 24;
 const FIT_MARGIN_PX = 16;
 // Debounce so a quick burst of keystrokes results in a single outer dispatch
@@ -28,6 +31,7 @@ const SOURCE_CHANGE_DEBOUNCE_MS = 150;
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 const CODE_ICON_PATHS = ["m16 18 6-6-6-6", "m8 6-6 6 6 6", "m13 4-2 16"] as const;
+const RESET_ICON_PATHS = ["M3 12a9 9 0 1 0 2.64-6.36L3 8", "M3 3v5h5"] as const;
 
 export type MermaidCanvasOptions = {
   svgHtml: string;
@@ -150,7 +154,7 @@ export function mountMermaidCanvas(
     topCluster.append(closeButton);
   }
 
-  // Bottom-right vertical cluster: expand (if wired) sits above the
+  // Bottom-right vertical cluster: expand (if wired) and reset sit above the
   // zoom-in / zoom-out buttons.
   const zoomCluster = document.createElement("div");
   zoomCluster.className = "cm-mermaid-canvas-zoom";
@@ -171,11 +175,14 @@ export function mountMermaidCanvas(
     zoomCluster.append(expandButton);
   }
 
+  const resetButton = makeButton("", "Reset zoom and pan");
   const zoomInButton = makeButton("+", "Zoom in");
   const zoomOutButton = makeButton("−", "Zoom out");
+  resetButton.classList.add("cm-mermaid-canvas-zoom-btn");
+  setResetButtonIcon(resetButton);
   zoomInButton.classList.add("cm-mermaid-canvas-zoom-btn");
   zoomOutButton.classList.add("cm-mermaid-canvas-zoom-btn");
-  zoomCluster.append(zoomInButton, zoomOutButton);
+  zoomCluster.append(resetButton, zoomInButton, zoomOutButton);
 
   host.append(topCluster, zoomCluster);
 
@@ -256,6 +263,10 @@ export function mountMermaidCanvas(
   // +/−, 0) work immediately afterward. `host` here is whichever canvas
   // owns this mount — inline widget or overlay — so the call routes
   // focus to the right place in both contexts.
+  resetButton.addEventListener("click", () => {
+    fitToViewport();
+    host.focus();
+  });
   zoomInButton.addEventListener("click", () => {
     zoomAtCenter(BUTTON_ZOOM_FACTOR);
     host.focus();
@@ -312,7 +323,8 @@ export function mountMermaidCanvas(
     (e) => {
       if (!(e.metaKey || e.ctrlKey)) return;
       e.preventDefault();
-      const factor = Math.exp(-e.deltaY * WHEEL_ZOOM_SENSITIVITY);
+      const sensitivity = e.ctrlKey && !e.metaKey ? PINCH_ZOOM_SENSITIVITY : WHEEL_ZOOM_SENSITIVITY;
+      const factor = Math.exp(-e.deltaY * sensitivity);
       zoomAt(e.clientX, e.clientY, factor);
     },
     { passive: false },
@@ -376,6 +388,9 @@ export function mountMermaidCanvas(
     stage.innerHTML = "";
     stage.style.transform = "none";
     stage.style.opacity = "1";
+    state.zoom = 1;
+    state.panX = 0;
+    state.panY = 0;
     const errEl = document.createElement("div");
     errEl.className = "cm-mermaid-canvas-error-msg";
     errEl.textContent = `Diagram error: ${message}`;
@@ -444,6 +459,14 @@ function decorateSvg(svg: SVGSVGElement | null, ariaLabel: string): void {
 }
 
 function setCodeButtonIcon(button: HTMLButtonElement): void {
+  setButtonIcon(button, CODE_ICON_PATHS);
+}
+
+function setResetButtonIcon(button: HTMLButtonElement): void {
+  setButtonIcon(button, RESET_ICON_PATHS);
+}
+
+function setButtonIcon(button: HTMLButtonElement, paths: readonly string[]): void {
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.setAttribute("class", "cm-mermaid-canvas-button-icon");
   svg.setAttribute("viewBox", "0 0 24 24");
@@ -454,7 +477,7 @@ function setCodeButtonIcon(button: HTMLButtonElement): void {
   svg.setAttribute("aria-hidden", "true");
   svg.setAttribute("focusable", "false");
 
-  for (const d of CODE_ICON_PATHS) {
+  for (const d of paths) {
     const path = document.createElementNS(SVG_NS, "path");
     path.setAttribute("d", d);
     svg.append(path);
