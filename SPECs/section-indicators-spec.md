@@ -55,15 +55,15 @@ The component is a vertical stack of short horizontal tick marks. Each tick repr
 
 ### Tokens / measurements
 
-| Property              | Value                       |
-| --------------------- | --------------------------- |
-| Tick height           | `2px`                       |
-| Inactive tick width   | `5px`                       |
-| Active tick width     | `10px`                      |
-| Vertical pitch        | `8px` (tick + 6px gap)      |
-| Inactive opacity      | `0.2`                       |
-| Active opacity        | `1.0`                       |
-| Fill                  | `currentColor` (foreground) |
+| Property            | Value                       |
+| ------------------- | --------------------------- |
+| Tick height         | `2px`                       |
+| Inactive tick width | `5px`                       |
+| Active tick width   | `10px`                      |
+| Vertical pitch      | `8px` (tick + 6px gap)      |
+| Inactive opacity    | `0.2`                       |
+| Active opacity      | `1.0`                       |
+| Fill                | `currentColor` (foreground) |
 
 ### Hover state — heading popover
 

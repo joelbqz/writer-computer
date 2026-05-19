@@ -46,9 +46,9 @@ These are the plausible remaining causes, ranked by the evidence available from 
 
 #### A. Self-write TTL is too short for delayed-sync filesystems (most likely)
 
-`SELF_WRITE_TTL = 2s` ([`watcher.rs:11`](../apps/desktop/src-tauri/src/watcher.rs)). On iCloud Drive, Dropbox, or SMB-mounted workspaces, the OS-level sync runs *after* the local write completes — FSEvents may fire 5–30 seconds later when sync replication reports the change. By then the TTL has expired, the event is no longer flagged as a self-write, and the editor reloads from disk, potentially clobbering keystrokes the user has typed since the save.
+`SELF_WRITE_TTL = 2s` ([`watcher.rs:11`](../apps/desktop/src-tauri/src/watcher.rs)). On iCloud Drive, Dropbox, or SMB-mounted workspaces, the OS-level sync runs _after_ the local write completes — FSEvents may fire 5–30 seconds later when sync replication reports the change. By then the TTL has expired, the event is no longer flagged as a self-write, and the editor reloads from disk, potentially clobbering keystrokes the user has typed since the save.
 
-**Inverse symptom of the original bug, same root cause:** the 2s window was too short *outwards* (events from one save still landing after consume-on-first) — and is also too short *inwards* (delayed-sync filesystems echo our own write back well past 2s).
+**Inverse symptom of the original bug, same root cause:** the 2s window was too short _outwards_ (events from one save still landing after consume-on-first) — and is also too short _inwards_ (delayed-sync filesystems echo our own write back well past 2s).
 
 A fix that doesn't depend on guessing the right TTL: **content-hash matching, not timestamp.** When `record_write` is called, store the bytes-just-written hash alongside the path. On an incoming event, read the file, hash it, and suppress if it matches a recorded hash within a (much wider) window — and remove the entry on first match. Externally-written content with a different hash falls through.
 
@@ -56,7 +56,7 @@ This swaps "timestamp coincidence" for "content equality" and removes the TTL gu
 
 #### B. ~~Notify's macOS FSEvents backend coalesces events into batches that exceed our debounce~~ — **ruled out**
 
-Initial read suggested the `if pending.is_empty() || last_emit.elapsed() < DEBOUNCE_MS` gate at `watcher.rs:248` could double the debounce window to ~600 ms. Closer trace shows it doesn't: `recv_timeout` returns immediately when an event arrives and waits up to `DEBOUNCE_MS` otherwise; after a `continue`, the next `recv_timeout` waits *up to* the remaining debounce window. Worst-case latency from a single event to flush is ~`DEBOUNCE_MS` (300 ms), which is the intended debounce behavior. Leaving this here so a future reader doesn't re-investigate.
+Initial read suggested the `if pending.is_empty() || last_emit.elapsed() < DEBOUNCE_MS` gate at `watcher.rs:248` could double the debounce window to ~600 ms. Closer trace shows it doesn't: `recv_timeout` returns immediately when an event arrives and waits up to `DEBOUNCE_MS` otherwise; after a `continue`, the next `recv_timeout` waits _up to_ the remaining debounce window. Worst-case latency from a single event to flush is ~`DEBOUNCE_MS` (300 ms), which is the intended debounce behavior. Leaving this here so a future reader doesn't re-investigate.
 
 #### C. The `fs:directory-changed` `expandedDirs` filter drops legitimate refreshes
 
@@ -70,7 +70,7 @@ if (expandedDirs.has(path) || path === root) {
 }
 ```
 
-A `fs:directory-changed` event for an *unexpanded* directory just invalidates the cache. That's correct **if** the user later expands and re-reads — but it means a tree slice you've never expanded won't update its `dirs_with_markdown` indicator (the "this folder contains markdown" dot rendered in the sidebar) in response to an external create until the user expands. For users who keep most folders collapsed, an external `git pull` that adds a `.md` inside a never-expanded directory doesn't visibly do anything.
+A `fs:directory-changed` event for an _unexpanded_ directory just invalidates the cache. That's correct **if** the user later expands and re-reads — but it means a tree slice you've never expanded won't update its `dirs_with_markdown` indicator (the "this folder contains markdown" dot rendered in the sidebar) in response to an external create until the user expands. For users who keep most folders collapsed, an external `git pull` that adds a `.md` inside a never-expanded directory doesn't visibly do anything.
 
 Probably **not the primary missing-event report** — but worth confirming. The `dirs_with_markdown` set is maintained on the Rust side ([`watcher.rs:118`](../apps/desktop/src-tauri/src/watcher.rs)) and read via the directory listing IPC, so the next directory read picks it up. The frontend just needs a way to surface it without expanding.
 
@@ -84,7 +84,7 @@ This is fine and probably not a cause of missed events. **Confirming this rules 
 
 #### E. Atomic-replace by external editors
 
-vim's `:w` does `write tempfile → rename(tempfile, target)`. FSEvents emits `Create(File)` for the temp, `Modify(Name(_))` for the rename. For the *target* path:
+vim's `:w` does `write tempfile → rename(tempfile, target)`. FSEvents emits `Create(File)` for the temp, `Modify(Name(_))` for the rename. For the _target_ path:
 
 - `Modify(Name)` → `event_kind_str` returns `"modified"` → `fs:file-changed` fires → frontend reloads. ✓
 - Membership-change branch kicks in: `is_md && path_exists` → `add_to_index`. ✓
@@ -249,7 +249,7 @@ Per CLAUDE.md memory ([`feedback_kebab_case_filenames.md`](../../../../.claude/p
 
 - [ ] Right-click on a tab whose file lives several folders deep in a workspace where those folders are collapsed → "Reveal in sidebar" expands the ancestor chain, scrolls the file row into view, and shows the row's active-state highlight.
 - [ ] Right-click on a tab while the sidebar is collapsed → "Reveal in sidebar" force-opens the sidebar (sets `appearance.sidebar-visible = true`), then performs the reveal.
-- [ ] Right-click on a tab whose file is *outside* the workspace root → menu item is either omitted or no-ops gracefully (no console error).
+- [ ] Right-click on a tab whose file is _outside_ the workspace root → menu item is either omitted or no-ops gracefully (no console error).
 
 ### Auto-reveal on file open (Problem 3)
 
