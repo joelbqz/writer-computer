@@ -107,42 +107,48 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
         onMouseEnter={() => setIsOpen(true)}
         onMouseLeave={handleRailLeave}
       >
-        <div
-          className="section-rail-ticks absolute top-1/2 flex flex-col"
-          data-open={isOpen ? "true" : "false"}
-          style={{
-            left: RAIL_LEFT,
-            width: RAIL_INNER_WIDTH,
-            gap: TICK_GAP,
-            color: "var(--text-primary, currentColor)",
-          }}
-          aria-label="Document sections"
-          role="navigation"
+        <ScrollFade
+          alwaysFade
+          fadeSize="48px"
+          className="absolute left-0 right-0 top-1/2 h-[70vh] -translate-y-1/2 overflow-hidden"
         >
-          {headings.map((heading, i) => {
-            const isActive = i === activeIndex;
-            const tickStyle: CSSProperties = {
-              width: ACTIVE_WIDTH,
-              height: TICK_HEIGHT,
-              background: "currentColor",
-              opacity: isActive ? 1 : 0.35,
-              transform: isActive ? "scaleX(1)" : `scaleX(${INACTIVE_TICK_SCALE})`,
-              transition: "transform 300ms ease-in, opacity 300ms ease-in",
-            };
-            return (
-              <button
-                key={`${heading.line}-${i}`}
-                type="button"
-                className="section-rail-tick block cursor-default border-0 bg-transparent p-0"
-                style={tickStyle}
-                title={heading.text}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => handleTickClick(heading)}
-                onContextMenu={(event) => handleContextMenu(event, heading)}
-              />
-            );
-          })}
-        </div>
+          <div
+            className="section-rail-ticks absolute top-1/2 flex flex-col"
+            data-open={isOpen ? "true" : "false"}
+            style={{
+              left: RAIL_LEFT,
+              width: RAIL_INNER_WIDTH,
+              gap: TICK_GAP,
+              color: "var(--text-primary, currentColor)",
+            }}
+            aria-label="Document sections"
+            role="navigation"
+          >
+            {headings.map((heading, i) => {
+              const isActive = i === activeIndex;
+              const tickStyle: CSSProperties = {
+                width: ACTIVE_WIDTH,
+                height: TICK_HEIGHT,
+                background: "currentColor",
+                opacity: isActive ? 1 : 0.35,
+                transform: isActive ? "scaleX(1)" : `scaleX(${INACTIVE_TICK_SCALE})`,
+                transition: "transform 300ms ease-in, opacity 300ms ease-in",
+              };
+              return (
+                <button
+                  key={`${heading.line}-${i}`}
+                  type="button"
+                  className="section-rail-tick block cursor-default border-0 bg-transparent p-0"
+                  style={tickStyle}
+                  title={heading.text}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => handleTickClick(heading)}
+                  onContextMenu={(event) => handleContextMenu(event, heading)}
+                />
+              );
+            })}
+          </div>
+        </ScrollFade>
       </div>
 
       {shouldRender && (

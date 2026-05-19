@@ -1,9 +1,10 @@
 import { useCallback, type HTMLAttributes, type ReactNode, type Ref, type UIEvent } from "react";
 import { useScrollFade } from "@/hooks/use-scroll-fade";
 
-interface ScrollFadeProps extends Omit<HTMLAttributes<HTMLDivElement>, "style"> {
+interface ScrollFadeProps extends HTMLAttributes<HTMLDivElement> {
   axis?: "vertical" | "horizontal";
   fadeSize?: string;
+  alwaysFade?: boolean;
   ref?: Ref<HTMLDivElement>;
   children: ReactNode;
 }
@@ -11,7 +12,9 @@ interface ScrollFadeProps extends Omit<HTMLAttributes<HTMLDivElement>, "style"> 
 export function ScrollFade({
   axis = "vertical",
   fadeSize = "24px",
+  alwaysFade = false,
   className,
+  style,
   onScroll: onScrollProp,
   ref,
   children,
@@ -19,9 +22,11 @@ export function ScrollFade({
 }: ScrollFadeProps) {
   const { setRef, scrolledStart, scrolledEnd, onScroll } = useScrollFade(axis);
   const direction = axis === "vertical" ? "bottom" : "right";
+  const showStart = alwaysFade || scrolledStart;
+  const showEnd = alwaysFade || scrolledEnd;
   const maskImage = `linear-gradient(to ${direction}, ${
-    scrolledStart ? `transparent, black ${fadeSize},` : "black,"
-  } ${scrolledEnd ? `black calc(100% - ${fadeSize}), transparent` : "black"})`;
+    showStart ? `transparent, black ${fadeSize},` : "black,"
+  } ${showEnd ? `black calc(100% - ${fadeSize}), transparent` : "black"})`;
 
   const mergedRef = useCallback(
     (el: HTMLDivElement | null) => {
@@ -49,7 +54,7 @@ export function ScrollFade({
       ref={mergedRef}
       onScroll={handleScroll}
       className={className}
-      style={{ maskImage, WebkitMaskImage: maskImage }}
+      style={{ ...style, maskImage, WebkitMaskImage: maskImage }}
     >
       {children}
     </div>
