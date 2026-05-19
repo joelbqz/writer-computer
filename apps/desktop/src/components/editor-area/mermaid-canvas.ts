@@ -22,7 +22,7 @@ const KEY_ZOOM_FACTOR = 1.15;
 const WHEEL_ZOOM_SENSITIVITY = 0.0015;
 // WebKit reports trackpad pinch as a synthetic Ctrl-wheel event with small
 // pixel deltas; give that path a higher multiplier so pinch feels responsive.
-const PINCH_ZOOM_SENSITIVITY = 0.0035;
+const PINCH_ZOOM_SENSITIVITY = 0.01;
 const KEY_PAN_STEP = 24;
 const FIT_MARGIN_PX = 16;
 // Debounce so a quick burst of keystrokes results in a single outer dispatch
