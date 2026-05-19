@@ -1,0 +1,190 @@
+/* Mermaid canvas widget styles. Loaded once at module scope so the rules
+   apply both inside the CodeMirror editor (where the widget mounts) and
+   inside the fullscreen <dialog> (which lives in document.body, outside
+   the editor's theme scope). */
+
+.cm-mermaid-widget {
+  padding: 8px 0;
+}
+
+.cm-mermaid-canvas {
+  position: relative;
+  height: 480px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background-color: transparent;
+  overflow: hidden;
+  outline: none;
+}
+
+.cm-mermaid-canvas:focus,
+.cm-mermaid-canvas:focus-visible,
+dialog.cm-mermaid-fullscreen:focus,
+dialog.cm-mermaid-fullscreen:focus-visible {
+  outline: none;
+}
+
+.cm-mermaid-canvas-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.cm-mermaid-canvas-viewport.is-dragging {
+  cursor: grabbing;
+}
+
+.cm-mermaid-canvas-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+.cm-mermaid-canvas-stage svg {
+  display: block;
+  max-width: none;
+}
+
+/* xychart series palette: keep all series close to the accent in hue and
+   lightness instead of the default rainbow shifts. beautiful-mermaid scopes
+   its own `--xychart-color-N` defaults to `svg { … }` (specificity 0,0,0,1);
+   this rule is 0,0,2,1 so it wins, and the derived `--xychart-bar-fill-N`
+   expressions (which read `--xychart-color-N` via color-mix) follow along
+   for free. */
+.cm-mermaid-canvas-stage svg[data-xychart-colors] {
+  --xychart-color-1: color-mix(in srgb, var(--accent) 45%, var(--fg-base) 55%);
+  --xychart-color-2: color-mix(in srgb, var(--accent) 20%, var(--fg-base) 80%);
+  --xychart-color-3: color-mix(in srgb, var(--accent) 8%, var(--fg-base) 92%);
+  --xychart-color-4: color-mix(in srgb, var(--accent) 4%, var(--fg-base) 96%);
+  --xychart-color-5: color-mix(in srgb, var(--accent) 2%, var(--fg-base) 98%);
+  --xychart-color-6: var(--fg-base);
+  --xychart-color-7: var(--fg-base);
+}
+
+.cm-mermaid-canvas-edit,
+.cm-mermaid-canvas-zoom-btn,
+.cm-mermaid-canvas-icon-btn {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background-color: var(--surface-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+  opacity: 0;
+  transition:
+    opacity 120ms ease-out,
+    background-color 120ms ease-out,
+    color 120ms ease-out;
+}
+
+.cm-mermaid-canvas:hover .cm-mermaid-canvas-edit,
+.cm-mermaid-canvas:focus-within .cm-mermaid-canvas-edit,
+.cm-mermaid-canvas:hover .cm-mermaid-canvas-zoom-btn,
+.cm-mermaid-canvas:focus-within .cm-mermaid-canvas-zoom-btn,
+.cm-mermaid-canvas:hover .cm-mermaid-canvas-icon-btn,
+.cm-mermaid-canvas:focus-within .cm-mermaid-canvas-icon-btn {
+  opacity: 1;
+}
+
+.cm-mermaid-canvas-edit:hover,
+.cm-mermaid-canvas-zoom-btn:hover,
+.cm-mermaid-canvas-icon-btn:hover {
+  background-color: var(--surface-subtle);
+  color: var(--text-primary);
+}
+
+.cm-mermaid-canvas-top {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.cm-mermaid-canvas-edit {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.cm-mermaid-canvas-icon-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  padding: 0;
+}
+
+.cm-mermaid-canvas-zoom {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cm-mermaid-canvas-zoom-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  padding: 0;
+}
+
+/* Errors render inside the canvas frame (the .cm-mermaid-canvas class is
+   kept on the host) — this just centres the error text and switches its
+   colour so the frame border + fixed height stay intact. */
+.cm-mermaid-canvas.cm-mermaid-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5em 1em;
+  color: var(--text-error, #ff6b6b);
+  font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85em;
+  text-align: center;
+}
+
+/* Fullscreen dialog: take the whole viewport and host a fresh canvas inside.
+   Controls inside the fullscreen canvas stay visible regardless of
+   hover/focus so the user has obvious affordances on first paint. */
+dialog.cm-mermaid-fullscreen {
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background-color: var(--bg-base);
+  color: inherit;
+  overflow: hidden;
+}
+
+dialog.cm-mermaid-fullscreen::backdrop {
+  background-color: color-mix(in srgb, var(--bg-base) 70%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+.cm-mermaid-fullscreen-canvas {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+}
+
+.cm-mermaid-fullscreen-canvas .cm-mermaid-canvas-icon-btn,
+.cm-mermaid-fullscreen-canvas .cm-mermaid-canvas-zoom-btn {
+  opacity: 1;
+}

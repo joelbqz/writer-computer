@@ -15,8 +15,14 @@ const FIT_MARGIN_PX = 16;
 export type MermaidCanvasOptions = {
   svgHtml: string;
   ariaLabel: string;
-  editMode: boolean;
-  onToggleEdit: () => void;
+  // `editMode` selects the toggle label; omitted with `onToggleEdit` to skip the toggle entirely.
+  editMode?: boolean;
+  // Mount the Edit-code / Preview toggle in the top-right cluster.
+  onToggleEdit?: () => void;
+  // Mount the expand button (opens fullscreen dialog) in the top-right cluster.
+  onExpand?: () => void;
+  // Mount the close button (✕) in the top-right cluster — used inside the fullscreen dialog.
+  onClose?: () => void;
 };
 
 type CanvasState = {
@@ -56,21 +62,47 @@ export function mountMermaidCanvas(host: HTMLElement, opts: MermaidCanvasOptions
   viewport.append(stage);
   host.append(viewport);
 
-  const editButton = makeButton(
-    opts.editMode ? "Preview" : "Edit code",
-    opts.editMode ? "Return to preview" : "Edit code",
-  );
-  editButton.classList.add("cm-mermaid-canvas-edit");
+  // Top-right cluster: edit-toggle and close (each optional depending on
+  // which callbacks the caller wires up).
+  const topCluster = document.createElement("div");
+  topCluster.className = "cm-mermaid-canvas-top";
 
+  if (opts.onToggleEdit) {
+    const editButton = makeButton(
+      opts.editMode ? "Preview" : "Edit code",
+      opts.editMode ? "Return to preview" : "Edit code",
+    );
+    editButton.classList.add("cm-mermaid-canvas-edit");
+    editButton.addEventListener("click", () => opts.onToggleEdit?.());
+    topCluster.append(editButton);
+  }
+
+  if (opts.onClose) {
+    const closeButton = makeButton("✕", "Close fullscreen");
+    closeButton.classList.add("cm-mermaid-canvas-icon-btn");
+    closeButton.addEventListener("click", () => opts.onClose?.());
+    topCluster.append(closeButton);
+  }
+
+  // Bottom-right vertical cluster: expand (if wired) sits above the
+  // zoom-in / zoom-out buttons.
   const zoomCluster = document.createElement("div");
   zoomCluster.className = "cm-mermaid-canvas-zoom";
+
+  if (opts.onExpand) {
+    const expandButton = makeButton("⛶", "Open in fullscreen");
+    expandButton.classList.add("cm-mermaid-canvas-zoom-btn");
+    expandButton.addEventListener("click", () => opts.onExpand?.());
+    zoomCluster.append(expandButton);
+  }
+
   const zoomInButton = makeButton("+", "Zoom in");
   const zoomOutButton = makeButton("−", "Zoom out");
   zoomInButton.classList.add("cm-mermaid-canvas-zoom-btn");
   zoomOutButton.classList.add("cm-mermaid-canvas-zoom-btn");
   zoomCluster.append(zoomInButton, zoomOutButton);
 
-  host.append(editButton, zoomCluster);
+  host.append(topCluster, zoomCluster);
 
   const state: CanvasState = { zoom: 1, panX: 0, panY: 0 };
   // Natural (unzoomed) SVG dimensions in pixels. Mermaid always emits a
@@ -147,7 +179,6 @@ export function mountMermaidCanvas(host: HTMLElement, opts: MermaidCanvasOptions
 
   zoomInButton.addEventListener("click", () => zoomAtCenter(BUTTON_ZOOM_FACTOR));
   zoomOutButton.addEventListener("click", () => zoomAtCenter(1 / BUTTON_ZOOM_FACTOR));
-  editButton.addEventListener("click", () => opts.onToggleEdit());
 
   // Drag-to-pan via pointer events. Capture the pointer so a drag that leaves
   // the viewport still receives moves; release on pointerup/cancel.
@@ -234,7 +265,8 @@ export function mountMermaidCanvas(host: HTMLElement, opts: MermaidCanvasOptions
         fitToViewport();
         break;
       case "Enter":
-        opts.onToggleEdit();
+        if (opts.onToggleEdit) opts.onToggleEdit();
+        else handled = false;
         break;
       default:
         handled = false;
