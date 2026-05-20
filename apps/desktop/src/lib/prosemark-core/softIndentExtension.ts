@@ -9,19 +9,20 @@ import {
 
 interface IndentData {
   lineNumber: number;
-  indentWidth: number;
-  extraIndent: number;
+  leadingChars: number;
+  leadingWidth: number;
+  prefixAfterLeadingWidth: number;
 }
 
 const softIndentPattern = /^(> )*(\s*)?(([-*+]?|\d[.)])\s)?(\[.\]\s)?/;
 const blockquotePrefixPattern = /^(?:> )*/;
 const leadingWhitespacePattern = /^(?:> )*(\s*)/;
 
-// Extra indent added on top of literal leading whitespace, as a fraction of
-// that whitespace's width. `2` means each nesting step gets `3 ×` the raw
-// indent (literal + 2× more on top), making the visual step easier to
-// read without changing the underlying markdown.
-const NEST_INDENT_MULTIPLIER = 2;
+// Fixed indent per leading-whitespace character of a list item. Drives the
+// visual nesting step from the source's character count instead of the
+// natural whitespace width, which is narrow in proportional fonts. Each
+// leading whitespace char shifts the bullet column by this many pixels.
+const INDENT_STEP_PER_CHAR = 12;
 
 const softIndentRefresh = Annotation.define<number>();
 const MAX_REFRESH_ROUNDS = 1;
@@ -134,32 +135,32 @@ export const softIndentExtension = ViewPlugin.fromClass(
           const lineLeft = view.coordsAtPos(line.from)?.left ?? 0;
           const prefixEndLeft =
             view.coordsAtPos(line.from + nonContent.length, -1)?.left ?? lineLeft;
-          const indentWidth = prefixEndLeft - lineLeft;
-          if (!indentWidth) continue;
+          const prefixWidth = prefixEndLeft - lineLeft;
+          if (!prefixWidth) continue;
 
-          // Amplify ONLY the leading whitespace (after any `> ` blockquote
-          // prefix), so the visual nesting step is more pronounced than what
-          // the raw spaces alone would give. Top-level items (no leading
-          // whitespace) are unaffected.
-          let extraIndent = 0;
+          // Leading whitespace inside any `> ` blockquote prefix. The
+          // blockquote prefix itself is not amplified — only the indentation
+          // a user types inside the list item is treated as nesting.
           const blockquoteLen = blockquotePrefixPattern.exec(nonContent)?.[0].length ?? 0;
-          const whitespaceLen = leadingWhitespacePattern.exec(nonContent)?.[1].length ?? 0;
-          if (whitespaceLen > 0) {
+          const leadingChars = leadingWhitespacePattern.exec(nonContent)?.[1].length ?? 0;
+
+          let leadingWidth = 0;
+          if (leadingChars > 0) {
             const blockquoteEndLeft =
               blockquoteLen > 0
                 ? (view.coordsAtPos(line.from + blockquoteLen)?.left ?? lineLeft)
                 : lineLeft;
             const whitespaceEndLeft =
-              view.coordsAtPos(line.from + blockquoteLen + whitespaceLen, -1)?.left ??
+              view.coordsAtPos(line.from + blockquoteLen + leadingChars, -1)?.left ??
               blockquoteEndLeft;
-            const leadingWhitespaceWidth = whitespaceEndLeft - blockquoteEndLeft;
-            extraIndent = leadingWhitespaceWidth * NEST_INDENT_MULTIPLIER;
+            leadingWidth = whitespaceEndLeft - blockquoteEndLeft;
           }
 
           indents.push({
             lineNumber: i,
-            indentWidth,
-            extraIndent,
+            leadingChars,
+            leadingWidth,
+            prefixAfterLeadingWidth: prefixWidth - leadingWidth,
           });
         }
       }
@@ -170,9 +171,17 @@ export const softIndentExtension = ViewPlugin.fromClass(
       const builder = new RangeSetBuilder<Decoration>();
       const styles = new Map<number, string>();
 
-      for (const { lineNumber, indentWidth, extraIndent } of indents) {
+      for (const { lineNumber, leadingChars, prefixAfterLeadingWidth } of indents) {
         const line = view.state.doc.line(lineNumber);
-        const style = `padding-inline-start: ${(indentWidth + 6 + extraIndent).toString()}px; text-indent: -${indentWidth.toString()}px;`;
+        // Nesting step is driven by leading-whitespace CHAR COUNT × a fixed
+        // pixel step (independent of the source's natural whitespace width).
+        // text-indent absorbs the literal leading whitespace + bullet/space
+        // prefix so the bullet lands exactly at `leadingChars * STEP + 6` on
+        // every line, with a fixed bullet-to-text gap of
+        // `prefixAfterLeadingWidth`.
+        const indentForLevel = leadingChars * INDENT_STEP_PER_CHAR;
+        const paddingStart = indentForLevel + prefixAfterLeadingWidth + INDENT_STEP_PER_CHAR;
+        const style = `padding-inline-start: ${(paddingStart).toString()}px; text-indent: -${prefixAfterLeadingWidth}px;`;
         styles.set(lineNumber, style);
 
         const deco = Decoration.line({

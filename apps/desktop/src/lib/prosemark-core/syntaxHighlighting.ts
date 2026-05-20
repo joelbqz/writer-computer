@@ -104,8 +104,6 @@ export const baseTheme = EditorView.theme({
   ".cm-rendered-list-mark-dot": {
     position: "absolute",
     left: "0",
-    right: "0",
-    textAlign: "center",
   },
   ".cm-blockquote-line": {
     position: "relative",
