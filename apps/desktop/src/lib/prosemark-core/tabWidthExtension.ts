@@ -9,7 +9,7 @@ import {
 } from "@codemirror/view";
 
 // Issue #96 ("Text Vibrating like crazy"):
-// Native tab rendering can vary enough to throw off softIndentExtension's pixel
+// Native tab rendering can vary enough to throw off pixel-based indent
 // measurements. Replacing each visible tab with a fixed-width widget keeps
 // indentation width deterministic and prevents jitter.
 

@@ -41,8 +41,8 @@ const defaultHidableSpecs: HidableNodeSpec[] = [
     // instead of CodeMirror resolving clicks into the zero-width
     // hidden-mark spans on the bare emphasized text. Bold and italic share
     // a single combined spec and a single wrapper class so the rendered DOM
-    // (and resulting line-wrap / hanging-indent behavior under
-    // `softIndentExtension`) is identical for both.
+    // (and resulting line-wrap / hanging-indent behavior) is identical for
+    // both.
     nodeName: ["StrongEmphasis", "Emphasis"],
     nodeDecoration: emphasisDecoration,
     subNodeNameToHide: "EmphasisMark",

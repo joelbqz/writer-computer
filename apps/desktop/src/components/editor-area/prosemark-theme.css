@@ -60,13 +60,12 @@
      using `lineStyle.paddingLeft/Right` from the first `.cm-line` in the
      content. With the page inset on `.cm-content` (so list-item bullets
      stay aligned to the text column), that filler rect spans the entire
-     `.cm-content` box including the page padding gutters. Worse, prosemark/
-     core's softIndent extension applies inline `padding-inline-start` to
-     list lines, so the rect's left edge depends on whichever line is first
-     in the document — list-item text can end up to the left of where the
-     rect starts. We originally clipped the scroller to the text column on
-     both sides; that suppressed the rect's stray extents entirely. Cursor
-     and text already lived inside that box, so they were unaffected.
+     `.cm-content` box including the page padding gutters, so the rect's
+     left edge depends on whichever line is first in the document — list-
+     item text can end up to the left of where the rect starts. We
+     originally clipped the scroller to the text column on both sides;
+     that suppressed the rect's stray extents entirely. Cursor and text
+     already lived inside that box, so they were unaffected.
 
      Heading-hash hanging needs room on the left for the hash markers to
      render in the page-padding gutter, so we relax the LEFT clip by the

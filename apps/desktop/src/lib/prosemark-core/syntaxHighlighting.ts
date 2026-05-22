@@ -94,16 +94,16 @@ export const baseTheme = EditorView.theme({
     cursor: "pointer",
     color: "var(--pm-link-color)",
   },
-  ".cm-rendered-list-mark": {
-    position: "relative",
+  ".cm-list-bullet-marker": {
+    display: "inline-block",
+    width: "1ch",
+    textAlign: "center",
     color: "var(--pm-muted-color)",
   },
-  ".cm-rendered-list-mark-spacer": {
-    visibility: "hidden",
-  },
-  ".cm-rendered-list-mark-dot": {
-    position: "absolute",
-    left: "0",
+  ".cm-list-indent-spacer": {
+    display: "inline-block",
+    width: "1ch",
+    pointerEvents: "none",
   },
   ".cm-blockquote-line": {
     position: "relative",

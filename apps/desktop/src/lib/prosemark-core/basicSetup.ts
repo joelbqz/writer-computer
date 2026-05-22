@@ -20,8 +20,8 @@ import {
   generalSyntaxHighlights,
   lightTheme,
 } from "./syntaxHighlighting";
-import { softIndentExtension } from "./softIndentExtension";
 import { fixedTabWidthExtension } from "./tabWidthExtension";
+import { listExtension } from "./list";
 import { revealBlockOnArrowExtension } from "./revealBlockOnArrow";
 import { prosemarkMarkdownFormattingKeymap } from "./markdownFormattingKeymap";
 export { prosemarkMarkdownSyntaxExtensions } from "./markdown";
@@ -33,8 +33,8 @@ export const prosemarkBasicSetup = (): Extension => [
   revealBlockOnArrowExtension,
   clickLinkExtension,
   defaultClickLinkHandler,
+  listExtension,
   fixedTabWidthExtension,
-  softIndentExtension,
   codeBlockDecorationsExtension,
 
   // Basic CodeMirror Setup

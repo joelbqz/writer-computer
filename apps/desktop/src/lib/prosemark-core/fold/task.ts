@@ -15,16 +15,17 @@ class Checkbox extends WidgetType {
   }
 
   toDOM() {
-    // Wrapper carries an invisible copy of the raw 5 chars (`- [ ]`) so its
-    // inline width matches the raw text exactly. The visual checkbox is
-    // absolutely positioned on top so the column where body text starts
-    // doesn't shift when the caret toggles between rendered and raw.
+    // Wrapper carries an invisible copy of the raw 6 chars (`- [ ] `,
+    // marker + trailing space) so its inline width matches the raw text
+    // exactly. The visual checkbox is absolutely positioned on top so the
+    // column where body text starts doesn't shift when the caret toggles
+    // between rendered and raw.
     const wrapper = document.createElement("span");
     wrapper.className = "cm-checkbox-wrapper";
 
     const spacer = document.createElement("span");
     spacer.className = "cm-checkbox-spacer";
-    spacer.textContent = "- [ ]";
+    spacer.textContent = "- [ ] ";
     wrapper.appendChild(spacer);
 
     const input = document.createElement("input");
@@ -44,16 +45,21 @@ class Checkbox extends WidgetType {
 export const taskExtension = [
   foldableSyntaxFacet.of({
     nodePath: "BulletList/ListItem/Task/TaskMarker",
+    // Checkbox stays rendered even when the cursor is on the line —
+    // matches the bullet-marker widget from `listExtension`, which also
+    // never reveals raw `- ` source.
+    keepDecorationOnUnfold: true,
     buildDecorations: (state, node) => {
       const value = state.doc.sliceString(node.from + 1, node.to - 1).toLowerCase() === "x";
+      // Range covers `- [ ] ` (marker + trailing space) so the checkbox
+      // widget renders as one unit, matching the bullet-marker widget for
+      // plain list items.
+      const trailing = state.doc.sliceString(node.to, node.to + 1);
+      const widgetEnd = trailing === " " ? node.to + 1 : node.to;
       return Decoration.replace({
         widget: new Checkbox(value),
-      }).range(node.from - 2, node.to);
+      }).range(node.from - 2, widgetEnd);
     },
-    unfoldZone: (_state, node) => ({
-      from: node.from - 2,
-      to: node.to,
-    }),
   }),
   EditorView.domEventHandlers(
     eventHandlersWithClass({
