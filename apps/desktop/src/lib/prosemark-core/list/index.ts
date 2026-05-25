@@ -117,6 +117,12 @@ const listBodyDecoration = Decoration.mark({ class: "cm-list-body" });
 
 const isBulletMarkChar = (ch: string): boolean => ch === "-" || ch === "+" || ch === "*";
 
+// Ordered-list markers per CommonMark: a run of digits followed by `.` or
+// `)`. Up to 9 digits per spec; we don't enforce here — Lezer wouldn't
+// emit a `ListMark` for anything else.
+const ORDERED_MARKER_RE = /^\d+[.)]$/;
+const isOrderedMarkText = (s: string): boolean => ORDERED_MARKER_RE.test(s);
+
 // A list marker is followed by a space OR tab per CommonMark; accept both
 // in the trailing-char gates so tab-separated markers render.
 const isMarkerTrailingChar = (ch: string): boolean => ch === " " || ch === "\t";
@@ -143,14 +149,18 @@ function buildListDecorations(state: EditorState): ListDecorations {
     enter: (node) => {
       if (node.name !== "ListMark") return;
 
-      // Bullet lists only — skip ordered-list markers like `1.` or `2)`.
+      // Accept bullet markers (single char of `-/+/*`) and ordered
+      // markers (`\d+[.)]`). Ordered keeps its source text visible (the
+      // digits matter); bullets get collapsed into a `•` widget below.
       const markText = state.doc.sliceString(node.from, node.to);
-      if (markText.length !== 1 || !isBulletMarkChar(markText)) return;
+      const isBullet = markText.length === 1 && isBulletMarkChar(markText);
+      const isOrdered = !isBullet && isOrderedMarkText(markText);
+      if (!isBullet && !isOrdered) return;
 
-      // Require a trailing space/tab so a bare `-`/`+`/`*` the user just
-      // typed (no whitespace yet) renders as plain text, not a bullet.
-      // Lezer's incremental parse can emit `ListMark` for the bare marker
-      // before the whitespace arrives.
+      // Require a trailing space/tab so a bare marker the user just typed
+      // (no whitespace yet) renders as plain text. Lezer's incremental
+      // parse can emit `ListMark` for the bare marker before the
+      // whitespace arrives.
       if (!isMarkerTrailingChar(state.doc.sliceString(node.to, node.to + 1))) return;
 
       // Depth = number of ancestor `ListItem` nodes above the item this
@@ -184,15 +194,16 @@ function buildListDecorations(state: EditorState): ListDecorations {
         }
       }
 
-      // Task vs plain bullet: tasks become one Checkbox widget over
-      // `- [ ] ` (marker + task marker + trailing whitespace); plain
-      // bullets become one Bullet widget over `- ` (marker + trailing
-      // whitespace). Same `Decoration.replace` shape either way — atomic,
-      // in the marker set, in the rendered set.
+      // Bullet: collapse `- ` into one `•` widget. Task: collapse the
+      // whole `- [ ] ` into one checkbox widget. Ordered: keep the source
+      // text visible (digits matter) and only add the line-level
+      // decorations below. The marker's right-edge position is tracked as
+      // `markerEnd` so the body wrap and any hanging-indent math can use
+      // it.
       const cursor = node.node.cursor();
       let widgetDeco: Range<Decoration> | null = null;
-      let widgetTo = -1;
-      if (cursor.nextSibling() && cursor.name === "Task") {
+      let markerEnd = node.to + 1;
+      if (isBullet && cursor.nextSibling() && cursor.name === "Task") {
         const taskCursor = cursor.node.cursor();
         if (
           taskCursor.firstChild() &&
@@ -201,26 +212,27 @@ function buildListDecorations(state: EditorState): ListDecorations {
         ) {
           const checked =
             state.doc.sliceString(taskCursor.from + 1, taskCursor.to - 1).toLowerCase() === "x";
-          widgetTo = taskCursor.to + 1;
+          markerEnd = taskCursor.to + 1;
           widgetDeco = Decoration.replace({ widget: new CheckboxWidget(checked) }).range(
             node.from,
-            widgetTo,
+            markerEnd,
           );
         }
       }
-      if (!widgetDeco) {
-        widgetTo = node.to + 1;
-        widgetDeco = bulletMarkerDecoration.range(node.from, widgetTo);
+      if (isBullet && !widgetDeco) {
+        widgetDeco = bulletMarkerDecoration.range(node.from, markerEnd);
       }
-      allRanges.push(widgetDeco);
-      atomicRanges.push(widgetDeco);
-      markerRanges.push(widgetDeco);
+      if (widgetDeco) {
+        allRanges.push(widgetDeco);
+        atomicRanges.push(widgetDeco);
+        markerRanges.push(widgetDeco);
+      }
 
-      // Wrap the body text (everything after the widget through end of
+      // Wrap the body text (everything after the marker through end of
       // line) so consumers can style it via `.cm-list-body`. Skipped when
       // the item is empty (no body content).
-      if (widgetTo < line.to) {
-        allRanges.push(listBodyDecoration.range(widgetTo, line.to));
+      if (markerEnd < line.to) {
+        allRanges.push(listBodyDecoration.range(markerEnd, line.to));
       }
 
       // Hanging-indent on every list line (including top level): pad the
