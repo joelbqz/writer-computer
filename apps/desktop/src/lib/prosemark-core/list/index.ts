@@ -99,6 +99,36 @@ class CheckboxWidget extends WidgetType {
   }
 }
 
+class EmptyListBodyWidget extends WidgetType {
+  eq(_other: EmptyListBodyWidget): boolean {
+    return true;
+  }
+
+  toDOM(): HTMLElement {
+    const el = document.createElement("span");
+    el.className = "cm-list-empty-body";
+    // `drawSelection` asks `coordsAtPos(prefixEnd, side: 1)` for empty list
+    // items. With no body text after the hidden prefix, give CM a zero-width
+    // inline box at the body column to measure for the drawn caret.
+    el.textContent = "\u200b";
+    el.style.display = "inline-block";
+    el.style.width = "0";
+    el.style.height = "1lh";
+    el.style.overflow = "hidden";
+    el.style.verticalAlign = "top";
+    el.style.textIndent = "0";
+    el.setAttribute("aria-hidden", "true");
+    return el;
+  }
+
+  coordsAt(dom: HTMLElement): DOMRect | null {
+    const rect = dom.getBoundingClientRect();
+    return rect.height > 0 ? rect : null;
+  }
+}
+
+const emptyListBodyWidget = new EmptyListBodyWidget();
+
 // Hide the source prefix chars (leading whitespace + `- ` or `- [ ] `) with
 // CSS while keeping them in the DOM. The corresponding theme rule gives the
 // hidden span zero inline width plus 1px text metrics: WebKit needs those
@@ -269,6 +299,10 @@ function buildListDecorations(state: EditorState): ListDecorations {
       // the item is empty (no body content).
       if (prefixEnd < line.to) {
         allRanges.push(listBodyDecoration.range(prefixEnd, line.to));
+      } else {
+        allRanges.push(
+          Decoration.widget({ widget: emptyListBodyWidget, side: 1 }).range(prefixEnd),
+        );
       }
 
       // Hanging-indent on every list line: pad the line by the rendered

@@ -41,6 +41,19 @@ function run(cmd: StateCommand, state: EditorState): { state: EditorState; ran: 
   return { state: next, ran };
 }
 
+function widgetNames(state: EditorState): Array<{ from: number; to: number; name: string }> {
+  const decos = state.field(__test.listDecorationsField);
+  const widgets: Array<{ from: number; to: number; name: string }> = [];
+  decos.all.between(0, state.doc.length, (from, to, deco) => {
+    const widget = (deco.spec as { widget?: unknown }).widget;
+    if (typeof widget !== "object" || widget === null) return;
+    const ctor = (widget as { constructor?: unknown }).constructor;
+    if (typeof ctor !== "function") return;
+    widgets.push({ from, to, name: ctor.name });
+  });
+  return widgets;
+}
+
 // ---------------------------------------------------------------------------
 // isOnListLine
 // ---------------------------------------------------------------------------
@@ -360,5 +373,26 @@ describe("listDecorationsField", () => {
       total++;
     });
     expect(total).toBe(6);
+  });
+
+  test("adds a cursor measurement widget for an empty bullet body", () => {
+    const s = makeState("- ", 2);
+    expect(widgetNames(s).filter((w) => w.name === "EmptyListBodyWidget")).toEqual([
+      { from: 2, to: 2, name: "EmptyListBodyWidget" },
+    ]);
+  });
+
+  test("adds a cursor measurement widget for an empty task body", () => {
+    const s = makeState("- [ ] ", 6);
+    expect(widgetNames(s).filter((w) => w.name === "EmptyListBodyWidget")).toEqual([
+      { from: 6, to: 6, name: "EmptyListBodyWidget" },
+    ]);
+  });
+
+  test("does not add a cursor measurement widget when body text exists", () => {
+    const bullet = makeState("- body", 2);
+    const task = makeState("- [ ] body", 6);
+    expect(widgetNames(bullet).some((w) => w.name === "EmptyListBodyWidget")).toBe(false);
+    expect(widgetNames(task).some((w) => w.name === "EmptyListBodyWidget")).toBe(false);
   });
 });
