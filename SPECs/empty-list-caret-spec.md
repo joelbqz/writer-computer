@@ -17,11 +17,11 @@ box to measure.
   used by non-empty list lines.
 - The source marker stays real markdown text and remains hidden with the same
   clipped prefix span so Backspace, Enter, and checkbox toggles keep working.
-- The end-of-prefix caret position has a zero-width visible-layout anchor after
-  the hidden prefix, so CodeMirror's drawn cursor layer can measure and render
-  the caret at the list body column.
-- Non-empty list lines do not get an extra anchor; their body text remains the
-  measurement target.
+- The bullet/checkbox marker point widget is anchored at the end of the hidden
+  source prefix, so the existing marker provides a visible-layout coordinate
+  target at the list body column when the item is empty.
+- Non-empty list lines use the same marker anchoring and continue to use their
+  body text as the normal text measurement target.
 
 ## Validation
 

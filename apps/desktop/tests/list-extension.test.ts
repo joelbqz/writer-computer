@@ -375,24 +375,28 @@ describe("listDecorationsField", () => {
     expect(total).toBe(6);
   });
 
-  test("adds a cursor measurement widget for an empty bullet body", () => {
+  test("anchors the bullet marker at the hidden prefix end", () => {
     const s = makeState("- ", 2);
-    expect(widgetNames(s).filter((w) => w.name === "EmptyListBodyWidget")).toEqual([
-      { from: 2, to: 2, name: "EmptyListBodyWidget" },
+    expect(widgetNames(s).filter((w) => w.name === "BulletMarkerWidget")).toEqual([
+      { from: 2, to: 2, name: "BulletMarkerWidget" },
     ]);
   });
 
-  test("adds a cursor measurement widget for an empty task body", () => {
+  test("anchors the checkbox marker at the hidden prefix end", () => {
     const s = makeState("- [ ] ", 6);
-    expect(widgetNames(s).filter((w) => w.name === "EmptyListBodyWidget")).toEqual([
-      { from: 6, to: 6, name: "EmptyListBodyWidget" },
+    expect(widgetNames(s).filter((w) => w.name === "CheckboxWidget")).toEqual([
+      { from: 6, to: 6, name: "CheckboxWidget" },
     ]);
   });
 
-  test("does not add a cursor measurement widget when body text exists", () => {
+  test("uses the same marker anchor when body text exists", () => {
     const bullet = makeState("- body", 2);
     const task = makeState("- [ ] body", 6);
-    expect(widgetNames(bullet).some((w) => w.name === "EmptyListBodyWidget")).toBe(false);
-    expect(widgetNames(task).some((w) => w.name === "EmptyListBodyWidget")).toBe(false);
+    expect(widgetNames(bullet).filter((w) => w.name === "BulletMarkerWidget")).toEqual([
+      { from: 2, to: 2, name: "BulletMarkerWidget" },
+    ]);
+    expect(widgetNames(task).filter((w) => w.name === "CheckboxWidget")).toEqual([
+      { from: 6, to: 6, name: "CheckboxWidget" },
+    ]);
   });
 });

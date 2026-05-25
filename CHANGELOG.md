@@ -2,7 +2,7 @@
 
 ## 2026-05-25
 
-- Keep the blinking caret visible on empty bullet and TODO list items by giving CodeMirror a zero-width body-column measurement anchor when the list prefix is hidden.
+- Keep the blinking caret visible on empty bullet and TODO list items by anchoring the existing marker widget at the hidden prefix end, giving CodeMirror a body-column coordinate target without an extra empty-line widget.
 - Center ordered-list markers in a minimum 3ch inline-block column, tune the ordered-line hanging indent, and wrap ordered item text in the same `cm-list-body` span used by bullet lists, so list numbers align consistently while long list numbers can grow naturally.
 - Fix list drag-selection and TODO checkbox regressions from the list-prefix renderer. Bullet and task prefixes now render as point widgets with hidden source-prefix text instead of `Decoration.replace` ranges, so pointer hit-testing no longer snaps selections or clicks to the prefix boundary. TODO checkboxes now use a single non-native `.cm-checkbox` span with CSS-drawn checked state, avoiding native input focus during drag-selection and restoring nested checkbox alignment. The hidden source prefix now uses zero-inline-width clipped text with 1px metrics instead of `font-size: 0`, because WebKit's `posAtCoords` can fail on `font-size: 0` task prefixes and leave TODO text selections with no drawn highlight.
 - Center TODO checkbox squares within the editor line box so they visually align with the task text instead of riding the inline baseline.
