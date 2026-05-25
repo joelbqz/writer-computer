@@ -171,12 +171,16 @@ function buildListDecorations(state: EditorState): ListDecorations {
 
       // Ordered-list markers (`1.`, `2)`): keep the marker as source text
       // (no widget), but fix its visual column before applying the line's
-      // hanging indent. We intentionally skip spacers/body wrap to keep
-      // ordered rendering minimal.
+      // hanging indent. We intentionally skip spacers to keep ordered
+      // rendering minimal.
       const markText = state.doc.sliceString(node.from, node.to);
       if (isOrderedMarkText(markText)) {
         const line = state.doc.lineAt(node.from);
+        const prefixEnd = node.to + 1;
         allRanges.push(orderedMarkerDecoration.range(node.from, node.to));
+        if (prefixEnd < line.to) {
+          allRanges.push(listBodyDecoration.range(prefixEnd, line.to));
+        }
         allRanges.push(orderedLineDecoration.range(line.from));
         return;
       }
