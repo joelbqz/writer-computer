@@ -10,8 +10,15 @@ import { GFM } from "@lezer/markdown";
 import { ensureSyntaxTree } from "@codemirror/language";
 import { computeCheckboxToggle, listExtension, __test } from "../src/lib/prosemark-core/list";
 
-const { isOnListLine, findPrevListItemIndent, listEnter, listBackspace, listIndent, listOutdent } =
-  __test;
+const {
+  computeCheckboxToggleFromLine,
+  isOnListLine,
+  findPrevListItemIndent,
+  listEnter,
+  listBackspace,
+  listIndent,
+  listOutdent,
+} = __test;
 
 function makeState(doc: string, anchor = 0, head?: number): EditorState {
   const state = EditorState.create({
@@ -299,6 +306,17 @@ describe("computeCheckboxToggle", () => {
     // Widget for the nested task starts at pos 2 (the `-`).
     const spec = computeCheckboxToggle(s, 2);
     expect(spec?.changes).toEqual({ from: 5, to: 6, insert: "x" });
+  });
+
+  test("line fallback toggles indented tasks from line start", () => {
+    const s = makeState("  - [ ] nested");
+    const spec = computeCheckboxToggleFromLine(s, 0);
+    expect(spec?.changes).toEqual({ from: 5, to: 6, insert: "x" });
+  });
+
+  test("line fallback returns null on non-task list lines", () => {
+    const s = makeState("  - nested");
+    expect(computeCheckboxToggleFromLine(s, 0)).toBeNull();
   });
 
   test("returns null when not pointing at a task pattern", () => {

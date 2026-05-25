@@ -11,28 +11,52 @@ import {
 import { Decoration, type DecorationSet, EditorView, WidgetType, keymap } from "@codemirror/view";
 import { eventHandlersWithClass } from "../utils";
 
-// Single source of truth for the width of every list widget (bullet,
-// checkbox wrapper, every indent spacer). Drives the hanging-indent
-// formula too, so all geometry scales together — tweak this constant to
-// resize the whole list-rendering column.
+// Single source of truth for the width of the visual list prefix unit.
+// Drives widget sizing and hanging-indent geometry together — tweak this
+// constant to resize the whole list-rendering column.
 const LIST_UNIT_CH = 3;
-const LIST_UNIT_WIDTH = `${LIST_UNIT_CH.toString()}ch`;
 
 // Cap on how far `findPrevListItemIndent` walks backward looking for a
 // parent. List nesting in practice is shallow; this avoids O(n) on giant
 // docs with no blank-line breaks between items.
 const PREV_LIST_LOOKBACK = 256;
 
+// Point-widget rendering of list prefixes (bullet, task checkbox) plus a
+// mark-based hide of the corresponding source chars. This is the structural
+// fix for the click/drag anchor-snap on body text of list lines: CM's
+// `posAtCoords` algorithm (`InlineCoordsScan.scanTile`) explicitly skips
+// PointWidget tiles when computing closeness — `child.flags & 48 → return
+// null` from `getRects` — but it does NOT skip Replace tiles, which is why
+// the previous `Decoration.replace` bullet/checkbox/spacer widgets caused
+// hit-tests on body text to snap to `widgetTo` (col 2 / col 6 / col 10
+// depending on depth). Widgets via `Decoration.widget({side: -1})` render
+// at the same visual position without participating in the closeness scan;
+// source chars get a `Decoration.mark` styled as a zero-inline-width clipped
+// box. They stay in the DOM for WebKit/CodeMirror geometry, but they do not
+// affect the rendered list body position. Each widget's width is depth-aware
+// so the bullet/checkbox glyph still hangs at the right edge of the prefix
+// gutter.
+
 class BulletMarkerWidget extends WidgetType {
-  eq(_other: BulletMarkerWidget): boolean {
-    return true;
+  constructor(private readonly depth: number) {
+    super();
+  }
+  eq(other: BulletMarkerWidget): boolean {
+    return other.depth === this.depth;
   }
 
   toDOM(): HTMLElement {
     const el = document.createElement("span");
     el.className = "cm-list-bullet-marker";
     el.textContent = "•";
-    el.style.width = LIST_UNIT_WIDTH;
+    // Width = full prefix (depth + 1 widget-units). `padding-left = depth *
+    // LIST_UNIT` shrinks the centered area to the rightmost widget-unit so
+    // the glyph sits where the bullet used to hang regardless of depth.
+    const prefixCh = (this.depth + 1) * LIST_UNIT_CH;
+    const padLeftCh = this.depth * LIST_UNIT_CH;
+    el.style.width = `${prefixCh.toString()}ch`;
+    el.style.paddingLeft = `${padLeftCh.toString()}ch`;
+    el.style.boxSizing = "border-box";
     el.setAttribute("aria-hidden", "true");
     return el;
   }
@@ -43,39 +67,31 @@ class BulletMarkerWidget extends WidgetType {
 }
 
 class CheckboxWidget extends WidgetType {
-  constructor(private readonly checked: boolean) {
+  constructor(
+    private readonly depth: number,
+    private readonly checked: boolean,
+  ) {
     super();
   }
 
   eq(other: CheckboxWidget): boolean {
-    return other.checked === this.checked;
+    return other.depth === this.depth && other.checked === this.checked;
   }
 
   toDOM(): HTMLElement {
-    // Wrapper width matches the bullet marker so tasks and bullets share
-    // the same hanging-indent and spacer geometry. `display: inline-block`
-    // is set inline because the existing `.cm-checkbox-wrapper` rule only
-    // sets `position: relative`. The hidden single-char spacer is kept so
-    // the inline-block has text-node line-height geometry; the visible
-    // checkbox is absolutely positioned on top. The `cm-checkbox`-targeted
-    // click handler below toggles state via `computeCheckboxToggle`.
-    const wrapper = document.createElement("span");
-    wrapper.className = "cm-checkbox-wrapper";
-    wrapper.style.display = "inline-block";
-    wrapper.style.width = LIST_UNIT_WIDTH;
-
-    const spacer = document.createElement("span");
-    spacer.className = "cm-checkbox-spacer";
-    spacer.textContent = "•";
-    wrapper.appendChild(spacer);
-
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.className = "cm-checkbox";
-    input.checked = this.checked;
-    wrapper.appendChild(input);
-
-    return wrapper;
+    const el = document.createElement("span");
+    el.className = this.checked ? "cm-checkbox cm-checkbox-checked" : "cm-checkbox";
+    // Give browser Range/coordsAtPos measurement a real text node. The
+    // visible checkbox is CSS-drawn on ::before, but drawSelection relies on
+    // DOM geometry and pseudo-only widgets can produce bad selection rects.
+    el.textContent = "\u200b";
+    const prefixCh = (this.depth + 1) * LIST_UNIT_CH;
+    const padLeftCh = this.depth * LIST_UNIT_CH;
+    el.style.width = `${prefixCh.toString()}ch`;
+    el.style.paddingLeft = `${padLeftCh.toString()}ch`;
+    el.style.boxSizing = "border-box";
+    el.setAttribute("aria-hidden", "true");
+    return el;
   }
 
   ignoreEvent(): boolean {
@@ -83,36 +99,22 @@ class CheckboxWidget extends WidgetType {
   }
 }
 
-class IndentSpacerWidget extends WidgetType {
-  eq(_other: IndentSpacerWidget): boolean {
-    return true;
-  }
+// Hide the source prefix chars (leading whitespace + `- ` or `- [ ] `) with
+// CSS while keeping them in the DOM. The corresponding theme rule gives the
+// hidden span zero inline width plus 1px text metrics: WebKit needs those
+// metrics for CodeMirror's left-edge `posAtCoords` probe when drawing
+// selections on TODO lines.
+const listPrefixHiddenDecoration = Decoration.mark({ class: "cm-list-prefix-hidden" });
 
-  toDOM(): HTMLElement {
-    const el = document.createElement("span");
-    el.className = "cm-list-indent-spacer";
-    el.style.width = LIST_UNIT_WIDTH;
-    // ZWSP gives the inline-block text-node geometry so the caret rendered
-    // at a spacer boundary has measurable height. Without it, a line whose
-    // entire prefix is empty inline-blocks leaves the browser's Range API
-    // with no text to anchor on, and the caret collapses to height 0.
-    el.textContent = "​";
-    el.setAttribute("aria-hidden", "true");
-    return el;
-  }
-}
+// Internal marker decoration (no visible class) — used purely to populate
+// the marker / atomic range sets for the `listBackspace` handler and
+// arrow-key skipping. Replaces the previous shared `bulletMarkerDecoration`
+// which doubled as both rendering and tracking.
+const listPrefixMarkerDecoration = Decoration.mark({});
 
-const bulletMarkerDecoration = Decoration.replace({
-  widget: new BulletMarkerWidget(),
-});
-
-const indentSpacerDecoration = Decoration.replace({
-  widget: new IndentSpacerWidget(),
-});
-
-// Wraps the body text of a list item (everything after the bullet/checkbox
-// widget through the end of the line) in a `<span class="cm-list-body">`,
-// so consumers can style body content distinctly from the marker.
+// Wraps the body text of a list item (everything after the prefix through
+// end of line) in a `<span class="cm-list-body">`, so consumers can style
+// body content distinctly from the marker.
 const listBodyDecoration = Decoration.mark({ class: "cm-list-body" });
 
 const isBulletMarkChar = (ch: string): boolean => ch === "-" || ch === "+" || ch === "*";
@@ -185,12 +187,14 @@ function buildListDecorations(state: EditorState): ListDecorations {
       }
       if (depth < 0) depth = 0;
 
-      // Leading-whitespace spacers — one inline widget per nesting level,
-      // evenly splitting the line's leading whitespace. Whatever the source
-      // uses (2 spaces, 4 spaces, a tab), each indent step collapses to
-      // one `LIST_UNIT_CH` widget. Spacers are atomic so arrow keys and
-      // Backspace treat each step as a unit (Backspace removes the whole
-      // step's chars).
+      // Indent-step atomic markers — one zero-DOM mark per nesting level,
+      // tracking the source char ranges so arrow keys and Backspace treat
+      // each indent step as a unit (Backspace removes the whole step's
+      // chars via `listBackspace`'s `decos.atomic` lookup). Previously
+      // rendered as `IndentSpacerWidget` Decoration.replace tiles, but
+      // those caused `posAtCoords` to snap body-text hit-tests to their
+      // widgetTo boundary — switched to mark-only tracking + line padding
+      // for the visual indent.
       const line = state.doc.lineAt(node.from);
       const leadingFrom = line.from;
       const leadingTo = node.from;
@@ -201,20 +205,19 @@ function buildListDecorations(state: EditorState): ListDecorations {
           const subFrom = leadingFrom + i * step;
           const subTo = i === depth - 1 ? leadingTo : leadingFrom + (i + 1) * step;
           if (subTo <= subFrom) break;
-          const spacerDeco = indentSpacerDecoration.range(subFrom, subTo);
-          allRanges.push(spacerDeco);
-          atomicRanges.push(spacerDeco);
+          atomicRanges.push(listPrefixMarkerDecoration.range(subFrom, subTo));
         }
       }
 
-      // Task vs plain bullet: tasks become one Checkbox widget over
-      // `- [ ] ` (marker + task marker + trailing whitespace); plain
-      // bullets become one Bullet widget over `- ` (marker + trailing
-      // whitespace). Same `Decoration.replace` shape either way — atomic,
-      // in the marker set, in the rendered set.
+      // Task vs plain bullet: tasks render one CheckboxWidget over the
+      // full prefix range, plain bullets render one BulletMarkerWidget.
+      // Both use `Decoration.widget({side: -1})` so CM's `posAtCoords`
+      // scan classifies them as PointWidget tiles and skips them when
+      // computing hit-test closeness — no widgetTo boundary for body-text
+      // hits to snap to.
       const cursor = node.node.cursor();
-      let widgetDeco: Range<Decoration> | null = null;
-      let widgetTo = -1;
+      let prefixEnd = -1;
+      let widget: WidgetType | null = null;
       if (cursor.nextSibling() && cursor.name === "Task") {
         const taskCursor = cursor.node.cursor();
         if (
@@ -224,34 +227,43 @@ function buildListDecorations(state: EditorState): ListDecorations {
         ) {
           const checked =
             state.doc.sliceString(taskCursor.from + 1, taskCursor.to - 1).toLowerCase() === "x";
-          widgetTo = taskCursor.to + 1;
-          widgetDeco = Decoration.replace({ widget: new CheckboxWidget(checked) }).range(
-            node.from,
-            widgetTo,
-          );
+          prefixEnd = taskCursor.to + 1;
+          widget = new CheckboxWidget(depth, checked);
         }
       }
-      if (!widgetDeco) {
-        widgetTo = node.to + 1;
-        widgetDeco = bulletMarkerDecoration.range(node.from, widgetTo);
+      if (widget === null) {
+        prefixEnd = node.to + 1;
+        widget = new BulletMarkerWidget(depth);
       }
-      allRanges.push(widgetDeco);
-      atomicRanges.push(widgetDeco);
-      markerRanges.push(widgetDeco);
+      // Point widget at line.from, side -1 → rendered before the source
+      // prefix chars (which are hidden below) so the glyph sits at the
+      // visual start of the line.
+      allRanges.push(Decoration.widget({ widget, side: -1 }).range(line.from));
+      // Hide the source prefix chars (leading whitespace + `- ` or
+      // `- [ ] `) via `font-size: 0`. Chars stay in the DOM as text
+      // nodes — that's the load-bearing difference from
+      // `Decoration.replace`: hit-tests resolve into the (collapsed) text
+      // rect instead of snapping to a widgetTo boundary.
+      allRanges.push(listPrefixHiddenDecoration.range(line.from, prefixEnd));
+      // Marker / atomic tracking — `listBackspace` checks `decos.marker`
+      // for the right-edge-of-prefix case (delete the whole prefix back to
+      // line.from), and `decos.atomic` already carries indent-step ranges
+      // from the loop above. Add the full-prefix range to both.
+      const fullPrefixDeco = listPrefixMarkerDecoration.range(line.from, prefixEnd);
+      markerRanges.push(fullPrefixDeco);
+      atomicRanges.push(fullPrefixDeco);
 
-      // Wrap the body text (everything after the widget through end of
+      // Wrap the body text (everything after the prefix through end of
       // line) so consumers can style it via `.cm-list-body`. Skipped when
       // the item is empty (no body content).
-      if (widgetTo < line.to) {
-        allRanges.push(listBodyDecoration.range(widgetTo, line.to));
+      if (prefixEnd < line.to) {
+        allRanges.push(listBodyDecoration.range(prefixEnd, line.to));
       }
 
-      // Hanging-indent on every list line (including top level): pad the
-      // whole line by the rendered prefix width (`(depth + 1) ×
-      // LIST_UNIT_CH` — every list widget is `LIST_UNIT_CH` wide) and pull
-      // the first line back with a matching negative `text-indent`, so the
-      // marker sits in the gutter on line 1 and wrapped continuation text
-      // aligns with the body column.
+      // Hanging-indent on every list line: pad the line by the rendered
+      // prefix width and pull the first visual line back by the same amount.
+      // The point widget occupies that pulled-back slot, while wrapped
+      // continuation lines keep the padding so body text stays aligned.
       const prefixCh = (depth + 1) * LIST_UNIT_CH;
       const lineStyle = `padding-inline-start: ${prefixCh.toString()}ch; text-indent: -${prefixCh.toString()}ch;`;
       allRanges.push(Decoration.line({ attributes: { style: lineStyle } }).range(line.from));
@@ -524,13 +536,13 @@ const listBackspace: StateCommand = ({ state, dispatch }) => {
 const isOnListLineAtAnyRange = (state: EditorState): boolean =>
   state.selection.ranges.some((r) => isOnListLine(state, r.head));
 
-// Click-toggle for the checkbox `<input>`. The widget DOM is rendered by
-// `CheckboxWidget` above; this handler is wired via `EditorView`'s
-// mousedown facet. The toggle position is derived from the source slice
-// (regex on `<mark> [X] `) rather than hardcoded offsets so future widget-
-// range tweaks don't silently desync. `posAtDOM` on a node inside a
-// `Decoration.replace` returns the replace range's `from`, which is the
-// ListMark's `from` here — exactly the anchor the regex needs.
+// Click-toggle for the checkbox widget. Keep this on `click`, not
+// `mousedown`: mousedown is CodeMirror's drag-selection start gesture, and
+// consuming it makes TODO lines feel broken when the user drags across the
+// checkbox. A drag won't fire click, so selection and toggle stay distinct.
+// The primary path toggles from the source slice beginning at the list marker;
+// the line fallback handles point widgets whose DOM position resolves to the
+// line start on indented tasks.
 export const computeCheckboxToggle = (
   state: EditorState,
   widgetStartPos: number,
@@ -550,12 +562,21 @@ export const computeCheckboxToggle = (
   };
 };
 
+const computeCheckboxToggleFromLine = (state: EditorState, pos: number): TransactionSpec | null => {
+  const line = state.doc.lineAt(pos);
+  const match = /^([ \t]*)[-+*] \[[ xX]\][ \t]/.exec(line.text);
+  if (!match) return null;
+  const indentLen = match[1]?.length ?? 0;
+  return computeCheckboxToggle(state, line.from + indentLen);
+};
+
 const checkboxClickHandler = EditorView.domEventHandlers(
   eventHandlersWithClass({
-    mousedown: {
+    click: {
       "cm-checkbox": (ev, view) => {
         const pos = view.posAtDOM(ev.target as HTMLElement);
-        const spec = computeCheckboxToggle(view.state, pos);
+        const spec =
+          computeCheckboxToggle(view.state, pos) ?? computeCheckboxToggleFromLine(view.state, pos);
         if (!spec) return false;
         view.dispatch(spec);
         return true; // prevent default
@@ -586,6 +607,7 @@ export const listExtension: Extension = [
 // Internals exposed only for tests. Not part of the public API.
 export const __test = {
   buildListDecorations,
+  computeCheckboxToggleFromLine,
   isOnListLine,
   findPrevListItemIndent,
   currentLineIndentLen,

@@ -188,37 +188,31 @@
   display: none;
 }
 
-/* Task checkboxes — replace native checkbox with hugeicon-style rounded square.
-   The widget DOM wraps the checkbox in a span that carries an invisible copy
-   of the raw 5 chars (`- [ ]`) as a spacer, so the wrapper's inline width
-   matches the raw text exactly. The checkbox is absolutely positioned on top
-   so toggling between rendered and raw doesn't shift the text column. */
-.cm-editor .cm-checkbox-wrapper {
-  position: relative;
-}
-
-.cm-editor .cm-checkbox-spacer {
-  visibility: hidden;
-}
-
+/* Task checkboxes — single-span point widgets, matching bullet marker geometry.
+   The visual box lives in ::before so there is no native input to steal focus
+   or pointer handling from CodeMirror selection drags. */
 .cm-editor .cm-checkbox {
-  appearance: none;
-  -webkit-appearance: none;
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
+  display: inline-block;
+  text-align: center;
+  text-indent: 0;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.cm-editor .cm-checkbox::before {
+  content: "";
+  display: inline-block;
   width: 18px;
   height: 18px;
   border: 1.5px solid var(--text-muted);
   border-radius: 5px;
-  cursor: pointer;
+  vertical-align: middle;
   transition:
     background-color 0.15s,
     border-color 0.15s;
 }
 
-.cm-editor .cm-checkbox:checked {
+.cm-editor .cm-checkbox.cm-checkbox-checked::before {
   background-color: var(--accent);
   border-color: var(--accent);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 12.5L10.5 15L16 9'/%3E%3C/svg%3E");

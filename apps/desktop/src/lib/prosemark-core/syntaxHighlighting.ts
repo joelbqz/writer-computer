@@ -105,9 +105,19 @@ export const baseTheme = EditorView.theme({
     color: "var(--pm-muted-color)",
     textIndent: "0",
   },
-  ".cm-list-indent-spacer": {
+  // The source prefix chars (leading whitespace + `- ` or `- [ ] `) stay in
+  // the DOM but render as a zero-inline-width clipped box. The 1px font is
+  // load-bearing for WebKit: CodeMirror's drawn selection calls
+  // `posAtCoords` at a wrapped line's left edge, and a `font-size: 0` task
+  // prefix can produce no y-overlapping rects there, so TODO text selections
+  // visually disappear even though the state selection is correct.
+  ".cm-list-prefix-hidden": {
     display: "inline-block",
-    pointerEvents: "none",
+    width: "0",
+    overflow: "hidden",
+    whiteSpace: "pre",
+    fontSize: "1px",
+    opacity: "0",
   },
   ".cm-blockquote-line": {
     position: "relative",
