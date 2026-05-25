@@ -105,6 +105,11 @@ export const baseTheme = EditorView.theme({
     color: "var(--pm-muted-color)",
     textIndent: "0",
   },
+  ".cm-list-ordered-marker": {
+    display: "inline-block",
+    textAlign: "center",
+    textIndent: "0",
+  },
   // The source prefix chars (leading whitespace + `- ` or `- [ ] `) stay in
   // the DOM but render as a zero-inline-width clipped box. The 1px font is
   // load-bearing for WebKit: CodeMirror's drawn selection calls

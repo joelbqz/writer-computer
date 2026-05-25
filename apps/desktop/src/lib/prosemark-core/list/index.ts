@@ -125,11 +125,16 @@ const isOrderedMarkText = (s: string): boolean => ORDERED_MARKER_RE.test(s);
 
 // Line-level hanging indent applied to ordered-list lines: the marker hangs
 // in the left gutter and wrapped continuation aligns with the body column.
-// Ordered markers stay as source text (the digits matter) so this is the
-// only decoration the list extension emits for them — no widgets, spacers,
-// or body wrap.
+// Ordered markers stay as source text (the digits matter), but the marker span
+// is fixed-width so one- and two-digit numbers share the same visual column.
 const orderedLineDecoration = Decoration.line({
-  attributes: { style: "padding-inline-start: 3ch; text-indent: -3.2ch;" },
+  attributes: {
+    style: `padding-inline-start: ${LIST_UNIT_CH.toString()}ch; text-indent: -${LIST_UNIT_CH.toString()}ch;`,
+  },
+});
+const orderedMarkerDecoration = Decoration.mark({
+  class: "cm-list-ordered-marker",
+  attributes: { style: `width: ${LIST_UNIT_CH.toString()}ch;` },
 });
 
 // A list marker is followed by a space OR tab per CommonMark; accept both
@@ -164,13 +169,14 @@ function buildListDecorations(state: EditorState): ListDecorations {
       // the whitespace arrives.
       if (!isMarkerTrailingChar(state.doc.sliceString(node.to, node.to + 1))) return;
 
-      // Ordered-list markers (`1.`, `2)`): only emit the hanging-indent
-      // line decoration. The digits stay as source text (no widget), and
-      // we intentionally skip spacers/body wrap to keep ordered rendering
-      // minimal.
+      // Ordered-list markers (`1.`, `2)`): keep the marker as source text
+      // (no widget), but fix its visual column before applying the line's
+      // hanging indent. We intentionally skip spacers/body wrap to keep
+      // ordered rendering minimal.
       const markText = state.doc.sliceString(node.from, node.to);
       if (isOrderedMarkText(markText)) {
         const line = state.doc.lineAt(node.from);
+        allRanges.push(orderedMarkerDecoration.range(node.from, node.to));
         allRanges.push(orderedLineDecoration.range(line.from));
         return;
       }
