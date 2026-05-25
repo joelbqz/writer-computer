@@ -240,10 +240,10 @@ function buildListDecorations(state: EditorState): ListDecorations {
       // visual start of the line.
       allRanges.push(Decoration.widget({ widget, side: -1 }).range(line.from));
       // Hide the source prefix chars (leading whitespace + `- ` or
-      // `- [ ] `) via `font-size: 0`. Chars stay in the DOM as text
-      // nodes — that's the load-bearing difference from
-      // `Decoration.replace`: hit-tests resolve into the (collapsed) text
-      // rect instead of snapping to a widgetTo boundary.
+      // `- [ ] `) via the clipped zero-width `.cm-list-prefix-hidden` span.
+      // Chars stay in the DOM as text nodes — that's the load-bearing
+      // difference from `Decoration.replace`: hit-tests resolve into the
+      // collapsed text rect instead of snapping to a widgetTo boundary.
       allRanges.push(listPrefixHiddenDecoration.range(line.from, prefixEnd));
       // Marker / atomic tracking — `listBackspace` checks `decos.marker`
       // for the right-edge-of-prefix case (delete the whole prefix back to
