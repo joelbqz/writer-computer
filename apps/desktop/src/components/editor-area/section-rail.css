@@ -1,5 +1,5 @@
 .section-rail-ticks {
-  transform-origin: left center;
+  transform-origin: right center;
   transform: translateY(-50%) translateX(0) scale(1);
   opacity: 1;
   transition:
@@ -9,19 +9,19 @@
 }
 
 .section-rail-ticks[data-open="true"] {
-  transform: translateY(-50%) translateX(8px) scale(1.05);
+  transform: translateY(-50%) translateX(-8px) scale(1.05);
   opacity: 0;
   pointer-events: none;
 }
 
 .section-rail-tick {
-  transform-origin: left center;
+  transform-origin: right center;
   will-change: transform;
 }
 
 .section-rail-popover {
-  transform-origin: left center;
-  transform: translateY(-50%) translateX(4px) scale(1);
+  transform-origin: right center;
+  transform: translateY(-50%) translateX(-4px) scale(1);
   opacity: 1;
   transition:
     transform 180ms ease,

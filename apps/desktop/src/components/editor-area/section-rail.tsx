@@ -16,11 +16,11 @@ const ACTIVE_WIDTH = 20;
 const INACTIVE_TICK_SCALE = INACTIVE_WIDTH / ACTIVE_WIDTH;
 const TICK_HEIGHT = 1;
 const TICK_GAP = 6;
-const RAIL_LEFT = 12;
+const RAIL_EDGE_INSET = 12;
 const RAIL_INNER_WIDTH = ACTIVE_WIDTH + 2;
-const RAIL_ZONE_WIDTH = RAIL_LEFT + RAIL_INNER_WIDTH;
+const RAIL_ZONE_WIDTH = RAIL_EDGE_INSET + RAIL_INNER_WIDTH;
 const POPOVER_WIDTH = 260;
-const POPOVER_LEFT = RAIL_LEFT;
+const POPOVER_EDGE_INSET = RAIL_EDGE_INSET;
 const POPOVER_TRANSITION_MS = 180;
 
 interface SectionRailProps {
@@ -97,12 +97,12 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
 
   return (
     <div
-      className="pointer-events-none absolute inset-y-0 left-0 z-20"
-      style={{ width: POPOVER_LEFT + POPOVER_WIDTH }}
+      className="pointer-events-none absolute inset-y-0 right-0 z-20"
+      style={{ width: POPOVER_EDGE_INSET + POPOVER_WIDTH }}
     >
       <div
         ref={railZoneRef}
-        className="pointer-events-auto absolute inset-y-0 left-0"
+        className="pointer-events-auto absolute inset-y-0 right-0"
         style={{ width: RAIL_ZONE_WIDTH }}
         onMouseEnter={() => setIsOpen(true)}
         onMouseLeave={handleRailLeave}
@@ -116,7 +116,7 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
             className="section-rail-ticks absolute top-1/2 flex flex-col"
             data-open={isOpen ? "true" : "false"}
             style={{
-              left: RAIL_LEFT,
+              right: RAIL_EDGE_INSET,
               width: RAIL_INNER_WIDTH,
               gap: TICK_GAP,
               color: "var(--text-primary, currentColor)",
@@ -158,7 +158,7 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
           data-state={phase}
           style={{
             top: "50%",
-            left: POPOVER_LEFT,
+            right: POPOVER_EDGE_INSET,
             width: POPOVER_WIDTH,
           }}
           onMouseEnter={() => setIsOpen(true)}
