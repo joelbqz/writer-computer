@@ -126,7 +126,8 @@ const isOrderedMarkText = (s: string): boolean => ORDERED_MARKER_RE.test(s);
 // Line-level hanging indent applied to ordered-list lines: the marker hangs
 // in the left gutter and wrapped continuation aligns with the body column.
 // Ordered markers stay as source text (the digits matter), but the marker span
-// is fixed-width so one- and two-digit numbers share the same visual column.
+// has a minimum width so one- and two-digit numbers share the same visual
+// column while longer markers can still grow.
 const orderedLineDecoration = Decoration.line({
   attributes: {
     style: `padding-inline-start: ${LIST_UNIT_CH.toString()}ch; text-indent: -3.4ch;`,
@@ -134,7 +135,7 @@ const orderedLineDecoration = Decoration.line({
 });
 const orderedMarkerDecoration = Decoration.mark({
   class: "cm-list-ordered-marker",
-  attributes: { style: `width: ${LIST_UNIT_CH.toString()}ch;` },
+  attributes: { style: `min-width: ${LIST_UNIT_CH.toString()}ch;` },
 });
 
 // A list marker is followed by a space OR tab per CommonMark; accept both
