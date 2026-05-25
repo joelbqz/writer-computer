@@ -1,7 +1,7 @@
 /* Writer theme overrides for ProseMark/CodeMirror */
 
 .cm-editor {
-  --pm-header-mark-color: var(--text-muted);
+  --pm-header-mark-color: color-mix(in srgb, var(--fg-base) 20%, transparent);
   --pm-link-color: var(--link-color);
   --pm-muted-color: var(--text-muted);
   --pm-code-background-color: var(--code-bg);

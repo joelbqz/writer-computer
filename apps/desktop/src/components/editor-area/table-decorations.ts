@@ -4,7 +4,6 @@ import {
   foldableSyntaxFacet,
   selectAllDecorationsOnSelectExtension,
 } from "@/lib/prosemark-core/main";
-import { dragFrozenSelectionField, rangesTouchInclusive } from "./drag-selection-gate";
 
 type Alignment = "left" | "center" | "right";
 
@@ -37,7 +36,6 @@ function parseMarkdownTable(text: string): ParsedTable | undefined {
   const headers = parseCells(lines[0]);
   const delimiterCells = parseCells(lines[1]);
 
-  // Verify delimiter row contains only dashes/colons
   const isDelimiter = delimiterCells.every((c) => /^:?-+:?$/.test(c));
   if (!isDelimiter) return undefined;
 
@@ -46,6 +44,8 @@ function parseMarkdownTable(text: string): ParsedTable | undefined {
 
   return { headers, alignments, rows };
 }
+
+// --- Widget ---
 
 class TableWidget extends WidgetType {
   constructor(
@@ -59,58 +59,72 @@ class TableWidget extends WidgetType {
     return this.rawText === other.rawText;
   }
 
+  ignoreEvent(): boolean {
+    return false;
+  }
+
   toDOM(): HTMLElement {
     const { headers, alignments, rows } = this.table;
 
     const wrapper = document.createElement("div");
     wrapper.className = "cm-table-widget";
-    wrapper.contentEditable = "false";
 
-    const table = wrapper.appendChild(document.createElement("table"));
+    const inner = wrapper.appendChild(document.createElement("div"));
+    inner.className = "cm-table-inner";
+    const tableEl = inner.appendChild(document.createElement("table"));
 
-    // Header
-    const thead = table.appendChild(document.createElement("thead"));
+    const thead = tableEl.appendChild(document.createElement("thead"));
     const headerRow = thead.appendChild(document.createElement("tr"));
     for (let i = 0; i < headers.length; i++) {
       const th = headerRow.appendChild(document.createElement("th"));
       th.textContent = headers[i];
-      const hAlign = alignments[i];
-      if (hAlign) th.style.textAlign = hAlign;
+      const a = alignments[i];
+      if (a) th.style.textAlign = a;
     }
 
-    // Body
-    const tbody = table.appendChild(document.createElement("tbody"));
-    for (const row of rows) {
+    const tbody = tableEl.appendChild(document.createElement("tbody"));
+    for (let r = 0; r < rows.length; r++) {
       const tr = tbody.appendChild(document.createElement("tr"));
-      for (let i = 0; i < headers.length; i++) {
+      for (let c = 0; c < headers.length; c++) {
         const td = tr.appendChild(document.createElement("td"));
-        td.textContent = row[i] ?? "";
-        const dAlign = alignments[i];
-        if (dAlign) td.style.textAlign = dAlign;
+        td.textContent = rows[r][c] ?? "";
+        const a = alignments[c];
+        if (a) td.style.textAlign = a;
       }
     }
 
     return wrapper;
   }
 
-  ignoreEvent(): boolean {
-    return false;
+  updateDOM(dom: HTMLElement): boolean {
+    const { headers, alignments, rows } = this.table;
+
+    const existingThs = dom.querySelectorAll<HTMLElement>("thead th");
+    const existingTrs = dom.querySelectorAll("tbody tr");
+    if (existingThs.length !== headers.length || existingTrs.length !== rows.length) return false;
+
+    existingThs.forEach((th, i) => {
+      th.textContent = headers[i];
+      th.style.textAlign = alignments[i] ?? "";
+    });
+
+    existingTrs.forEach((tr, rowIdx) => {
+      tr.querySelectorAll<HTMLElement>("td").forEach((td, colIdx) => {
+        td.textContent = rows[rowIdx]?.[colIdx] ?? "";
+        td.style.textAlign = alignments[colIdx] ?? "";
+      });
+    });
+
+    return true;
   }
 }
 
+// --- Extensions ---
+
 const tableFoldExtension = foldableSyntaxFacet.of({
   nodePath: "Table",
-  // `keepDecorationOnUnfold: true` makes prosemark always delegate the
-  // decoration choice to us instead of short-circuiting when the live
-  // selection touches the table range. Without it, the drag-freeze override
-  // below would be bypassed and the table would unfurl mid-drag the moment
-  // the extending selection enters the table.
-  keepDecorationOnUnfold: true,
   buildDecorations: (state, node, selectionTouchesRange) => {
-    const frozen = state.field(dragFrozenSelectionField, false);
-    const touches = frozen ? rangesTouchInclusive(frozen, node) : selectionTouchesRange;
-    if (touches) return undefined;
-
+    if (selectionTouchesRange) return undefined;
     const text = state.doc.sliceString(node.from, node.to);
     const parsed = parseMarkdownTable(text);
     if (!parsed) return undefined;
@@ -126,29 +140,40 @@ const tableFoldExtension = foldableSyntaxFacet.of({
 const tableTheme = EditorView.baseTheme({
   ".cm-table-widget": {
     padding: "0.25em 0",
-    overflowX: "auto",
+  },
+  ".cm-table-inner": {
+    display: "inline-block",
   },
   ".cm-table-widget table": {
-    borderCollapse: "collapse",
-    fontFamily: "'SF Mono', Menlo, Monaco, Consolas, monospace",
-    fontSize: "0.9em",
+    borderCollapse: "separate",
+    borderSpacing: "0",
+    border: "1px solid var(--border-color, #3e3e42)",
+    borderRadius: "8px",
+    overflow: "hidden",
+    fontFamily: "inherit",
+    fontSize: "inherit",
+    width: "auto",
   },
   ".cm-table-widget th, .cm-table-widget td": {
-    border: "1px solid var(--border-color, #3e3e42)",
-    padding: "0.4em 0.8em",
-    minWidth: "10em",
+    padding: "0.5em 0.8em",
+    minWidth: "6em",
+    fontSize: "inherit",
+    lineHeight: "1.4",
+    borderBottom: "1px solid var(--border-color, #3e3e42)",
+    borderRight: "1px solid var(--border-color, #3e3e42)",
+  },
+  ".cm-table-widget th:last-child, .cm-table-widget td:last-child": {
+    borderRight: "none",
+  },
+  ".cm-table-widget tbody tr:last-child td": {
+    borderBottom: "none",
   },
   ".cm-table-widget th": {
     fontWeight: "600",
-    backgroundColor: "var(--code-bg, #2d2d2d)",
+    backgroundColor: "var(--surface-subtle, var(--code-bg, #2d2d2d))",
   },
 });
 
-/**
- * Workaround: foldExtension only rebuilds on docChanged/selection, not on syntax
- * tree progression. When the incremental parser finishes after initial load, folds
- * stay stale. This plugin detects tree changes and nudges a rebuild.
- */
 const foldTreeSync = ViewPlugin.fromClass(
   class {
     update(update: ViewUpdate) {
@@ -165,7 +190,7 @@ export function tableDecorations() {
   return [
     tableFoldExtension,
     tableTheme,
-    selectAllDecorationsOnSelectExtension("cm-table-widget"),
     foldTreeSync,
+    selectAllDecorationsOnSelectExtension("cm-table-widget"),
   ];
 }
