@@ -117,7 +117,6 @@ function makeToggleInlineCommand(nodeName: string, open: string, close: string):
 
 const toggleStrongEmphasis = makeToggleInlineCommand("StrongEmphasis", "**", "**");
 const toggleEmphasis = makeToggleInlineCommand("Emphasis", "_", "_");
-const toggleInlineCode = makeToggleInlineCommand("InlineCode", "`", "`");
 const toggleStrikethrough = makeToggleInlineCommand("Strikethrough", "~~", "~~");
 
 /**
@@ -157,7 +156,6 @@ const insertLink: Command = (view) => {
 export const prosemarkMarkdownFormattingKeymap: readonly KeyBinding[] = [
   { key: "Mod-b", run: toggleStrongEmphasis, preventDefault: true },
   { key: "Mod-i", run: toggleEmphasis, preventDefault: true },
-  { key: "Mod-`", run: toggleInlineCode, preventDefault: true },
   { key: "Mod-k", run: insertLink, preventDefault: true },
   { key: "Mod-Shift-x", run: toggleStrikethrough, preventDefault: true },
 ];
