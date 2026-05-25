@@ -1,6 +1,15 @@
 import { syntaxTree } from "@codemirror/language";
-import { type EditorState, type Extension, Prec, type Range, StateField } from "@codemirror/state";
+import {
+  type EditorState,
+  type Extension,
+  Prec,
+  type Range,
+  StateField,
+  type StateCommand,
+  type TransactionSpec,
+} from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, WidgetType, keymap } from "@codemirror/view";
+import { eventHandlersWithClass } from "../utils";
 
 // Single source of truth for the width of every list widget (bullet,
 // checkbox wrapper, every indent spacer). Drives the hanging-indent
@@ -8,6 +17,11 @@ import { Decoration, type DecorationSet, EditorView, WidgetType, keymap } from "
 // resize the whole list-rendering column.
 const LIST_UNIT_CH = 3;
 const LIST_UNIT_WIDTH = `${LIST_UNIT_CH.toString()}ch`;
+
+// Cap on how far `findPrevListItemIndent` walks backward looking for a
+// parent. List nesting in practice is shallow; this avoids O(n) on giant
+// docs with no blank-line breaks between items.
+const PREV_LIST_LOOKBACK = 256;
 
 class BulletMarkerWidget extends WidgetType {
   eq(_other: BulletMarkerWidget): boolean {
@@ -44,7 +58,7 @@ class CheckboxWidget extends WidgetType {
     // sets `position: relative`. The hidden single-char spacer is kept so
     // the inline-block has text-node line-height geometry; the visible
     // checkbox is absolutely positioned on top. The `cm-checkbox`-targeted
-    // click handler in `fold/task.ts` toggles state.
+    // click handler below toggles state via `computeCheckboxToggle`.
     const wrapper = document.createElement("span");
     wrapper.className = "cm-checkbox-wrapper";
     wrapper.style.display = "inline-block";
@@ -103,8 +117,13 @@ const listBodyDecoration = Decoration.mark({ class: "cm-list-body" });
 
 const isBulletMarkChar = (ch: string): boolean => ch === "-" || ch === "+" || ch === "*";
 
+// A list marker is followed by a space OR tab per CommonMark; accept both
+// in the trailing-char gates so tab-separated markers render.
+const isMarkerTrailingChar = (ch: string): boolean => ch === " " || ch === "\t";
+
 interface ListDecorations {
-  /** Marker + spacers. Drives rendering. */
+  /** Marker + spacers + body wraps + per-line hanging-indent. Drives
+   *  rendering. */
   all: DecorationSet;
   /** Drives atomic cursor motion — every list widget (bullet, task, every
    *  spacer) skips as a unit. */
@@ -128,11 +147,11 @@ function buildListDecorations(state: EditorState): ListDecorations {
       const markText = state.doc.sliceString(node.from, node.to);
       if (markText.length !== 1 || !isBulletMarkChar(markText)) return;
 
-      // Require a trailing space so a bare `-`/`+`/`*` the user just typed
-      // (no space yet) renders as plain text, not a bullet. Lezer's
-      // incremental parse can emit `ListMark` for the bare marker before
-      // the space arrives.
-      if (state.doc.sliceString(node.to, node.to + 1) !== " ") return;
+      // Require a trailing space/tab so a bare `-`/`+`/`*` the user just
+      // typed (no whitespace yet) renders as plain text, not a bullet.
+      // Lezer's incremental parse can emit `ListMark` for the bare marker
+      // before the whitespace arrives.
+      if (!isMarkerTrailingChar(state.doc.sliceString(node.to, node.to + 1))) return;
 
       // Depth = number of ancestor `ListItem` nodes above the item this
       // mark belongs to. Top-level items have depth 0; one level of nesting
@@ -145,9 +164,10 @@ function buildListDecorations(state: EditorState): ListDecorations {
 
       // Leading-whitespace spacers — one inline widget per nesting level,
       // evenly splitting the line's leading whitespace. Whatever the source
-      // uses (2 spaces, 4 spaces, a tab), each indent step collapses to one
-      // 1ch widget. Spacers are atomic so arrow keys and Backspace treat
-      // each step as a unit (Backspace removes the whole step's chars).
+      // uses (2 spaces, 4 spaces, a tab), each indent step collapses to
+      // one `LIST_UNIT_CH` widget. Spacers are atomic so arrow keys and
+      // Backspace treat each step as a unit (Backspace removes the whole
+      // step's chars).
       const line = state.doc.lineAt(node.from);
       const leadingFrom = line.from;
       const leadingTo = node.from;
@@ -165,10 +185,10 @@ function buildListDecorations(state: EditorState): ListDecorations {
       }
 
       // Task vs plain bullet: tasks become one Checkbox widget over
-      // `- [ ] ` (marker + task marker + trailing space); plain bullets
-      // become one Bullet widget over `- ` (marker + trailing space).
-      // Same `Decoration.replace` shape either way — atomic, in the marker
-      // set, in the rendered set.
+      // `- [ ] ` (marker + task marker + trailing whitespace); plain
+      // bullets become one Bullet widget over `- ` (marker + trailing
+      // whitespace). Same `Decoration.replace` shape either way — atomic,
+      // in the marker set, in the rendered set.
       const cursor = node.node.cursor();
       let widgetDeco: Range<Decoration> | null = null;
       let widgetTo = -1;
@@ -177,7 +197,7 @@ function buildListDecorations(state: EditorState): ListDecorations {
         if (
           taskCursor.firstChild() &&
           taskCursor.name === "TaskMarker" &&
-          state.doc.sliceString(taskCursor.to, taskCursor.to + 1) === " "
+          isMarkerTrailingChar(state.doc.sliceString(taskCursor.to, taskCursor.to + 1))
         ) {
           const checked =
             state.doc.sliceString(taskCursor.from + 1, taskCursor.to - 1).toLowerCase() === "x";
@@ -241,13 +261,15 @@ const listDecorationsField = StateField.define<ListDecorations>({
 // Find the indent of the nearest list-item line above `lineNumber` whose
 // own indent matches the predicate. Used by indent / outdent to align the
 // current line to a valid CommonMark parent. Returns -1 if none found
-// before a blank line breaks the list context.
+// before a blank line breaks the list context, or after PREV_LIST_LOOKBACK
+// lines (defensive cap so giant docs don't pay an O(n) scan per keystroke).
 const findPrevListItemIndent = (
   state: EditorState,
   lineNumber: number,
   predicate: (indent: number) => boolean,
 ): number => {
-  for (let i = lineNumber - 1; i >= 1; i--) {
+  const stop = Math.max(1, lineNumber - PREV_LIST_LOOKBACK);
+  for (let i = lineNumber - 1; i >= stop; i--) {
     const prev = state.doc.line(i);
     const text = prev.text;
     if (text.trim() === "") return -1;
@@ -283,52 +305,59 @@ const isOnListLine = (state: EditorState, pos: number): boolean => {
   return found;
 };
 
+// `StateCommand` signature instead of `(view) => boolean` keeps the
+// handlers testable: tests can call them with `{state, dispatch}` directly
+// (no `EditorView`/DOM needed). EditorView satisfies the same shape, so
+// they still bind to the keymap without changes.
+
 // Tab on a list line: nest one level deeper by aligning to the previous
 // list item's content column (= prev indent + 2 for `- ` markers). That
 // matches CommonMark's rule that a nested item's indent must be ≥ the
 // parent's content column, while staying within the parent's `+3` window
 // (which is what blanket "insert 2 spaces" violates once the chain of
 // parents above isn't deep enough — Lezer reclassifies the line as a code
-// continuation and the bullet vanishes). If no valid parent exists, the
-// keystroke is consumed as a no-op so `indentWithTab` doesn't fall through
-// and insert a literal `\t` (which would also break the list parse).
-const listIndent = (view: EditorView): boolean => {
-  const { state } = view;
+// continuation and the bullet vanishes). Always consumes Tab on a list
+// line (even when nesting is a no-op) so `indentWithTab` doesn't fall
+// through and insert a literal `\t` — that would break the list parse.
+const listIndent: StateCommand = ({ state, dispatch }) => {
   if (state.readOnly) return false;
-  if (state.selection.ranges.length !== 1) return false;
+  // Multi-cursor / non-empty selection: consume so the fall-through
+  // `indentWithTab` doesn't insert `\t` characters that break list parsing
+  // on any of the selected lines. Multi-line list indent is a TODO.
+  if (state.selection.ranges.length !== 1 || !state.selection.main.empty) {
+    return isOnListLineAtAnyRange(state);
+  }
   const sel = state.selection.main;
-  if (!sel.empty) return false;
   if (!isOnListLine(state, sel.head)) return false;
 
   const line = state.doc.lineAt(sel.head);
   const currentIndent = currentLineIndentLen(line.text);
 
-  // Target = nearest previous list item with indent ≤ ours; its content
-  // column (prevIndent + 2) becomes our new indent, which nests us under
-  // it. If we're already at or past that target, no deeper nesting is
-  // possible without an intermediate sibling above.
   const prevIndent = findPrevListItemIndent(state, line.number, (i) => i <= currentIndent);
   if (prevIndent < 0) return true;
   const targetIndent = prevIndent + 2;
   if (currentIndent >= targetIndent) return true;
 
   const insertLen = targetIndent - currentIndent;
-  view.dispatch({
-    changes: { from: line.from, insert: " ".repeat(insertLen) },
-    selection: { anchor: sel.head + insertLen },
-    userEvent: "input.indent",
-  });
+  dispatch(
+    state.update({
+      changes: { from: line.from, insert: " ".repeat(insertLen) },
+      selection: { anchor: sel.head + insertLen },
+      userEvent: "input.indent",
+    }),
+  );
   return true;
 };
 
 // Shift-Tab on a list line: align to the nearest previous list item with
-// a strictly shallower indent — i.e. step up one nesting level.
-const listOutdent = (view: EditorView): boolean => {
-  const { state } = view;
+// a strictly shallower indent — i.e. step up one nesting level. Same
+// multi-cursor-consume policy as `listIndent`.
+const listOutdent: StateCommand = ({ state, dispatch }) => {
   if (state.readOnly) return false;
-  if (state.selection.ranges.length !== 1) return false;
+  if (state.selection.ranges.length !== 1 || !state.selection.main.empty) {
+    return isOnListLineAtAnyRange(state);
+  }
   const sel = state.selection.main;
-  if (!sel.empty) return false;
   if (!isOnListLine(state, sel.head)) return false;
 
   const line = state.doc.lineAt(sel.head);
@@ -343,11 +372,13 @@ const listOutdent = (view: EditorView): boolean => {
 
   const cursorOffsetInLine = sel.head - line.from;
   const newHead = line.from + Math.max(targetIndent, cursorOffsetInLine - removeLen);
-  view.dispatch({
-    changes: { from: line.from, to: line.from + removeLen },
-    selection: { anchor: newHead },
-    userEvent: "delete.outdent",
-  });
+  dispatch(
+    state.update({
+      changes: { from: line.from, to: line.from + removeLen },
+      selection: { anchor: newHead },
+      userEvent: "delete.outdent",
+    }),
+  );
   return true;
 };
 
@@ -360,23 +391,26 @@ const EMPTY_LIST_LINE_RE = /^[ \t]*[-+*] (\[.\] )?$/;
 // line. Used to mirror the prefix onto the next line on `Enter`.
 const LIST_LINE_PREFIX_RE = /^([ \t]*)([-+*]) (\[.\] )?/;
 
-const listEnter = (view: EditorView): boolean => {
-  const { state } = view;
+const listEnter: StateCommand = ({ state, dispatch }) => {
   if (state.readOnly) return false;
-  if (state.selection.ranges.length !== 1) return false;
+  // Multi-cursor / non-empty selection: fall through to default Enter
+  // (insert newline) — list-aware splitting on multi-line selections is
+  // out of scope for now.
+  if (state.selection.ranges.length !== 1 || !state.selection.main.empty) return false;
   const sel = state.selection.main;
-  if (!sel.empty) return false;
   if (!isOnListLine(state, sel.head)) return false;
 
   const line = state.doc.lineAt(sel.head);
 
   // Empty list item → wipe and break out of the list.
   if (EMPTY_LIST_LINE_RE.test(line.text)) {
-    view.dispatch({
-      changes: { from: line.from, to: line.to },
-      selection: { anchor: line.from },
-      userEvent: "delete.empty-list-marker",
-    });
+    dispatch(
+      state.update({
+        changes: { from: line.from, to: line.to },
+        selection: { anchor: line.from },
+        userEvent: "delete.empty-list-marker",
+      }),
+    );
     return true;
   }
 
@@ -396,23 +430,24 @@ const listEnter = (view: EditorView): boolean => {
   if (cursorOffsetInLine < prefixLen) return false;
 
   const continuation = isTask ? `${indent}${marker} [ ] ` : `${indent}${marker} `;
-  view.dispatch({
-    changes: { from: sel.head, insert: `\n${continuation}` },
-    selection: { anchor: sel.head + 1 + continuation.length },
-    userEvent: "input.list-continue",
-  });
+  dispatch(
+    state.update({
+      changes: { from: sel.head, insert: `\n${continuation}` },
+      selection: { anchor: sel.head + 1 + continuation.length },
+      userEvent: "input.list-continue",
+    }),
+  );
   return true;
 };
 
-// `deleteCharBackward` from @codemirror/commands ignores `atomicRanges` — it
-// uses `findClusterBreak` / code-point math, not `view.moveByChar`. So we
-// install an explicit Backspace handler that:
-//   - at the right edge of a bullet/task marker → deletes from `line.from`
-//     to the marker's end, wiping leading indent + marker in one keystroke
-//     (orphan indent on a non-list line is meaningless),
-//   - at the right edge of a spacer → deletes just that spacer's range,
-//     removing one nesting level,
-//   - elsewhere → falls through to the default handler.
+// CodeMirror 6's `deleteCharBackward` from `@codemirror/commands` DOES
+// respect `atomicRanges` via `skipAtomic` — but it deletes exactly the
+// atomic range, not more. This handler is what gives the user-visible
+// "Backspace at a bullet wipes the leading indent too" behavior: at a
+// marker's right edge, deletion is extended to `line.from`. At a spacer's
+// right edge, just the spacer's source chars go (one indent step). The
+// handler is also what makes lang-markdown's `deleteMarkupBackward` skip
+// list-line backspacing (we return true and stop the chain).
 const findEndsAt = (set: DecorationSet, lineStart: number, head: number): number => {
   let from = -1;
   set.between(lineStart, head, (rangeFrom, rangeTo) => {
@@ -425,8 +460,7 @@ const findEndsAt = (set: DecorationSet, lineStart: number, head: number): number
   return from;
 };
 
-const listBackspace = (view: EditorView): boolean => {
-  const { state } = view;
+const listBackspace: StateCommand = ({ state, dispatch }) => {
   if (state.readOnly) return false;
   if (state.selection.ranges.length !== 1) return false;
   const range = state.selection.main;
@@ -438,28 +472,84 @@ const listBackspace = (view: EditorView): boolean => {
 
   // Bullet/task first: extend to line.from so leading indent goes with it.
   if (findEndsAt(decos.marker, lineStart, head) >= 0) {
-    view.dispatch({
-      changes: { from: lineStart, to: head },
-      selection: { anchor: lineStart },
-      userEvent: "delete.list",
-    });
+    dispatch(
+      state.update({
+        changes: { from: lineStart, to: head },
+        selection: { anchor: lineStart },
+        userEvent: "delete.list",
+      }),
+    );
     return true;
   }
 
   // Spacer: delete just the one indent step's chars.
   const spacerFrom = findEndsAt(decos.atomic, lineStart, head);
   if (spacerFrom < 0) return false;
-  view.dispatch({
-    changes: { from: spacerFrom, to: head },
-    selection: { anchor: spacerFrom },
-    userEvent: "delete.list",
-  });
+  dispatch(
+    state.update({
+      changes: { from: spacerFrom, to: head },
+      selection: { anchor: spacerFrom },
+      userEvent: "delete.list",
+    }),
+  );
   return true;
 };
 
+// Returns true if any selection range's `head` sits on a list line. Used
+// by the Tab/Shift-Tab multi-cursor short-circuit so we still consume the
+// keystroke (suppressing `indentWithTab`) even when we won't act on it.
+const isOnListLineAtAnyRange = (state: EditorState): boolean =>
+  state.selection.ranges.some((r) => isOnListLine(state, r.head));
+
+// Click-toggle for the checkbox `<input>`. The widget DOM is rendered by
+// `CheckboxWidget` above; this handler is wired via `EditorView`'s
+// mousedown facet. The toggle position is derived from the source slice
+// (regex on `<mark> [X] `) rather than hardcoded offsets so future widget-
+// range tweaks don't silently desync. `posAtDOM` on a node inside a
+// `Decoration.replace` returns the replace range's `from`, which is the
+// ListMark's `from` here — exactly the anchor the regex needs.
+export const computeCheckboxToggle = (
+  state: EditorState,
+  widgetStartPos: number,
+): TransactionSpec | null => {
+  const slice = state.doc.sliceString(widgetStartPos, widgetStartPos + 8);
+  const m = /^[-+*] \[([ xX])\][ \t]/.exec(slice);
+  if (!m) return null;
+  const innerCharPos = widgetStartPos + 3; // position of the ` ` or `x` inside `[ ]`
+  const currentlyChecked = m[1]?.toLowerCase() === "x";
+  return {
+    changes: {
+      from: innerCharPos,
+      to: innerCharPos + 1,
+      insert: currentlyChecked ? " " : "x",
+    },
+    userEvent: "input.toggle-checkbox",
+  };
+};
+
+const checkboxClickHandler = EditorView.domEventHandlers(
+  eventHandlersWithClass({
+    mousedown: {
+      "cm-checkbox": (ev, view) => {
+        const pos = view.posAtDOM(ev.target as HTMLElement);
+        const spec = computeCheckboxToggle(view.state, pos);
+        if (!spec) return false;
+        view.dispatch(spec);
+        return true; // prevent default
+      },
+    },
+  }),
+);
+
 export const listExtension: Extension = [
   listDecorationsField,
-  Prec.high(
+  // `Prec.highest` wins over `@codemirror/lang-markdown`'s `Prec.high`
+  // keymap (which also binds Enter and Backspace via
+  // `insertNewlineContinueMarkup` / `deleteMarkupBackward`). On non-list
+  // contexts (ordered lists, blockquotes, ATX headings) our handlers
+  // return false and lang-markdown's still runs — that's how blockquote
+  // `> ` deletion and ordered-list `1. ` continuation are preserved.
+  Prec.highest(
     keymap.of([
       { key: "Backspace", run: listBackspace },
       { key: "Enter", run: listEnter },
@@ -467,4 +557,21 @@ export const listExtension: Extension = [
       { key: "Shift-Tab", run: listOutdent },
     ]),
   ),
+  checkboxClickHandler,
 ];
+
+// Internals exposed only for tests. Not part of the public API.
+export const __test = {
+  buildListDecorations,
+  isOnListLine,
+  findPrevListItemIndent,
+  currentLineIndentLen,
+  listEnter,
+  listBackspace,
+  listIndent,
+  listOutdent,
+  EMPTY_LIST_LINE_RE,
+  LIST_LINE_PREFIX_RE,
+  LIST_UNIT_CH,
+  listDecorationsField,
+};

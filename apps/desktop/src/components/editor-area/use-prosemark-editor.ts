@@ -480,12 +480,6 @@ function createEditorExtensions(
     markdown({
       codeLanguages: languages,
       extensions: [GFM, prosemarkMarkdownSyntaxExtensions, htmlBlockParserExtension],
-      // Disable lang-markdown's Prec.high Enter/Backspace keymap
-      // (`insertNewlineContinueMarkup` + `deleteMarkupBackward`) — `listExtension`
-      // owns list-aware Enter and Backspace, and running both together
-      // doubles the inserted continuation and leaves a blank line between
-      // items.
-      addKeymap: false,
     }),
     linkNavigationExtension(getFilePath, isDisposed),
     editorBodyContextMenuExtension(getFilePath, isDisposed),

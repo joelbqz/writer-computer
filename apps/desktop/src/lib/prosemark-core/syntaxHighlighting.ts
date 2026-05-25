@@ -94,16 +94,17 @@ export const baseTheme = EditorView.theme({
     cursor: "pointer",
     color: "var(--pm-link-color)",
   },
+  // Width is set inline by `listExtension` from its `LIST_UNIT_CH`
+  // constant (single source of truth), so the rules here only carry
+  // layout-shape and theming concerns.
   ".cm-list-bullet-marker": {
     display: "inline-block",
-    width: "1ch",
     textAlign: "center",
     color: "var(--pm-muted-color)",
     textIndent: "0",
   },
   ".cm-list-indent-spacer": {
     display: "inline-block",
-    width: "1ch",
     pointerEvents: "none",
   },
   ".cm-blockquote-line": {
