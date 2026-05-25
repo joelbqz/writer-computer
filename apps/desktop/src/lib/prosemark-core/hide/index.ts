@@ -46,6 +46,16 @@ const defaultHidableSpecs: HidableNodeSpec[] = [
     nodeName: ["StrongEmphasis", "Emphasis"],
     nodeDecoration: emphasisDecoration,
     subNodeNameToHide: "EmphasisMark",
+    // Replace-based hide so `**`/`*` marks are absent from the visible DOM
+    // instead of `font-size: 0`. The collapsed-rect quirk that `font-size: 0`
+    // triggers in `coordsAtPos` measurements also destabilizes the rects
+    // `drawSelection` computes during pointer-drag selections, producing a
+    // one-frame disappearance of `.cm-selectionBackground` as the drag head
+    // crosses a hidden span — most visible on bullet-list lines where atomic
+    // bullet/spacer skips keep the head near hidden-mark boundaries. See the
+    // 2026-05-18 wrapped-bullet `softIndentExtension` entry for the same
+    // root cause documented from a different angle.
+    removeFromDOM: true,
   },
   {
     nodeName: "InlineCode",
@@ -63,6 +73,7 @@ const defaultHidableSpecs: HidableNodeSpec[] = [
     nodeName: "Strikethrough",
     nodeDecoration: strikethroughDecoration,
     subNodeNameToHide: "StrikethroughMark",
+    removeFromDOM: true,
   },
   {
     nodeName: "Escape",

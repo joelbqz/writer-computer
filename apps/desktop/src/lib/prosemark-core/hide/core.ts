@@ -20,6 +20,14 @@ export const hideInlineDecoration = Decoration.mark({
 export const hideInlineKeepSpaceDecoration = Decoration.mark({
   class: "cm-transparent-token",
 });
+// Replace-based hide: the hidden chars are removed from the visible DOM
+// entirely, instead of being kept as a `font-size: 0` span. Use this for
+// inline marks where the `font-size: 0` span's collapsed bounding rect
+// destabilizes `view.coordsAtPos` measurements that other extensions (e.g.
+// CodeMirror's `drawSelection`) rely on — the same browser-engine quirk
+// documented in the 2026-05-18 wrapped-bullet `softIndentExtension` fix.
+// `subNodeNameToHide`-driven hides opt in via `removeFromDOM: true`.
+export const hideInlineReplaceDecoration = Decoration.replace({});
 export const hideBlockDecoration = Decoration.replace({
   block: true,
 });
@@ -100,7 +108,9 @@ const buildDecorations = (state: EditorState) => {
                   ? hideBlockDecoration
                   : spec.keepSpace
                     ? hideInlineKeepSpaceDecoration
-                    : hideInlineDecoration
+                    : spec.removeFromDOM
+                      ? hideInlineReplaceDecoration
+                      : hideInlineDecoration
                 ).range(node.from, node.to),
               );
             }
@@ -147,6 +157,11 @@ export interface HidableNodeSpec {
   ) => Range<Decoration> | Range<Decoration>[] | undefined;
   block?: boolean;
   keepSpace?: boolean;
+  // Use a `Decoration.replace` (chars removed from the visible DOM) instead
+  // of a `Decoration.mark` (`font-size: 0` on the chars). Only applies to
+  // the `subNodeNameToHide` path and ignored when `block` or `keepSpace` is
+  // set. See `hideInlineReplaceDecoration` for the rationale.
+  removeFromDOM?: boolean;
   unhideZone?: (state: EditorState, node: SyntaxNodeRef) => RangeLike;
   // Custom zone used for the selection-touch check that decides whether to
   // hide. Defaults to the node range. Set to a tighter zone when the node's

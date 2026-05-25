@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-05-25
+
+- Stop the `.cm-selectionBackground` rectangle from blinking out for a frame while drag-selecting across `**bold**` or `~~strikethrough~~` ranges (most visible on bullet-list lines, where atomic bullet/spacer skips keep the head dwelling near hidden-mark boundaries). Root cause is the same browser-engine quirk the 2026-05-18 wrapped-bullet `softIndentExtension` fix names: `coordsAtPos` measured against a `cm-emphasis` wrapper around a `font-size: 0` `cm-hidden-token` collapses to a zero-rect at the origin, and `drawSelection` uses the same measurement to size its selection rect. Switch the StrongEmphasis/Emphasis and Strikethrough hide specs to a `Decoration.replace`-based hide (new opt-in `removeFromDOM: true` flag on `HidableNodeSpec`; new `hideInlineReplaceDecoration`) so the `**` / `~~` chars are absent from the visible DOM entirely instead of being kept as zero-font-size spans — `coordsAtPos` then anchors on the surrounding real text nodes and returns a stable rect. ATXHeading hide stays on the mark-based `hideInlineDecoration` because `heading-decorations.ts` co-styles the same range with `cm-heading-hash` and needs a real DOM span to position the hung-margin hash.
+
 ## 2026-05-19
 
 - Make Mermaid canvas trackpad pinch zoom more responsive while leaving Cmd-wheel, keyboard, and button zoom increments unchanged.
