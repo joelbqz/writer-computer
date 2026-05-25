@@ -192,21 +192,24 @@
    The visual box lives in ::before so there is no native input to steal focus
    or pointer handling from CodeMirror selection drags. */
 .cm-editor .cm-checkbox {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1lh;
   text-align: center;
   text-indent: 0;
-  vertical-align: middle;
+  vertical-align: top;
   cursor: pointer;
 }
 
 .cm-editor .cm-checkbox::before {
   content: "";
   display: inline-block;
+  flex: 0 0 auto;
   width: 18px;
   height: 18px;
   border: 1.5px solid var(--text-muted);
   border-radius: 5px;
-  vertical-align: middle;
   transition:
     background-color 0.15s,
     border-color 0.15s;

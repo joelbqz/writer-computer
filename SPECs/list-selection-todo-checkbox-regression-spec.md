@@ -28,7 +28,8 @@ the wrapper's left edge instead of the nested list slot.
   `cm-checkbox-checked` class.
 - Nested checkboxes use the same depth-aware width and padding model as bullet
   markers, so their visual slot aligns with nested bullets and wrapped body
-  text.
+  text. The checkbox square is vertically centered in the editor line box so it
+  sits optically centered against the task text.
 - Clicking a checkbox toggles the source `[ ]` / `[x]`. The handler falls back
   to line-based task detection so nested toggles do not depend on where
   `posAtDOM` resolves inside the point widget.
