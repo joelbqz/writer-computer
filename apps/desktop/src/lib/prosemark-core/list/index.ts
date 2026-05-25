@@ -129,7 +129,7 @@ const isOrderedMarkText = (s: string): boolean => ORDERED_MARKER_RE.test(s);
 // is fixed-width so one- and two-digit numbers share the same visual column.
 const orderedLineDecoration = Decoration.line({
   attributes: {
-    style: `padding-inline-start: ${LIST_UNIT_CH.toString()}ch; text-indent: -${LIST_UNIT_CH.toString()}ch;`,
+    style: `padding-inline-start: ${LIST_UNIT_CH.toString()}ch; text-indent: -3.4ch;`,
   },
 });
 const orderedMarkerDecoration = Decoration.mark({
