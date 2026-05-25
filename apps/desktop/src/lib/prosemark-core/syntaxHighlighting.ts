@@ -35,6 +35,7 @@ export const baseSyntaxHighlights = syntaxHighlighting(
     {
       tag: markdownTags.headerMark,
       color: "var(--pm-header-mark-color)",
+      opacity: "0.4",
     },
     {
       tag: tags.strong,
@@ -59,6 +60,7 @@ export const baseSyntaxHighlights = syntaxHighlighting(
     {
       tag: markdownTags.listMark,
       color: "var(--pm-muted-color)",
+      paddingLeft: "1ch",
     },
     {
       tag: markdownTags.escapeMark,

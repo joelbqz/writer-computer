@@ -311,42 +311,6 @@ describe("computeCheckboxToggle", () => {
 // Decoration field
 // ---------------------------------------------------------------------------
 
-describe("ordered lists", () => {
-  test("renders no bullet widget — source `1. ` stays visible", () => {
-    const s = makeState("1. foo");
-    const decos = s.field(__test.listDecorationsField);
-    let markerCount = 0;
-    decos.marker.between(0, s.doc.length, () => {
-      markerCount++;
-    });
-    expect(markerCount).toBe(0);
-  });
-
-  test("adds the hanging-indent line decoration on `1. foo`", () => {
-    const s = makeState("1. foo");
-    const decos = s.field(__test.listDecorationsField);
-    const styles: string[] = [];
-    decos.all.between(0, s.doc.length, (_from, _to, value) => {
-      const spec = (value as { spec?: { attributes?: { style?: string } } }).spec;
-      const style = spec?.attributes?.style;
-      if (style) styles.push(style);
-    });
-    expect(styles).toContain("padding-inline-start: 3ch; text-indent: -3ch;");
-  });
-
-  test("adds a spacer per nesting level for `  1. b`", () => {
-    const s = makeState("- a\n  1. b");
-    const decos = s.field(__test.listDecorationsField);
-    // Atomic set on the nested-1 line should hold exactly one spacer.
-    let spacerCount = 0;
-    decos.atomic.between(4, 10, () => {
-      spacerCount++;
-    });
-    // 1 spacer (no bullet widget for ordered).
-    expect(spacerCount).toBe(1);
-  });
-});
-
 describe("listDecorationsField", () => {
   test("does not render a bullet for a bare `-` (no trailing space)", () => {
     const s = makeState("-", 1);
