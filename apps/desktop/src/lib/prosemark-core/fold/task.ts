@@ -1,82 +1,27 @@
-import { Decoration, EditorView, WidgetType } from "@codemirror/view";
-import { foldableSyntaxFacet } from "./core";
+import { EditorView } from "@codemirror/view";
 import { eventHandlersWithClass } from "../utils";
 
-class Checkbox extends WidgetType {
-  value: boolean;
-
-  constructor(value: boolean) {
-    super();
-    this.value = value;
-  }
-
-  eq(other: Checkbox): boolean {
-    return this.value === other.value;
-  }
-
-  toDOM() {
-    // Wrapper carries an invisible copy of the raw 6 chars (`- [ ] `,
-    // marker + trailing space) so its inline width matches the raw text
-    // exactly. The visual checkbox is absolutely positioned on top so the
-    // column where body text starts doesn't shift when the caret toggles
-    // between rendered and raw.
-    const wrapper = document.createElement("span");
-    wrapper.className = "cm-checkbox-wrapper";
-
-    const spacer = document.createElement("span");
-    spacer.className = "cm-checkbox-spacer";
-    spacer.textContent = "- [ ] ";
-    wrapper.appendChild(spacer);
-
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.className = "cm-checkbox";
-    input.checked = this.value;
-    wrapper.appendChild(input);
-
-    return wrapper;
-  }
-
-  ignoreEvent(_event: Event) {
-    return false;
-  }
-}
-
-export const taskExtension = [
-  foldableSyntaxFacet.of({
-    nodePath: "BulletList/ListItem/Task/TaskMarker",
-    // Checkbox stays rendered even when the cursor is on the line —
-    // matches the bullet-marker widget from `listExtension`, which also
-    // never reveals raw `- ` source.
-    keepDecorationOnUnfold: true,
-    buildDecorations: (state, node) => {
-      const value = state.doc.sliceString(node.from + 1, node.to - 1).toLowerCase() === "x";
-      // Range covers `- [ ] ` (marker + trailing space) so the checkbox
-      // widget renders as one unit, matching the bullet-marker widget for
-      // plain list items.
-      const trailing = state.doc.sliceString(node.to, node.to + 1);
-      const widgetEnd = trailing === " " ? node.to + 1 : node.to;
-      return Decoration.replace({
-        widget: new Checkbox(value),
-      }).range(node.from - 2, widgetEnd);
+// The Checkbox WIDGET itself lives in `listExtension` (`../list/index.ts`)
+// — tasks render through the same `Decoration.replace` pipeline as plain
+// bullets there, so the atomic-cursor / Backspace / Enter / Tab behavior
+// is identical. All that remains here is the mousedown handler that
+// toggles the underlying `[ ]` ↔ `[x]` source when the user clicks the
+// rendered checkbox input.
+export const taskExtension = EditorView.domEventHandlers(
+  eventHandlersWithClass({
+    mousedown: {
+      "cm-checkbox": (ev, view) => {
+        const pos = view.posAtDOM(ev.target as HTMLElement);
+        const change = {
+          from: pos + 3,
+          to: pos + 4,
+          insert: (ev.target as HTMLInputElement).checked ? " " : "x", // this value is old, so the text is swap
+        };
+        view.dispatch({
+          changes: change,
+        });
+        return true; // prevent default
+      },
     },
   }),
-  EditorView.domEventHandlers(
-    eventHandlersWithClass({
-      mousedown: {
-        "cm-checkbox": (ev, view) => {
-          const pos = view.posAtDOM(ev.target as HTMLElement);
-          const change = {
-            from: pos + 3,
-            to: pos + 4,
-            insert: (ev.target as HTMLInputElement).checked ? " " : "x", // this value is old, so the text is swap
-          };
-          view.dispatch({
-            changes: change,
-          });
-          return true; // prevent default
-        },
-      },
-    }),
-  ),
-];
+);

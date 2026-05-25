@@ -99,6 +99,7 @@ export const baseTheme = EditorView.theme({
     width: "1ch",
     textAlign: "center",
     color: "var(--pm-muted-color)",
+    textIndent: "0",
   },
   ".cm-list-indent-spacer": {
     display: "inline-block",
