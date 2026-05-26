@@ -2,6 +2,7 @@
 
 ## 2026-05-26
 
+- Change the default editor line height to 1.8 so new and reset paragraph spacing matches the app's typographic fallback.
 - Fix rendered table-cell links so clicking markdown links and Obsidian wiki links navigates instead of unfolding the table source. Table-cell wiki links now render aliases correctly, including table-escaped separators like `[[Format your notes\|Formatting]]`.
 - Render inline markdown inside folded table preview cells. Bold, italic, inline code, links, strikethrough, escaped pipes, and common HTML entities now display as rendered inline content in table headers and body cells, while inline HTML stays text-only and the unfolded source-editing path is unchanged.
 - Render unfolded markdown tables as codeblock-styled source lines in the main editor. Tables still fold to the rendered preview when the selection is outside them, but selecting into a table now keeps the markdown editable while giving it the same code surface treatment as fenced code.

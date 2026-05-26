@@ -6,6 +6,7 @@
 
 ## Done
 
+- Default paragraph line height — make new and reset editor line-height settings use 1.8 instead of 1.6.
 - Table cell link regressions: [`SPECs/table-cell-link-regressions-spec.md`](SPECs/table-cell-link-regressions-spec.md) — keep rendered table-cell links clickable without unfolding the table, and render Obsidian wiki links with table-escaped aliases correctly.
 - Table cell markdown preview: [`SPECs/table-cell-markdown-preview-spec.md`](SPECs/table-cell-markdown-preview-spec.md) — render inline markdown inside folded table preview cells instead of showing the raw markdown delimiters.
 - Table unfold codeblock display: [`SPECs/table-unfold-codeblock-spec.md`](SPECs/table-unfold-codeblock-spec.md) — render touched table markdown as codeblock-styled source lines in the main editor instead of plain prose.
