@@ -18,6 +18,7 @@ import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
 type SyntaxNode = ReturnType<typeof syntaxTree>["topNode"];
 
 const ATX_HEADING_RE = /^ATXHeading([1-6])$/;
+const SETEXT_HEADING_RE = /^SetextHeading([1-2])$/;
 
 // Max byte length of any heading no-go zone on a line: "###### " = 7 chars.
 // O(1) fast-path: a position more than this far from its line start cannot
@@ -31,8 +32,18 @@ const hashMark = Decoration.mark({ class: "cm-heading-hash" });
 const lineDecos: Record<number, Decoration> = {};
 for (let level = 1; level <= 6; level++) {
   lineDecos[level] = Decoration.line({
-    attributes: { class: `cm-heading-line cm-heading-line-${level}` },
+    attributes: { class: `cm-markdown-heading cm-heading-line cm-heading-line-${level}` },
   });
+}
+
+function getMarkdownHeadingLevel(name: string): number | null {
+  const atx = ATX_HEADING_RE.exec(name);
+  if (atx) return Number(atx[1]);
+
+  const setext = SETEXT_HEADING_RE.exec(name);
+  if (setext) return Number(setext[1]);
+
+  return null;
 }
 
 function findHeadingHashEnd(node: SyntaxNode): number | null {
@@ -123,12 +134,13 @@ function buildDecorations(view: EditorView): DecorationSet {
       from,
       to,
       enter(node) {
-        const m = ATX_HEADING_RE.exec(node.name);
-        if (!m) return undefined;
+        const level = getMarkdownHeadingLevel(node.name);
+        if (level === null) return undefined;
 
-        const level = Number(m[1]);
         const lineFrom = view.state.doc.lineAt(node.from).from;
         decos.push({ from: lineFrom, to: lineFrom, deco: lineDecos[level]! });
+
+        if (!ATX_HEADING_RE.test(node.name)) return false;
 
         const hashEnd = findHeadingHashEnd(node.node);
         if (hashEnd !== null) {
@@ -336,4 +348,5 @@ export const __test = {
   clampRangesToZones,
   couldBeInZone,
   anySelectionEndpointCouldBeInZone,
+  getMarkdownHeadingLevel,
 };

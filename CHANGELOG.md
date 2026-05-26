@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-05-26
+
+- Add 1rem top padding to rendered editor Markdown headings through a shared heading line class, covering both ATX and Setext heading syntax while preserving the existing hanging ATX hash behavior.
+
 ## 2026-05-25
 
 - Keep the blinking caret visible on empty bullet and TODO list items by anchoring the existing marker widget at the hidden prefix end, giving CodeMirror a body-column coordinate target without an extra empty-line widget.

@@ -236,6 +236,10 @@
    runtime-injected theme is loaded after this stylesheet, so !important
    pins the override and keeps the hash visible in the margin in both
    caret-on and caret-off states. See heading-hash-margin-spec.md. */
+.cm-editor .cm-markdown-heading {
+  padding-top: 1rem;
+}
+
 .cm-editor .cm-heading-line {
   position: relative;
 }

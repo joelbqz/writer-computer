@@ -5,7 +5,8 @@ import { GFM } from "@lezer/markdown";
 import { ensureSyntaxTree } from "@codemirror/language";
 import { headingDecorations, __test } from "../src/components/editor-area/heading-decorations";
 
-const { collectHeadingNoGoZones, clampRangesToZones, couldBeInZone } = __test;
+const { collectHeadingNoGoZones, clampRangesToZones, couldBeInZone, getMarkdownHeadingLevel } =
+  __test;
 
 function makeState(doc: string, selection?: EditorSelection): EditorState {
   const state = EditorState.create({
@@ -53,6 +54,29 @@ describe("collectHeadingNoGoZones", () => {
     const zones = collectHeadingNoGoZones(state);
     expect(zones).toHaveLength(1);
     expect(zones[0]?.from).toBe("#NotHeading\n".length);
+  });
+
+  test("does not create hash no-go zones for Setext headings", () => {
+    const state = makeState("Title\n=====\n\nSubtitle\n-----");
+    expect(collectHeadingNoGoZones(state)).toEqual([]);
+  });
+});
+
+describe("getMarkdownHeadingLevel", () => {
+  test("returns levels for ATX headings", () => {
+    expect(getMarkdownHeadingLevel("ATXHeading1")).toBe(1);
+    expect(getMarkdownHeadingLevel("ATXHeading6")).toBe(6);
+  });
+
+  test("returns levels for Setext headings", () => {
+    expect(getMarkdownHeadingLevel("SetextHeading1")).toBe(1);
+    expect(getMarkdownHeadingLevel("SetextHeading2")).toBe(2);
+  });
+
+  test("returns null for non-heading nodes", () => {
+    expect(getMarkdownHeadingLevel("Paragraph")).toBeNull();
+    expect(getMarkdownHeadingLevel("ATXHeading7")).toBeNull();
+    expect(getMarkdownHeadingLevel("SetextHeading3")).toBeNull();
   });
 });
 
