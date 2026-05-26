@@ -9,6 +9,7 @@ import { FRONTMATTER_LANGUAGE_LABEL, isFrontmatterNode } from "./markdown/frontm
 const fallbackMonospaceCodeFont =
   "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
 const codeFontFamily = `var(--pm-code-font, ${fallbackMonospaceCodeFont})`;
+const editorFontSize = "var(--writer-editor-font-size, 16px)";
 
 const codeBlockDecorations = (view: EditorView) => {
   const builder = new RangeSetBuilder<Decoration>();
@@ -147,12 +148,13 @@ export const codeBlockDecorationsExtension: Extension = ViewPlugin.fromClass(
   },
 );
 
-export const codeFenceTheme = EditorView.theme({
+const codeFenceThemeSpec = {
   ".cm-fenced-code-line": {
     display: "block",
     marginLeft: "6px",
     backgroundColor: "var(--pm-code-background-color)",
     fontFamily: codeFontFamily,
+    fontSize: editorFontSize,
     fontVariantLigatures: "none",
     fontFeatureSettings: '"calt" 0',
     fontKerning: "none",
@@ -198,4 +200,10 @@ export const codeFenceTheme = EditorView.theme({
     width: "16px",
     height: "16px",
   },
-});
+};
+
+export const codeFenceTheme = EditorView.theme(codeFenceThemeSpec);
+
+export const __testCodeFenceExtension = {
+  codeFenceThemeSpec,
+};
