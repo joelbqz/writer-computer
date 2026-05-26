@@ -7,6 +7,7 @@ import type { MarkdownConfig } from "@lezer/markdown";
 const fallbackMonospaceCodeFont =
   "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
 const codeFontFamily = `var(--pm-code-font, ${fallbackMonospaceCodeFont})`;
+const editorFontSize = "var(--writer-editor-font-size, 16px)";
 
 export const additionalMarkdownSyntaxTags: MarkdownConfig = {
   // Define new nodes with tags here
@@ -75,7 +76,7 @@ export const baseSyntaxHighlights = syntaxHighlighting(
   ]),
 );
 
-export const baseTheme = EditorView.theme({
+const baseThemeSpec = {
   ".cm-content": {
     fontFamily: "var(--font)",
     fontSize: "0.9rem",
@@ -156,10 +157,16 @@ export const baseTheme = EditorView.theme({
     fontKerning: "none",
     padding: "0.2rem",
     borderRadius: "0.4rem",
-    fontSize: "0.8rem",
+    fontSize: editorFontSize,
     backgroundColor: "var(--pm-code-background-color)",
   },
-});
+};
+
+export const baseTheme = EditorView.theme(baseThemeSpec);
+
+export const __testSyntaxHighlighting = {
+  baseThemeSpec,
+};
 
 export const generalSyntaxHighlights = syntaxHighlighting(
   HighlightStyle.define([
