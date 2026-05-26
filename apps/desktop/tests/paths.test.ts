@@ -1,9 +1,12 @@
 import { describe, expect, test } from "vite-plus/test";
 import {
+  formatMarkdownDestination,
   getFileExtension,
   getFileName,
   getFileStem,
   getRelativePath,
+  normalizeLocalMarkdownDestination,
+  normalizeMarkdownDestination,
   normalizePath,
   resolveLinkTarget,
 } from "../src/lib/paths";
@@ -83,6 +86,30 @@ describe("normalizePath", () => {
   });
 });
 
+describe("markdown destinations", () => {
+  test("strips angle brackets around destinations", () => {
+    expect(normalizeMarkdownDestination("<Writer TODOs.md>")).toBe("Writer TODOs.md");
+  });
+
+  test("unescapes markdown escaped spaces", () => {
+    expect(normalizeMarkdownDestination("Writer\\ TODOs.md")).toBe("Writer TODOs.md");
+  });
+
+  test("decodes local percent escapes after markdown normalization", () => {
+    expect(normalizeLocalMarkdownDestination("<Writer%20TODOs.md>")).toBe("Writer TODOs.md");
+  });
+
+  test("wraps generated destinations with spaces in angle brackets", () => {
+    expect(formatMarkdownDestination("Writer TODOs-assets/image.png")).toBe(
+      "<Writer TODOs-assets/image.png>",
+    );
+  });
+
+  test("leaves generated destinations without spaces unchanged", () => {
+    expect(formatMarkdownDestination("note-assets/image.png")).toBe("note-assets/image.png");
+  });
+});
+
 describe("resolveLinkTarget", () => {
   test("resolves relative markdown links inside the workspace", async () => {
     expect(await resolveLinkTarget("../ideas/next.md", "/vault/daily/today.md", "/vault")).toEqual({
@@ -103,6 +130,20 @@ describe("resolveLinkTarget", () => {
 
   test("decodes encoded local markdown paths", async () => {
     expect(await resolveLinkTarget("./My%20Guide.md", "/vault/docs/start.md", "/vault")).toEqual({
+      kind: "internal",
+      path: "/vault/docs/My Guide.md",
+    });
+  });
+
+  test("resolves angle-bracket local markdown paths with spaces", async () => {
+    expect(await resolveLinkTarget("<./My Guide.md>", "/vault/docs/start.md", "/vault")).toEqual({
+      kind: "internal",
+      path: "/vault/docs/My Guide.md",
+    });
+  });
+
+  test("resolves markdown-escaped spaces in local paths", async () => {
+    expect(await resolveLinkTarget("./My\\ Guide.md", "/vault/docs/start.md", "/vault")).toEqual({
       kind: "internal",
       path: "/vault/docs/My Guide.md",
     });

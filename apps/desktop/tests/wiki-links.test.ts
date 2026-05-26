@@ -144,6 +144,26 @@ describe("resolveWikiLink", () => {
     expect(fuzzySearch).not.toHaveBeenCalled();
   });
 
+  test("resolves workspace-relative paths with spaces and aliases with spaces", async () => {
+    const fuzzySearch = vi.fn();
+    const fileExists = vi.fn().mockResolvedValue(true);
+
+    const result = await resolveWikiLink(
+      "Project Notes/My Note|Label With Spaces",
+      "/vault",
+      fuzzySearch,
+      fileExists,
+    );
+
+    expect(result).toEqual({ kind: "internal", path: "/vault/Project Notes/My Note.md" });
+    expect(fileExists).toHaveBeenCalledWith("/vault/Project Notes/My Note.md");
+    expect(fuzzySearch).not.toHaveBeenCalled();
+    expect(parseWikiLink("Project Notes/My Note|Label With Spaces")).toMatchObject({
+      path: "Project Notes/My Note",
+      displayText: "Label With Spaces",
+    });
+  });
+
   test("returns unresolved for missing path target", async () => {
     const fuzzySearch = vi.fn();
     const fileExists = vi.fn().mockResolvedValue(false);

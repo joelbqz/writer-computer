@@ -1,9 +1,10 @@
 import { EditorView, ViewPlugin } from "@codemirror/view";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { getParentDir } from "@/lib/paths";
+import { decodeLinkPath, getParentDir, normalizeMarkdownDestination } from "@/lib/paths";
 
 function resolveImgSrc(img: HTMLImageElement, markdownDir: string) {
-  const src = img.getAttribute("src");
+  const rawSrc = img.getAttribute("src");
+  const src = rawSrc ? normalizeMarkdownDestination(rawSrc) : rawSrc;
   if (!src) return;
   if (
     src.startsWith("http://") ||
@@ -13,7 +14,8 @@ function resolveImgSrc(img: HTMLImageElement, markdownDir: string) {
     src.startsWith("blob:")
   )
     return;
-  const absolute = src.startsWith("/") ? src : `${markdownDir}/${src}`;
+  const localSrc = decodeLinkPath(src);
+  const absolute = localSrc.startsWith("/") ? localSrc : `${markdownDir}/${localSrc}`;
   img.src = convertFileSrc(absolute);
 }
 

@@ -7,6 +7,7 @@ export function getFileExtension(path: string): string {
 
 const WINDOWS_ABSOLUTE_PATH = /^[A-Za-z]:[\\/]/;
 const EXPLICIT_URL_SCHEME = /^[A-Za-z][A-Za-z\d+.-]*:/;
+const MARKDOWN_ESCAPABLE = new Set(`!"#$%&'()*+,-./:;<=>?@[\\]^_\`{|}~ \t`.split(""));
 
 export type LinkTarget =
   | { kind: "internal"; path: string; anchor?: string }
@@ -29,12 +30,45 @@ function extractAnchor(href: string): string | undefined {
   return anchor ? decodeLinkPath(anchor) : undefined;
 }
 
-function decodeLinkPath(path: string): string {
+export function decodeLinkPath(path: string): string {
   try {
     return decodeURIComponent(path);
   } catch {
     return path;
   }
+}
+
+function unescapeMarkdownDestination(path: string): string {
+  let result = "";
+  for (let index = 0; index < path.length; index++) {
+    const char = path[index]!;
+    const next = path[index + 1];
+    if (char === "\\" && next && MARKDOWN_ESCAPABLE.has(next)) {
+      result += next;
+      index++;
+      continue;
+    }
+    result += char;
+  }
+  return result;
+}
+
+export function normalizeMarkdownDestination(destination: string): string {
+  let normalized = destination.trim();
+  if (normalized.startsWith("<") && normalized.endsWith(">")) {
+    normalized = normalized.slice(1, -1).trim();
+  }
+  return unescapeMarkdownDestination(normalized);
+}
+
+export function normalizeLocalMarkdownDestination(destination: string): string {
+  return decodeLinkPath(normalizeMarkdownDestination(destination));
+}
+
+export function formatMarkdownDestination(destination: string): string {
+  if (!/[\s<>]/.test(destination)) return destination;
+  const escaped = destination.replace(/</g, "%3C").replace(/>/g, "%3E");
+  return `<${escaped}>`;
 }
 
 export function normalizePath(path: string): string {
@@ -93,7 +127,7 @@ export async function resolveLinkTarget(
   workspaceRoot?: string | null,
   fileExists?: FileExistsFn,
 ): Promise<LinkTarget | null> {
-  const trimmed = href.trim();
+  const trimmed = normalizeMarkdownDestination(href);
   if (!trimmed) return null;
   if (trimmed.startsWith("#")) {
     const anchor = extractAnchor(trimmed);
@@ -181,12 +215,11 @@ export function getParentDir(path: string): string {
 }
 
 export function resolveImagePath(imageSrc: string, markdownDir: string): string {
-  if (
-    imageSrc.startsWith("/") ||
-    imageSrc.startsWith("http://") ||
-    imageSrc.startsWith("https://")
-  ) {
-    return imageSrc;
+  const normalizedSrc = normalizeMarkdownDestination(imageSrc);
+  if (normalizedSrc.startsWith("http://") || normalizedSrc.startsWith("https://")) {
+    return normalizedSrc;
   }
-  return `${markdownDir.replace(/\/$/, "")}/${imageSrc}`;
+  const localSrc = decodeLinkPath(normalizedSrc);
+  if (localSrc.startsWith("/")) return localSrc;
+  return `${markdownDir.replace(/\/$/, "")}/${localSrc}`;
 }

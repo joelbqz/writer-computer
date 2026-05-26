@@ -1,4 +1,5 @@
 import { Decoration, WidgetType } from "@codemirror/view";
+import { normalizeMarkdownDestination } from "@/lib/paths";
 import { foldableSyntaxFacet, selectAllDecorationsOnSelectExtension } from "./core";
 import { iterChildren } from "../utils";
 
@@ -40,7 +41,7 @@ export const imageExtension = [
       let imageUrl: string | undefined;
       iterChildren(node.node.cursor(), (node) => {
         if (node.name === "URL") {
-          imageUrl = state.doc.sliceString(node.from, node.to);
+          imageUrl = normalizeMarkdownDestination(state.doc.sliceString(node.from, node.to));
         }
 
         return undefined;

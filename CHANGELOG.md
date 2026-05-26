@@ -2,6 +2,7 @@
 
 ## 2026-05-26
 
+- Fix Markdown links/images and wiki-style links whose labels, aliases, folder names, filenames, or generated pasted-image asset paths contain spaces. Bare-space destinations such as `[Todo](Writer TODOs.md)` and `![image.png](Writer TODOs-assets/file.png)` now parse as full links/images, angle-bracket destinations like `<Writer TODOs.md>` normalize to the intended local path, percent-encoded paths still decode, and pasted images now wrap generated destinations with spaces in angle brackets.
 - Add 1rem top padding to rendered editor Markdown headings through a shared heading line class, covering both ATX and Setext heading syntax while preserving the existing hanging ATX hash behavior.
 - Make sidebar icons and labels promote to the full theme foreground color on hover, selection, and active file states so they read white in dark mode and dark in light mode instead of staying gray.
 - Make fenced Markdown code blocks and inline code follow the editor font-size setting while keeping their monospace code font.

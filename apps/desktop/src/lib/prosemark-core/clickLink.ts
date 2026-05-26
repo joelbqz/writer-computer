@@ -3,6 +3,7 @@ import { HighlightStyle, syntaxHighlighting, syntaxTree } from "@codemirror/lang
 import { eventHandlersWithClass, iterChildren } from "./utils";
 import { markdownTags } from "./markdown/tags";
 import { Facet } from "@codemirror/state";
+import { normalizeMarkdownDestination } from "@/lib/paths";
 
 function getUrlFromLink(view: EditorView, pos: number): string | undefined {
   const tree = syntaxTree(view.state);
@@ -17,7 +18,7 @@ function getUrlFromLink(view: EditorView, pos: number): string | undefined {
 
       iterChildren(node.node.cursor(), (cursor) => {
         if (cursor.name === "URL") {
-          url = view.state.doc.sliceString(cursor.from, cursor.to);
+          url = normalizeMarkdownDestination(view.state.doc.sliceString(cursor.from, cursor.to));
           return true;
         }
       });
@@ -70,7 +71,7 @@ const getRawUrl = (view: EditorView, pos: number): string | undefined => {
       if (node.name !== "URL") return;
       if (node.node.parent?.name === "Link") return;
 
-      url = view.state.doc.sliceString(node.from, node.to);
+      url = normalizeMarkdownDestination(view.state.doc.sliceString(node.from, node.to));
       return true;
     },
   });

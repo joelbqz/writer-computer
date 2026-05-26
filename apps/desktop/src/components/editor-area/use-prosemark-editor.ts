@@ -64,7 +64,12 @@ import { getWorkspaceRoot } from "@/hooks/workspace-api";
 import { buildSlugIndex, parseDocumentHeadings } from "@/hooks/use-document-headings";
 import type { DocumentHeading } from "@/hooks/use-document-headings";
 import { parseDocument, parseFrontmatter } from "@/lib/frontmatter";
-import { getFileName, resolveLinkTarget } from "@/lib/paths";
+import {
+  formatMarkdownDestination,
+  getFileName,
+  normalizeMarkdownDestination,
+  resolveLinkTarget,
+} from "@/lib/paths";
 import { consumePendingAnchor, setPendingAnchor } from "@/lib/pending-anchor";
 import { logTimeline, mark } from "@/lib/startup-metrics";
 import * as tauri from "@/lib/tauri";
@@ -199,7 +204,7 @@ async function handleImagePaste(
   const format = file.type.split("/")[1] || "png";
   const result = await tauri.saveClipboardImage(filePath, imageData, format);
   if (isDisposed()) return;
-  const imageMarkdown = `![${file.name}](${result.relative_path})`;
+  const imageMarkdown = `![${file.name}](${formatMarkdownDestination(result.relative_path)})`;
   const cursor = view.state.selection.main.head;
   view.dispatch({ changes: { from: cursor, insert: imageMarkdown } });
 }
@@ -258,7 +263,7 @@ function getLinkHref(view: EditorView, pos: number) {
 
       do {
         if (cursor.name === "URL") {
-          href = view.state.doc.sliceString(cursor.from, cursor.to);
+          href = normalizeMarkdownDestination(view.state.doc.sliceString(cursor.from, cursor.to));
           return false;
         }
       } while (cursor.nextSibling());
@@ -277,7 +282,7 @@ function getRawUrl(view: EditorView, pos: number) {
     enter(node) {
       if (node.name !== "URL") return;
       if (node.node.parent?.name === "Link") return false;
-      href = view.state.doc.sliceString(node.from, node.to);
+      href = normalizeMarkdownDestination(view.state.doc.sliceString(node.from, node.to));
       return false;
     },
   });

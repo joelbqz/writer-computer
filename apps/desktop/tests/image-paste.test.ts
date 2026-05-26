@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vite-plus/test";
-import { getParentDir, resolveImagePath } from "../src/lib/paths";
+import { formatMarkdownDestination, getParentDir, resolveImagePath } from "../src/lib/paths";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -25,6 +25,24 @@ describe("resolveImagePath", () => {
   test("handles subdirectory paths", () => {
     expect(resolveImagePath("sub/dir/img.png", "/workspace/docs")).toBe(
       "/workspace/docs/sub/dir/img.png",
+    );
+  });
+
+  test("handles angle-bracket image paths with spaces", () => {
+    expect(resolveImagePath("<note assets/img file.png>", "/workspace/docs")).toBe(
+      "/workspace/docs/note assets/img file.png",
+    );
+  });
+
+  test("handles percent-encoded image paths with spaces", () => {
+    expect(resolveImagePath("note%20assets/img%20file.png", "/workspace/docs")).toBe(
+      "/workspace/docs/note assets/img file.png",
+    );
+  });
+
+  test("formats generated image destinations with spaces", () => {
+    expect(formatMarkdownDestination("My Note-assets/image.png")).toBe(
+      "<My Note-assets/image.png>",
     );
   });
 });
