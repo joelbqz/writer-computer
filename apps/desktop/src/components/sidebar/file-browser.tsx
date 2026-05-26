@@ -25,16 +25,16 @@ export function FileBrowser() {
         <button
           type="button"
           onClick={() => openCommandPalette()}
-          className="relative flex w-full items-center rounded-lg border border-transparent bg-[var(--surface-input)] pl-[34px] pr-3 text-[13px] text-[var(--text-muted)] h-[var(--chrome-control-height)]"
+          className="relative flex w-full items-center rounded-lg border border-transparent bg-[var(--surface-input)] pl-[34px] pr-3 text-[13px] text-[var(--text-muted)] transition-colors hover:text-[var(--fg-base)] h-[var(--chrome-control-height)]"
         >
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fg-base)] opacity-[0.54]"
+            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-current"
           >
             <HugeiconsIcon icon={Search01Icon} size={16} color="currentColor" strokeWidth={2} />
           </span>
           Search
-          <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-[var(--text-muted)]">
+          <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-current">
             ⌘<span className="ml-0.5">P</span>
           </kbd>
         </button>

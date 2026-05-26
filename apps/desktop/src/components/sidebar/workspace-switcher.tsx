@@ -82,10 +82,10 @@ export function WorkspaceSwitcher() {
       type="button"
       onClick={() => void showMenu()}
       aria-label="Switch workspace"
-      className="flex h-[32px] w-full items-center gap-1.5 overflow-hidden rounded-lg pl-[10px] pr-2 text-left text-[13px] leading-[1.15] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-subtle)] hover:text-[var(--text-secondary)]"
+      className="flex h-[32px] w-full items-center gap-1.5 overflow-hidden rounded-lg pl-[10px] pr-2 text-left text-[13px] leading-[1.15] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-subtle)] hover:text-[var(--fg-base)]"
     >
       <span
-        className="flex w-5 shrink-0 items-center justify-center text-[var(--text-icon-muted)]"
+        className="flex w-5 shrink-0 items-center justify-center text-current"
         aria-hidden="true"
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" strokeLinejoin="round">

@@ -7,6 +7,7 @@
 ## Done
 
 - Markdown heading top padding: [`SPECs/heading-top-padding-spec.md`](SPECs/heading-top-padding-spec.md) — inject a shared editor heading class and use it to add 1rem top padding to Markdown headings.
+- Sidebar hover and active foreground polish — make sidebar icons and labels use full foreground color on hover, selection, and active states.
 - Empty list caret visibility: [`SPECs/empty-list-caret-spec.md`](SPECs/empty-list-caret-spec.md) — keep the caret visible at the body column on empty bullet and task-list items whose source marker is hidden by the list-prefix renderer.
 - List selection and TODO checkbox regression: [`SPECs/list-selection-todo-checkbox-regression-spec.md`](SPECs/list-selection-todo-checkbox-regression-spec.md) — replace list-prefix replace widgets with point widgets to stop selection/caret snaps, and render TODO checkboxes as a single non-native span so drag-selection and nested alignment work.
 - Mermaid canvas widget: [`SPECs/mermaid-canvas-widget-spec.md`](SPECs/mermaid-canvas-widget-spec.md) — render mermaid blocks in a fixed-height canvas-style frame with pan, zoom, reset-to-fit, and an edit-code toggle.

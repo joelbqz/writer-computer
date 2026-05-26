@@ -3,6 +3,7 @@
 ## 2026-05-26
 
 - Add 1rem top padding to rendered editor Markdown headings through a shared heading line class, covering both ATX and Setext heading syntax while preserving the existing hanging ATX hash behavior.
+- Make sidebar icons and labels promote to the full theme foreground color on hover, selection, and active file states so they read white in dark mode and dark in light mode instead of staying gray.
 
 ## 2026-05-25
 

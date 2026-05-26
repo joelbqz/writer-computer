@@ -63,11 +63,10 @@ export const FileTreeNode = memo(function FileTreeNode({
     input.select();
   }, [isRenaming]);
 
-  const toneClassName = entry.is_dir
-    ? "text-[var(--text-muted)]"
-    : isActive
-      ? "text-[var(--text-secondary)]"
-      : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]";
+  const isHighlighted = isActive || isSelected;
+  const toneClassName = isHighlighted
+    ? "text-[var(--fg-base)]"
+    : "text-[var(--text-muted)] hover:text-[var(--fg-base)]";
 
   function handleClick(event: MouseEvent<HTMLElement>) {
     if (isRenaming) return;
@@ -103,7 +102,7 @@ export const FileTreeNode = memo(function FileTreeNode({
         style={{ paddingLeft: depth === 0 ? 10 : depth * 12 + 6 }}
       >
         <span
-          className="flex w-5 shrink-0 items-center justify-center text-[var(--fg-base)] opacity-[0.54]"
+          className="flex w-5 shrink-0 items-center justify-center text-current"
           aria-hidden="true"
         >
           {entry.is_dir ? <FolderIcon isExpanded={isExpanded} /> : <FileIcon />}
@@ -146,10 +145,10 @@ export const FileTreeNode = memo(function FileTreeNode({
       onMouseDown={(e) => e.preventDefault()}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
-      className={`flex h-[32px] w-full items-center gap-1.5 overflow-hidden rounded-lg pr-2 text-left text-[13px] leading-[1.15] ${toneClassName} ${bgClassName}`}
+      className={`flex h-[32px] w-full items-center gap-1.5 overflow-hidden rounded-lg pr-2 text-left text-[13px] leading-[1.15] transition-colors ${toneClassName} ${bgClassName}`}
       style={{ paddingLeft: depth === 0 ? 10 : depth * 12 + 6 }}
     >
-      <span className="flex w-5 shrink-0 items-center justify-center text-[var(--fg-base)] opacity-[0.54]">
+      <span className="flex w-5 shrink-0 items-center justify-center text-current">
         {entry.is_dir ? <FolderIcon isExpanded={isExpanded} /> : <FileIcon />}
       </span>
       <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{displayName}</span>
