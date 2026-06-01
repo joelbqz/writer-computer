@@ -182,11 +182,12 @@ export interface StartupState {
   settings: Record<string, unknown>;
   recent_workspaces: string[];
   pending_open: PendingOpenPayload | null;
-  /** Prefetched workspace restore payload. Populated when
-   *  `window.restore-workspace` is enabled, there's no pending open, and the
-   *  most-recent recent workspace still exists on disk. The frontend hydrates
-   *  its stores synchronously from this bundle before the first render, so
-   *  React mounts with full content instead of an empty shell. */
+  /** Prefetched workspace restore payload. Populated for pending-open cold
+   *  starts in target-only mode, or when `window.restore-workspace` is
+   *  enabled, there's no pending open, and the most-recent recent workspace
+   *  still exists on disk. The frontend hydrates its stores synchronously
+   *  from this bundle before the first render, so React mounts with full
+   *  content instead of an empty shell. */
   restore_bundle: RestoreWorkspaceResponse | null;
 }
 

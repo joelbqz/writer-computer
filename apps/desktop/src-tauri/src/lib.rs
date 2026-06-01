@@ -44,6 +44,12 @@ fn queue_open_event(app: &tauri::AppHandle, label: &str, payload: PendingOpenPay
     let _ = app.emit_to(label, "open:from-drop", payload);
 }
 
+fn main_window_has_no_workspace(app: &tauri::AppHandle) -> bool {
+    app.state::<AppState>()
+        .get(MAIN_WINDOW_LABEL)
+        .is_some_and(|state| state.workspace_root.read().is_none())
+}
+
 /// Wire up per-window event handlers: drag-drop routes to the window's own
 /// pending-open queue, and the close/destroy event tears down the window's
 /// `WorkspaceState` (which drops the watcher, stopping FSEvents / inotify
@@ -487,6 +493,9 @@ pub fn run() {
                             match existing {
                                 Some(label) => {
                                     queue_open_event(_app, &label, payload);
+                                }
+                                None if main_window_has_no_workspace(_app) => {
+                                    queue_open_event(_app, MAIN_WINDOW_LABEL, payload);
                                 }
                                 None => {
                                     let _ = open_new_workspace_window(

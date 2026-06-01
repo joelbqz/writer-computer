@@ -19,7 +19,9 @@ async function handleOpenPayload(payload: PendingOpenPayload) {
   }
 
   if (payload.workspace !== current) {
-    await useWorkspaceStore.getState().openWorkspace(payload.workspace);
+    const bundle = await tauri.restoreWorkspace(payload.workspace);
+    await useWorkspaceStore.getState().restoreFromBundle(bundle, payload);
+    return;
   }
   if (payload.file) {
     await useEditorStore.getState().openFile(payload.file);
@@ -77,6 +79,17 @@ export function createPendingOpenDrainer(
 
 const drainPendingOpens = createPendingOpenDrainer(tauri.takePendingOpen, queueOpenPayload);
 
+export function applyStartupLaunchOverrides(
+  settings: Record<string, unknown>,
+  pendingOpen: PendingOpenPayload | null,
+): Record<string, unknown> {
+  if (!pendingOpen?.file) return settings;
+  return {
+    ...settings,
+    "appearance.sidebar-visible": false,
+  };
+}
+
 // Guard against React 18 StrictMode double-mount
 let startupInitiated = false;
 let startupReady: Promise<void> = Promise.resolve();
@@ -95,18 +108,19 @@ async function resolveStartup() {
     const startup = await tauri.getStartupState();
     mark("ipc:get_startup_state:end");
 
+    pendingOpen = startup.pending_open;
+
     useSettingsStore.getState().hydrateFromBackend({
-      settings: startup.settings,
+      settings: applyStartupLaunchOverrides(startup.settings, pendingOpen),
     });
 
     useWorkspaceStore.setState({
       recentWorkspaces: startup.recent_workspaces,
     });
 
-    pendingOpen = startup.pending_open;
-
     if (startup.restore_bundle) {
-      await useWorkspaceStore.getState().restoreFromBundle(startup.restore_bundle);
+      await useWorkspaceStore.getState().restoreFromBundle(startup.restore_bundle, pendingOpen);
+      if (pendingOpen) pendingOpen = null;
     }
   } catch (error) {
     console.error("Failed to resolve startup state", error);

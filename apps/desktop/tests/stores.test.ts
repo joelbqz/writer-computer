@@ -17,7 +17,7 @@ import { useUIStore } from "../src/stores/ui-store";
 import { useWorkspaceStore } from "../src/stores/workspace-store";
 import { toggleSidebar } from "../src/hooks/use-sidebar";
 import { toggleTheme } from "../src/hooks/use-theme";
-import { createPendingOpenDrainer } from "../src/hooks/use-open-drop";
+import { applyStartupLaunchOverrides, createPendingOpenDrainer } from "../src/hooks/use-open-drop";
 import { getEditorSessionSnapshot } from "../src/stores/editor-store";
 
 const mockedInvoke = vi.mocked(invoke);
@@ -78,6 +78,67 @@ describe("workspace-store", () => {
     expect(useEditorStore.getState().tabs).toEqual([
       { id: expect.any(String), location: { kind: "launcher" }, back: [], forward: [] },
     ]);
+  });
+
+  test("restoreFromBundle with a file launch target ignores saved session tabs", async () => {
+    const bundle = {
+      workspace: { root: "/ws", name: "ws", file_count: 0 },
+      entries: [],
+      recent_workspaces: ["/ws"],
+      session: {
+        tabs: [{ location: { kind: "file", path: "/ws/old.md" }, back: [], forward: [] }],
+        active_index: 0,
+      },
+      active_file: {
+        path: "/ws/target.md",
+        content: "---\ntitle: Target\n---\n\nBody",
+        modified_at: 1,
+      },
+    };
+
+    await useWorkspaceStore.getState().restoreFromBundle(bundle, {
+      workspace: "/ws",
+      file: "/ws/target.md",
+    });
+
+    const workspace = useWorkspaceStore.getState();
+    const editor = useEditorStore.getState();
+    expect(workspace.root).toBe("/ws");
+    expect(tabPaths()).toEqual(["/ws/target.md"]);
+    expect(editor.activeFilePath).toBe("/ws/target.md");
+    expect(editor.openFiles.get("/ws/target.md")?.title).toBe("Target");
+    expect(editor.openFiles.has("/ws/old.md")).toBe(false);
+    expect(mockedInvoke).not.toHaveBeenCalledWith("read_file", expect.anything());
+  });
+
+  test("restoreFromBundle with a folder launch target ignores saved session tabs", async () => {
+    const bundle = {
+      workspace: { root: "/ws", name: "ws", file_count: 0 },
+      entries: [],
+      recent_workspaces: ["/ws"],
+      session: {
+        tabs: [{ location: { kind: "file", path: "/ws/old.md" }, back: [], forward: [] }],
+        active_index: 0,
+      },
+      active_file: {
+        path: "/ws/old.md",
+        content: "Old",
+        modified_at: 1,
+      },
+    };
+
+    await useWorkspaceStore.getState().restoreFromBundle(bundle, {
+      workspace: "/ws",
+      file: null,
+    });
+
+    const editor = useEditorStore.getState();
+    expect(tabPaths()).toEqual([]);
+    expect(editor.tabs).toEqual([
+      { id: expect.any(String), location: { kind: "launcher" }, back: [], forward: [] },
+    ]);
+    expect(editor.activeFilePath).toBeNull();
+    expect(editor.openFiles.size).toBe(0);
   });
 
   test("toggleDirectory expands and collapses", async () => {
@@ -753,6 +814,35 @@ describe("workspace-store isStartupResolved", () => {
   test("setStartupResolved sets it to true", () => {
     useWorkspaceStore.getState().setStartupResolved();
     expect(useWorkspaceStore.getState().isStartupResolved).toBe(true);
+  });
+});
+
+describe("startup launch overrides", () => {
+  test("single-file launch starts with the sidebar hidden without mutating the source settings", () => {
+    const settings = {
+      "appearance.sidebar-visible": true,
+      "appearance.theme": "system",
+    };
+
+    const next = applyStartupLaunchOverrides(settings, {
+      workspace: "/ws",
+      file: "/ws/note.md",
+    });
+
+    expect(next).toEqual({
+      "appearance.sidebar-visible": false,
+      "appearance.theme": "system",
+    });
+    expect(settings["appearance.sidebar-visible"]).toBe(true);
+  });
+
+  test("folder launch keeps the persisted sidebar setting", () => {
+    const settings = {
+      "appearance.sidebar-visible": true,
+      "appearance.theme": "system",
+    };
+
+    expect(applyStartupLaunchOverrides(settings, { workspace: "/ws", file: null })).toBe(settings);
   });
 });
 

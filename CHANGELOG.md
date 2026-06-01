@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-06-01
+
+- Fix cold starts from a concrete folder or markdown file target, including `writer <path>` and OS file/folder opens. Pending-open startup now treats the launch target as authoritative: it hydrates the requested workspace in target-only mode instead of restoring the last workspace or saved tab session, opens exactly the requested file when one was provided, and starts single-file launches with the sidebar closed for that startup.
+
 ## 2026-05-28
 
 - Animate the sidebar folder caret so it rotates smoothly between collapsed (pointing right) and expanded (pointing down) instead of swapping icons instantly. The caret rotation is now the only animated transition on sidebar rows — the hover background highlight and the icon/label opacity changes apply instantly.

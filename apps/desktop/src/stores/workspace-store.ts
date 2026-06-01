@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { DirEntry } from "@/types/fs";
-import type { RestoreWorkspaceResponse } from "@/lib/tauri";
+import type { PendingOpenPayload, RestoreWorkspaceResponse } from "@/lib/tauri";
 import * as tauri from "@/lib/tauri";
 import { saveSession, loadSession } from "@/lib/session";
 import { getEditorSessionSnapshot, useEditorStore } from "@/stores/editor-store";
@@ -16,7 +16,10 @@ interface WorkspaceState {
   openWorkspace: (path: string) => Promise<void>;
   /** Hydrate from a prefetched `RestoreWorkspaceResponse` (startup cold-path
    *  and user-initiated switches via the `restore_workspace` IPC). */
-  restoreFromBundle: (bundle: RestoreWorkspaceResponse) => Promise<void>;
+  restoreFromBundle: (
+    bundle: RestoreWorkspaceResponse,
+    launchTarget?: PendingOpenPayload | null,
+  ) => Promise<void>;
   closeWorkspace: () => void;
   setStartupResolved: () => void;
   refreshDirectory: (path: string) => Promise<void>;
@@ -94,7 +97,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set({ root: null, directoryCache: new Map(), expandedDirs: new Set(), isIndexing: false });
   },
 
-  restoreFromBundle: async (bundle) => {
+  restoreFromBundle: async (bundle, launchTarget = null) => {
     // Clear editor state in case anything was hydrated by a parallel hook.
     useEditorStore.setState({
       openFiles: new Map(),
@@ -110,6 +113,25 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       expandedDirs: new Set(),
       recentWorkspaces: bundle.recent_workspaces,
     });
+
+    if (launchTarget) {
+      if (launchTarget.file) {
+        await useEditorStore.getState().restoreSession(
+          [
+            {
+              location: { kind: "file", path: launchTarget.file },
+              back: [],
+              forward: [],
+            },
+          ],
+          0,
+          bundle.active_file,
+        );
+      } else {
+        useEditorStore.getState().ensureLauncherTab();
+      }
+      return;
+    }
 
     if (bundle.session && bundle.session.tabs && bundle.session.tabs.length > 0) {
       // Fire-and-forget: `restoreSession` populates the active tab

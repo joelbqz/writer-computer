@@ -228,15 +228,23 @@ pub struct RestoreWorkspaceResponse {
     pub active_file: Option<FileContent>,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) enum RestoreBundleMode {
+    RestoreSession,
+    LaunchTarget { file: Option<String> },
+}
+
 /// Shared workspace-restore body used by both the `restore_workspace` IPC
 /// (user-initiated workspace switches) and `get_startup_state` (cold start).
 /// Prepares workspace state synchronously, then fans out directory, recents,
-/// and session reads in parallel via `spawn_blocking`, and finally prefetches
-/// the active tab's file content when the session has one.
+/// and optional session reads in parallel via `spawn_blocking`, and finally
+/// prefetches the active file content when either the session or launch target
+/// names one.
 pub(crate) async fn build_restore_bundle(
     app: &tauri::AppHandle,
     label: &str,
     path: &str,
+    mode: RestoreBundleMode,
 ) -> Result<RestoreWorkspaceResponse, AppError> {
     // Workspace state mutations (watcher, ignore matcher, indexing thread)
     // happen synchronously up front so the parallel reads below see
@@ -267,10 +275,14 @@ pub(crate) async fn build_restore_bundle(
             load_recent_workspaces(&app).unwrap_or_default()
         })
     };
-    let session_handle = {
+    let session_handle = if matches!(&mode, RestoreBundleMode::RestoreSession) {
         let app = app.clone();
         let root = canonical_root.clone();
-        tauri::async_runtime::spawn_blocking(move || load_session_impl(&app, &root))
+        Some(tauri::async_runtime::spawn_blocking(move || {
+            load_session_impl(&app, &root)
+        }))
+    } else {
+        None
     };
 
     let entries = entries_handle
@@ -279,14 +291,20 @@ pub(crate) async fn build_restore_bundle(
     let recent_workspaces = recents_handle
         .await
         .map_err(|e| AppError::Io(e.to_string()))?;
-    let session = session_handle
-        .await
-        .map_err(|e| AppError::Io(e.to_string()))??;
+    let session = if let Some(handle) = session_handle {
+        handle.await.map_err(|e| AppError::Io(e.to_string()))??
+    } else {
+        None
+    };
 
-    // If the session has an active tab, pre-fetch its content so the editor
-    // can mount with the file already loaded — saves another sequential IPC
-    // and the 40 ms `OPEN_FILE_GRACE_MS` wait on the frontend side.
-    let active_file = if let Some(active_path) = active_session_path(session.as_ref()) {
+    // If the restore mode names an active file, pre-fetch its content so the
+    // editor can mount with the file already loaded — saves another
+    // sequential IPC and the 40 ms `OPEN_FILE_GRACE_MS` wait on the frontend.
+    let active_path = match mode {
+        RestoreBundleMode::RestoreSession => active_session_path(session.as_ref()),
+        RestoreBundleMode::LaunchTarget { file } => file,
+    };
+    let active_file = if let Some(active_path) = active_path {
         tauri::async_runtime::spawn_blocking(move || read_file_impl(&active_path).ok())
             .await
             .map_err(|e| AppError::Io(e.to_string()))?
@@ -310,7 +328,7 @@ pub async fn restore_workspace(
     app: tauri::AppHandle,
 ) -> Result<RestoreWorkspaceResponse, AppError> {
     let label = webview.label().to_string();
-    build_restore_bundle(&app, &label, &path).await
+    build_restore_bundle(&app, &label, &path, RestoreBundleMode::RestoreSession).await
 }
 
 fn active_session_path(session: Option<&SessionData>) -> Option<String> {

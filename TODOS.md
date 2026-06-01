@@ -6,6 +6,7 @@
 
 ## Done
 
+- Cold-start target open: [`SPECs/cold-start-target-open-spec.md`](SPECs/cold-start-target-open-spec.md) — when Writer starts from a CLI/dock/drop file or folder target, ignore the previous workspace/session and open only that target; file targets start with the sidebar closed.
 - Sidebar file label setting — add an `appearance.sidebar-file-label` enum (`title` | `filename`, default `title`) and have the sidebar file tree render the filename stem or the title-fallback chain accordingly. Also expose a "Rename..." action in the file context menu (files reuse the inline-rename flow folders already had).
 - Desktop dev script — make the root `dev` script delegate to the desktop package's Tauri dev workflow and keep desktop build/preview scripts on Vite+ commands.
 - Dependency lock refresh: [`SPECs/Agent/worksheet-dependency-lock-refresh.md`](SPECs/Agent/worksheet-dependency-lock-refresh.md) — refresh compatible Rust and JavaScript dependency lockfiles, including the `vite-plus` toolchain update, root TypeScript config alignment, and package-audit fixes.
