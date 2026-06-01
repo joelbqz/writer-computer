@@ -5,6 +5,7 @@
 //! fake without spawning the real desktop app.
 
 use crate::open_target::{self, PendingOpenPayload};
+use crate::virtual_workspace::{parse_files_csv, VirtualWorkspaceRegistry};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -16,6 +17,7 @@ const EXIT_RUNTIME: u8 = 3;
 
 pub const USAGE: &str = "\
 Usage: writer [PATH]
+       writer workspace <command>
 
 Open a folder or markdown file in the Writer desktop app.
 
@@ -27,9 +29,21 @@ Options:
   -h, --help        Print this help and exit.
   -V, --version     Print version and exit.
 
+Workspace commands:
+  workspace new <name> --files=<paths>       Create a virtual workspace.
+  workspace list                             List virtual workspaces.
+  workspace open <name>                      Open a virtual workspace.
+  workspace add <name> --files=<paths>       Add references.
+  workspace remove <name> --files=<paths>    Remove references only.
+  workspace delete <name>                    Delete the workspace definition.
+
+  <paths> is a comma-separated list of absolute file or folder paths.
+
 Environment:
   WRITER_APP_PATH   Override the path to the Writer bundle (macOS) or
                     binary (Linux/Windows). Useful for development builds.
+  WRITER_VIRTUAL_WORKSPACES_FILE
+                    Override the virtual workspace definition file.
 ";
 
 /// Version embedded at compile time from the Cargo package.
@@ -41,18 +55,35 @@ enum ParsedArgs {
     Help,
     Version,
     Open { path: Option<PathBuf> },
+    Workspace(WorkspaceCommand),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum WorkspaceCommand {
+    New { name: String, files: Vec<PathBuf> },
+    List,
+    Open { name: String },
+    Add { name: String, files: Vec<PathBuf> },
+    Remove { name: String, files: Vec<PathBuf> },
+    Delete { name: String },
 }
 
 #[derive(Debug, PartialEq, Eq)]
 enum ParseError {
+    MissingArgument(&'static str),
+    MissingFiles,
     UnknownFlag(String),
+    UnknownCommand(String),
     TooManyArgs,
 }
 
 impl std::fmt::Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::MissingArgument(arg) => write!(f, "missing argument: {arg}"),
+            Self::MissingFiles => write!(f, "missing required option: --files=<paths>"),
             Self::UnknownFlag(flag) => write!(f, "unknown option: {flag}"),
+            Self::UnknownCommand(command) => write!(f, "unknown command: {command}"),
             Self::TooManyArgs => write!(f, "expected at most one path argument"),
         }
     }
@@ -60,6 +91,14 @@ impl std::fmt::Display for ParseError {
 
 fn parse_args(argv: &[OsString]) -> Result<ParsedArgs, ParseError> {
     // argv[0] is the program name.
+    if argv
+        .get(1)
+        .and_then(|arg| arg.to_str())
+        .is_some_and(|arg| arg == "workspace")
+    {
+        return parse_workspace_args(&argv[2..]);
+    }
+
     let mut positional: Option<PathBuf> = None;
 
     for arg in argv.iter().skip(1) {
@@ -81,6 +120,87 @@ fn parse_args(argv: &[OsString]) -> Result<ParsedArgs, ParseError> {
     }
 
     Ok(ParsedArgs::Open { path: positional })
+}
+
+fn parse_workspace_args(args: &[OsString]) -> Result<ParsedArgs, ParseError> {
+    let command = args
+        .first()
+        .and_then(|arg| arg.to_str())
+        .ok_or(ParseError::MissingArgument("workspace command"))?;
+
+    let parsed = match command {
+        "new" => {
+            let name = workspace_name_arg(args, 1)?;
+            let files = parse_required_files(args, 2)?;
+            WorkspaceCommand::New { name, files }
+        }
+        "list" => {
+            if args.len() > 1 {
+                return Err(ParseError::TooManyArgs);
+            }
+            WorkspaceCommand::List
+        }
+        "open" => {
+            let name = workspace_name_arg(args, 1)?;
+            if args.len() > 2 {
+                return Err(ParseError::TooManyArgs);
+            }
+            WorkspaceCommand::Open { name }
+        }
+        "add" => {
+            let name = workspace_name_arg(args, 1)?;
+            let files = parse_required_files(args, 2)?;
+            WorkspaceCommand::Add { name, files }
+        }
+        "remove" => {
+            let name = workspace_name_arg(args, 1)?;
+            let files = parse_required_files(args, 2)?;
+            WorkspaceCommand::Remove { name, files }
+        }
+        "delete" => {
+            let name = workspace_name_arg(args, 1)?;
+            if args.len() > 2 {
+                return Err(ParseError::TooManyArgs);
+            }
+            WorkspaceCommand::Delete { name }
+        }
+        other if other.starts_with('-') => return Err(ParseError::UnknownFlag(other.to_string())),
+        other => return Err(ParseError::UnknownCommand(other.to_string())),
+    };
+
+    Ok(ParsedArgs::Workspace(parsed))
+}
+
+fn workspace_name_arg(args: &[OsString], index: usize) -> Result<String, ParseError> {
+    args.get(index)
+        .map(|arg| arg.to_string_lossy().to_string())
+        .filter(|name| !name.trim().is_empty())
+        .ok_or(ParseError::MissingArgument("name"))
+}
+
+fn parse_required_files(args: &[OsString], start: usize) -> Result<Vec<PathBuf>, ParseError> {
+    let mut files: Option<Vec<PathBuf>> = None;
+    let mut index = start;
+    while index < args.len() {
+        let arg = args[index].to_string_lossy();
+        if arg == "--files" {
+            index += 1;
+            let value = args
+                .get(index)
+                .ok_or(ParseError::MissingArgument("--files value"))?
+                .to_string_lossy()
+                .to_string();
+            files = Some(parse_files_csv(&value).map_err(|_| ParseError::MissingFiles)?);
+        } else if let Some(value) = arg.strip_prefix("--files=") {
+            files = Some(parse_files_csv(value).map_err(|_| ParseError::MissingFiles)?);
+        } else if arg.starts_with('-') {
+            return Err(ParseError::UnknownFlag(arg.to_string()));
+        } else {
+            return Err(ParseError::TooManyArgs);
+        }
+        index += 1;
+    }
+    files.ok_or(ParseError::MissingFiles)
 }
 
 /// Resolve a user-supplied path against `cwd`. Relative paths and `.` / `..`
@@ -147,7 +267,12 @@ fn launch_system(target: Option<&Path>) -> Result<(), LaunchError> {
     };
 
     if let Some(path) = target {
-        cmd.arg(path);
+        let target_arg = path.to_string_lossy();
+        if crate::virtual_workspace::is_virtual_workspace_uri(&target_arg) {
+            cmd.arg("--args").arg(path);
+        } else {
+            cmd.arg(path);
+        }
     }
 
     let status = cmd.status()?;
@@ -200,9 +325,77 @@ pub fn run<L: Launcher>(argv: Vec<OsString>, cwd: &Path, launcher: &L) -> ExitCo
             ExitCode::from(EXIT_SUCCESS)
         }
         Ok(ParsedArgs::Open { path }) => run_open(path, cwd, launcher),
+        Ok(ParsedArgs::Workspace(command)) => run_workspace(command, launcher),
         Err(err) => {
             fail_usage(err);
             ExitCode::from(EXIT_USAGE)
+        }
+    }
+}
+
+fn run_workspace<L: Launcher>(command: WorkspaceCommand, launcher: &L) -> ExitCode {
+    let registry = match VirtualWorkspaceRegistry::for_app_data() {
+        Ok(registry) => registry,
+        Err(err) => {
+            fail_runtime(&err);
+            return ExitCode::from(EXIT_RUNTIME);
+        }
+    };
+
+    let result = match command {
+        WorkspaceCommand::New { name, files } => registry.create(&name, &files).map(|workspace| {
+            println!(
+                "Created workspace {} ({} references)",
+                workspace.name,
+                workspace.references.len()
+            );
+        }),
+        WorkspaceCommand::List => registry.list().map(|workspaces| {
+            for workspace in workspaces {
+                println!(
+                    "{}\t{} references",
+                    workspace.name,
+                    workspace.references.len()
+                );
+            }
+        }),
+        WorkspaceCommand::Open { name } => match registry.get(&name) {
+            Ok(workspace) => {
+                let target = PathBuf::from(workspace.uri());
+                launcher.launch(Some(&target)).map_err(|err| {
+                    crate::virtual_workspace::VirtualWorkspaceError::Io(std::io::Error::other(
+                        err.to_string(),
+                    ))
+                })
+            }
+            Err(err) => Err(err),
+        },
+        WorkspaceCommand::Add { name, files } => registry.add(&name, &files).map(|workspace| {
+            println!(
+                "Updated workspace {} ({} references)",
+                workspace.name,
+                workspace.references.len()
+            );
+        }),
+        WorkspaceCommand::Remove { name, files } => {
+            registry.remove(&name, &files).map(|workspace| {
+                println!(
+                    "Updated workspace {} ({} references)",
+                    workspace.name,
+                    workspace.references.len()
+                );
+            })
+        }
+        WorkspaceCommand::Delete { name } => registry.delete(&name).map(|()| {
+            println!("Deleted workspace {name}");
+        }),
+    };
+
+    match result {
+        Ok(()) => ExitCode::from(EXIT_SUCCESS),
+        Err(err) => {
+            fail_runtime(&err);
+            ExitCode::from(EXIT_RUNTIME)
         }
     }
 }
@@ -342,6 +535,79 @@ mod tests {
     }
 
     #[test]
+    fn parse_workspace_new_with_files_equals() {
+        assert_eq!(
+            parse_args(&argv(&[
+                "writer",
+                "workspace",
+                "new",
+                "Drafts",
+                "--files=/tmp/a.md,/tmp/b"
+            ]))
+            .unwrap(),
+            ParsedArgs::Workspace(WorkspaceCommand::New {
+                name: "Drafts".into(),
+                files: vec![PathBuf::from("/tmp/a.md"), PathBuf::from("/tmp/b")]
+            })
+        );
+    }
+
+    #[test]
+    fn parse_workspace_add_with_files_value() {
+        assert_eq!(
+            parse_args(&argv(&[
+                "writer",
+                "workspace",
+                "add",
+                "Drafts",
+                "--files",
+                "/tmp/a.md,/tmp/b"
+            ]))
+            .unwrap(),
+            ParsedArgs::Workspace(WorkspaceCommand::Add {
+                name: "Drafts".into(),
+                files: vec![PathBuf::from("/tmp/a.md"), PathBuf::from("/tmp/b")]
+            })
+        );
+    }
+
+    #[test]
+    fn parse_workspace_list() {
+        assert_eq!(
+            parse_args(&argv(&["writer", "workspace", "list"])).unwrap(),
+            ParsedArgs::Workspace(WorkspaceCommand::List)
+        );
+    }
+
+    #[test]
+    fn parse_workspace_open() {
+        assert_eq!(
+            parse_args(&argv(&["writer", "workspace", "open", "Drafts"])).unwrap(),
+            ParsedArgs::Workspace(WorkspaceCommand::Open {
+                name: "Drafts".into()
+            })
+        );
+    }
+
+    #[test]
+    fn parse_workspace_delete() {
+        assert_eq!(
+            parse_args(&argv(&["writer", "workspace", "delete", "Drafts"])).unwrap(),
+            ParsedArgs::Workspace(WorkspaceCommand::Delete {
+                name: "Drafts".into()
+            })
+        );
+    }
+
+    #[test]
+    fn parse_workspace_remove_requires_files() {
+        assert!(matches!(
+            parse_args(&argv(&["writer", "workspace", "remove", "Drafts"])),
+            Err(ParseError::MissingFiles)
+        ));
+    }
+
+    #[test]
     fn parse_rejects_multiple_positional() {
         assert!(matches!(
             parse_args(&argv(&["writer", "a", "b"])),
@@ -444,6 +710,50 @@ mod tests {
             format!("{code:?}"),
             format!("{:?}", ExitCode::from(EXIT_RUNTIME))
         );
+    }
+
+    #[test]
+    fn run_workspace_open_launches_virtual_workspace_uri() {
+        let store = tempdir().unwrap();
+        let source = tempdir().unwrap();
+        let note = source.path().join("note.md");
+        fs::write(&note, "# Note").unwrap();
+        let store_file = store.path().join("virtual_workspaces.json");
+        std::env::set_var("WRITER_VIRTUAL_WORKSPACES_FILE", &store_file);
+
+        let launcher = FakeLauncher::new();
+        let cwd = tempdir().unwrap();
+        let create_code = run(
+            argv(&[
+                "writer",
+                "workspace",
+                "new",
+                "Drafts",
+                &format!("--files={}", note.display()),
+            ]),
+            cwd.path(),
+            &launcher,
+        );
+        assert_eq!(
+            format!("{create_code:?}"),
+            format!("{:?}", ExitCode::from(EXIT_SUCCESS))
+        );
+
+        let open_code = run(
+            argv(&["writer", "workspace", "open", "Drafts"]),
+            cwd.path(),
+            &launcher,
+        );
+        assert_eq!(
+            format!("{open_code:?}"),
+            format!("{:?}", ExitCode::from(EXIT_SUCCESS))
+        );
+        assert_eq!(
+            launcher.calls.borrow().as_slice(),
+            &[Some(PathBuf::from("writer-workspace://Drafts"))]
+        );
+
+        std::env::remove_var("WRITER_VIRTUAL_WORKSPACES_FILE");
     }
 
     #[test]

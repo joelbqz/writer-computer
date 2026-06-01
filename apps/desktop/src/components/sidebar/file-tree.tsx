@@ -19,7 +19,7 @@ import {
   renameOpenFile,
   rewritePathPrefix,
 } from "@/hooks/editor-api";
-import { useWorkspaceRoot } from "@/hooks/use-workspace";
+import { useIsVirtualWorkspace, useWorkspaceRoot } from "@/hooks/use-workspace";
 import * as tauri from "@/lib/tauri";
 import { getFileStem, getParentDir, getRelativePath } from "@/lib/paths";
 import { duplicateFile } from "./duplicate-file";
@@ -66,6 +66,7 @@ export function FileTree({ rootPath }: FileTreeProps) {
   const invalidatePath = useInvalidatePath();
   const rewriteExpandedDir = useRewriteExpandedDir();
   const workspaceRoot = useWorkspaceRoot();
+  const isVirtualWorkspace = useIsVirtualWorkspace();
   const fileLabelMode = useSetting("appearance.sidebar-file-label");
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
@@ -129,6 +130,9 @@ export function FileTree({ rootPath }: FileTreeProps) {
         // Plain click: clear selection and perform normal action
         setSelectedPaths(new Set());
         setSelectionAnchor(entry.path);
+        if (entry.missing) {
+          return;
+        }
         if (entry.is_dir) {
           void toggleDirectory(entry.path);
         } else {
@@ -430,6 +434,10 @@ export function FileTree({ rootPath }: FileTreeProps) {
 
   const handleContextMenu = useCallback(
     (_event: MouseEvent<HTMLElement>, entry: DirEntry) => {
+      if (isVirtualWorkspace || entry.missing) {
+        return;
+      }
+
       // If multiple items are selected and the right-clicked item is in the selection,
       // show the bulk menu
       if (selectedPaths.size >= 2 && selectedPaths.has(entry.path)) {
@@ -447,7 +455,13 @@ export function FileTree({ rootPath }: FileTreeProps) {
         handleFileContextMenu(entry);
       }
     },
-    [handleBulkContextMenu, handleFileContextMenu, handleFolderContextMenu, selectedPaths],
+    [
+      handleBulkContextMenu,
+      handleFileContextMenu,
+      handleFolderContextMenu,
+      isVirtualWorkspace,
+      selectedPaths,
+    ],
   );
 
   if (flatItems.length === 0) {

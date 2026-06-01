@@ -68,7 +68,9 @@ pub async fn get_startup_state(
     } else if restore_enabled {
         recent_workspaces
             .first()
-            .filter(|path| Path::new(path).is_dir())
+            .filter(|path| {
+                crate::virtual_workspace::is_virtual_workspace_uri(path) || Path::new(path).is_dir()
+            })
             .cloned()
     } else {
         None

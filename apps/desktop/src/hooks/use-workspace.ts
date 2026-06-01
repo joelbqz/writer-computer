@@ -2,6 +2,7 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 
 export function useWorkspace() {
   const root = useWorkspaceStore((s) => s.root);
+  const isVirtual = useWorkspaceStore((s) => s.isVirtual);
   const isIndexing = useWorkspaceStore((s) => s.isIndexing);
   const openWorkspace = useWorkspaceStore((s) => s.openWorkspace);
   const closeWorkspace = useWorkspaceStore((s) => s.closeWorkspace);
@@ -9,6 +10,7 @@ export function useWorkspace() {
   const removeRecentWorkspace = useWorkspaceStore((s) => s.removeRecentWorkspace);
   return {
     root,
+    isVirtual,
     isIndexing,
     openWorkspace,
     closeWorkspace,
@@ -23,4 +25,8 @@ export function useIsStartupResolved() {
 
 export function useWorkspaceRoot() {
   return useWorkspaceStore((s) => s.root);
+}
+
+export function useIsVirtualWorkspace() {
+  return useWorkspaceStore((s) => s.isVirtual);
 }

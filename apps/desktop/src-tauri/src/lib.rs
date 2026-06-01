@@ -8,12 +8,13 @@ pub mod open_target;
 mod state;
 #[cfg(desktop)]
 mod updater;
+pub mod virtual_workspace;
 mod watcher;
 pub mod writer_cli;
 
 use commands::settings::init_window_settings;
 use error::AppError;
-use open_target::resolve_path;
+use open_target::resolve_arg;
 pub use open_target::PendingOpenPayload;
 use state::AppState;
 use std::path::PathBuf;
@@ -54,7 +55,7 @@ fn attach_window_handlers(app: &tauri::AppHandle, window: &WebviewWindow) {
     window.on_window_event(move |event| match event {
         WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) => {
             for path in paths {
-                if let Some(payload) = resolve_path(path) {
+                if let Some(payload) = crate::open_target::resolve_path(path) {
                     queue_open_event(&handle, &label, payload);
                     break;
                 }
@@ -81,6 +82,33 @@ pub(crate) fn open_new_workspace_window(
     workspace_path: String,
     file: Option<String>,
 ) -> Result<(), AppError> {
+    if virtual_workspace::is_virtual_workspace_uri(&workspace_path) {
+        let name = virtual_workspace::workspace_name_from_uri(&workspace_path)
+            .ok_or_else(|| AppError::NotFound(workspace_path.clone()))?;
+        virtual_workspace::VirtualWorkspaceRegistry::for_app_data()
+            .map_err(|e| AppError::Io(e.to_string()))?
+            .get(name)
+            .map_err(|e| AppError::NotFound(e.to_string()))?;
+
+        let workspace = PathBuf::from(&workspace_path);
+        if let Some(existing_label) = app.state::<AppState>().find_by_workspace(&workspace) {
+            if let Some(window) = app.get_webview_window(&existing_label) {
+                let _ = window.set_focus();
+                return Ok(());
+            }
+        }
+
+        let label = format!("w-{}", uuid::Uuid::new_v4().simple());
+        let state = app.state::<AppState>().get_or_create(&label);
+        init_window_settings(app, &state);
+        state.push_pending_open(PendingOpenPayload {
+            workspace: workspace_path,
+            file,
+        });
+
+        return build_workspace_window(app, &label);
+    }
+
     let raw_workspace = PathBuf::from(&workspace_path);
     if !raw_workspace.exists() || !raw_workspace.is_dir() {
         return Err(AppError::NotFound(workspace_path));
@@ -110,6 +138,10 @@ pub(crate) fn open_new_workspace_window(
         file,
     });
 
+    build_workspace_window(app, &label)
+}
+
+fn build_workspace_window(app: &tauri::AppHandle, label: &str) -> Result<(), AppError> {
     // Clone the main window's config (titlebar overlay, traffic-light
     // position, transparency, hudWindow vibrancy, `visible: false`) so
     // secondary windows look and animate identically. Rewrite the label,
@@ -125,11 +157,11 @@ pub(crate) fn open_new_workspace_window(
     let mut window_config = match window_config {
         Ok(c) => c,
         Err(e) => {
-            app.state::<AppState>().remove(&label);
+            app.state::<AppState>().remove(label);
             return Err(e);
         }
     };
-    window_config.label = label.clone();
+    window_config.label = label.to_string();
     window_config.center = false;
 
     let window = (|| -> Result<WebviewWindow, AppError> {
@@ -145,7 +177,7 @@ pub(crate) fn open_new_workspace_window(
             // Prevent an orphaned `WorkspaceState` from lingering in the
             // registry for a window that never opened (so `Destroyed` never
             // fires). Drops the watcher (none yet) and reclaims memory.
-            app.state::<AppState>().remove(&label);
+            app.state::<AppState>().remove(label);
             return Err(e);
         }
     };
@@ -343,7 +375,7 @@ fn run_cli_uninstall(app: tauri::AppHandle) {
 /// user just re-launched the app without an argument.
 fn handle_single_instance(app: &tauri::AppHandle, argv: Vec<String>) {
     let path_arg = argv.into_iter().nth(1);
-    match path_arg.and_then(|arg| resolve_path(&PathBuf::from(arg))) {
+    match path_arg.and_then(|arg| resolve_arg(&arg)) {
         Some(payload) => {
             if let Err(err) =
                 open_new_workspace_window(app, payload.workspace.clone(), payload.file.clone())
@@ -397,8 +429,7 @@ pub fn run() {
             // main window is the one that will host the requested workspace.
             let args: Vec<String> = std::env::args().collect();
             if args.len() > 1 {
-                let path = PathBuf::from(&args[1]);
-                if let Some(payload) = resolve_path(&path) {
+                if let Some(payload) = resolve_arg(&args[1]) {
                     main_state.push_pending_open(payload);
                 }
             }

@@ -30,6 +30,20 @@ pub fn index_workspace(
     app: tauri::AppHandle,
 ) -> Result<IndexStats, AppError> {
     let state = app.state::<AppState>().get_or_create(webview.label());
+    if let Some(workspace) = state.virtual_workspace.read().clone() {
+        let start = std::time::Instant::now();
+        let (indexed, dirs) = crate::virtual_workspace::index_workspace(&workspace);
+        let file_count = indexed.len();
+        let duration_ms = start.elapsed().as_millis() as u64;
+        *state.file_index.write() = indexed;
+        *state.dirs_with_markdown.write() = dirs;
+        state.index_ready.store(true, Ordering::Relaxed);
+        return Ok(IndexStats {
+            file_count,
+            duration_ms,
+        });
+    }
+
     let root = state
         .workspace_root
         .read()

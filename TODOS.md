@@ -6,6 +6,7 @@
 
 ## Done
 
+- Virtual workspaces: [`SPECs/virtual-workspaces-spec.md`](SPECs/virtual-workspaces-spec.md) — add named CLI-managed virtual collections of absolute file/folder references, preserving folder structure without copying, moving, renaming, or deleting referenced files.
 - Sidebar file label setting — add an `appearance.sidebar-file-label` enum (`title` | `filename`, default `title`) and have the sidebar file tree render the filename stem or the title-fallback chain accordingly. Also expose a "Rename..." action in the file context menu (files reuse the inline-rename flow folders already had).
 - Desktop dev script — make the root `dev` script delegate to the desktop package's Tauri dev workflow and keep desktop build/preview scripts on Vite+ commands.
 - Dependency lock refresh: [`SPECs/Agent/worksheet-dependency-lock-refresh.md`](SPECs/Agent/worksheet-dependency-lock-refresh.md) — refresh compatible Rust and JavaScript dependency lockfiles, including the `vite-plus` toolchain update, root TypeScript config alignment, and package-audit fixes.

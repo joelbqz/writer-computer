@@ -83,6 +83,7 @@ export const FileTreeNode = memo(function FileTreeNode({
     : fileLabelMode === "filename"
       ? getFileStem(entry.name)
       : editorTitle || entry.title || getFileStem(entry.name);
+  const renderedName = entry.missing ? `${displayName} (missing)` : displayName;
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto-focus and select the stem when entering rename mode.
@@ -98,6 +99,7 @@ export const FileTreeNode = memo(function FileTreeNode({
 
   function handleClick(event: MouseEvent<HTMLElement>) {
     if (isRenaming) return;
+    if (entry.missing) return;
     // All clicks go through onClick so the parent can manage selection.
     // The parent decides whether to also open/toggle based on modifiers.
     if (onClick) {
@@ -112,7 +114,7 @@ export const FileTreeNode = memo(function FileTreeNode({
   }
 
   function handleContextMenu(event: MouseEvent<HTMLElement>) {
-    if (!entry.is_dir && !entry.is_markdown) return;
+    if (entry.missing || (!entry.is_dir && !entry.is_markdown)) return;
     if (!onContextMenu) return;
     event.preventDefault();
     event.stopPropagation();
@@ -169,11 +171,17 @@ export const FileTreeNode = memo(function FileTreeNode({
       data-tree-path={entry.path}
       aria-selected={isActive}
       aria-expanded={entry.is_dir ? isExpanded : undefined}
-      aria-label={entry.is_dir ? `${entry.name} folder` : displayName}
+      aria-label={
+        entry.missing
+          ? `${renderedName} unavailable`
+          : entry.is_dir
+            ? `${entry.name} folder`
+            : displayName
+      }
       onMouseDown={(e) => e.preventDefault()}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
-      className={`group ${entry.is_dir ? "group/folder " : ""}flex h-[32px] w-full items-center gap-1.5 overflow-hidden rounded-lg pr-2 text-left text-[13px] leading-[1.15] text-[var(--fg-base)] ${bgClassName}`}
+      className={`group ${entry.is_dir ? "group/folder " : ""}flex h-[32px] w-full items-center gap-1.5 overflow-hidden rounded-lg pr-2 text-left text-[13px] leading-[1.15] text-[var(--fg-base)] ${entry.missing ? "cursor-default" : ""} ${bgClassName}`}
       style={{ paddingLeft: depth === 0 ? 10 : depth * 12 + 6 }}
     >
       <span className="relative flex w-5 shrink-0 items-center justify-center">
@@ -201,7 +209,7 @@ export const FileTreeNode = memo(function FileTreeNode({
       <span
         className={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${isHighlighted ? "opacity-100" : "opacity-60 group-hover:opacity-100"}`}
       >
-        {displayName}
+        {renderedName}
       </span>
     </button>
   );

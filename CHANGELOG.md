@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-06-01
+
+- Add CLI-managed virtual workspaces. `writer workspace new/list/open/add/remove/delete` now manages named collections of absolute file and folder references without copying, moving, renaming, or deleting the referenced files. Opening a virtual workspace shows a folder-style sidebar view that preserves nested folder structure, marks missing references as unavailable, and keeps virtual workspace remove/delete operations scoped to the workspace definition only. See `SPECs/virtual-workspaces-spec.md`.
+
 ## 2026-05-28
 
 - Animate the sidebar folder caret so it rotates smoothly between collapsed (pointing right) and expanded (pointing down) instead of swapping icons instantly. The caret rotation is now the only animated transition on sidebar rows — the hover background highlight and the icon/label opacity changes apply instantly.

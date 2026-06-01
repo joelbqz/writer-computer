@@ -7,6 +7,7 @@ import { getEditorSessionSnapshot, useEditorStore } from "@/stores/editor-store"
 
 interface WorkspaceState {
   root: string | null;
+  isVirtual: boolean;
   isIndexing: boolean;
   isStartupResolved: boolean;
   directoryCache: Map<string, DirEntry[]>;
@@ -28,6 +29,7 @@ interface WorkspaceState {
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   root: null,
+  isVirtual: false,
   isIndexing: false,
   isStartupResolved: false,
   directoryCache: new Map(),
@@ -65,6 +67,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const recents = await tauri.getRecentWorkspaces();
     set({
       root: info.root,
+      isVirtual: info.is_virtual ?? false,
       isIndexing: true,
       directoryCache: new Map([[info.root, entries]]),
       expandedDirs: new Set(),
@@ -91,7 +94,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       activeTabId: null,
       activeFilePath: null,
     });
-    set({ root: null, directoryCache: new Map(), expandedDirs: new Set(), isIndexing: false });
+    set({
+      root: null,
+      isVirtual: false,
+      directoryCache: new Map(),
+      expandedDirs: new Set(),
+      isIndexing: false,
+    });
   },
 
   restoreFromBundle: async (bundle) => {
@@ -105,6 +114,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
     set({
       root: bundle.workspace.root,
+      isVirtual: bundle.workspace.is_virtual ?? false,
       isIndexing: true,
       directoryCache: new Map([[bundle.workspace.root, bundle.entries]]),
       expandedDirs: new Set(),

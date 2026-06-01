@@ -3,6 +3,10 @@ use crate::commands::search::index_workspace_impl;
 use crate::error::AppError;
 use crate::ignore::WorkspaceIgnore;
 use crate::state::{AppState, WorkspaceState};
+use crate::virtual_workspace::{
+    is_virtual_workspace_uri, workspace_name_from_uri, VirtualWorkspaceError,
+    VirtualWorkspaceRegistry,
+};
 use crate::watcher::drop_watcher_off_thread;
 use crate::PendingOpenPayload;
 use serde::{Deserialize, Serialize};
@@ -17,6 +21,7 @@ pub struct WorkspaceInfo {
     pub root: String,
     pub name: String,
     pub file_count: usize,
+    pub is_virtual: bool,
 }
 
 /// Synchronous workspace setup shared by `open_workspace` and the bundled
@@ -54,6 +59,10 @@ fn prepare_workspace_state(
     label: &str,
     path: &str,
 ) -> Result<WorkspaceInfo, AppError> {
+    if is_virtual_workspace_uri(path) {
+        return prepare_virtual_workspace_state(app, label, path);
+    }
+
     let root = canonicalize_workspace_root(path)?;
     let canonical_path = root.to_string_lossy().to_string();
 
@@ -85,6 +94,7 @@ fn prepare_workspace_state(
 
     // Reset per-workspace state.
     *state.workspace_root.write() = Some(root.clone());
+    *state.virtual_workspace.write() = None;
     *state.file_index.write() = Vec::new();
     *state.dirs_with_markdown.write() = Default::default();
     state.index_ready.store(false, Ordering::Relaxed);
@@ -122,7 +132,67 @@ fn prepare_workspace_state(
         root: canonical_path,
         name,
         file_count: 0,
+        is_virtual: false,
     })
+}
+
+fn prepare_virtual_workspace_state(
+    app: &tauri::AppHandle,
+    label: &str,
+    uri: &str,
+) -> Result<WorkspaceInfo, AppError> {
+    let name = workspace_name_from_uri(uri).ok_or_else(|| AppError::NotFound(uri.to_string()))?;
+    let workspace = VirtualWorkspaceRegistry::for_app_data()
+        .map_err(virtual_error)?
+        .get(name)
+        .map_err(virtual_error)?;
+    let workspace_uri = workspace.uri();
+    let state = app.state::<AppState>().get_or_create(label);
+
+    let _ = state.workspace_epoch.fetch_add(1, Ordering::SeqCst) + 1;
+    {
+        let mut guard = state.cancel_index.write();
+        guard.store(true, Ordering::SeqCst);
+        *guard = Arc::new(AtomicBool::new(false));
+    }
+
+    *state.workspace_root.write() = Some(PathBuf::from(&workspace_uri));
+    *state.virtual_workspace.write() = Some(workspace.clone());
+    *state.workspace_ignore.write() = None;
+    *state.dirs_with_markdown.write() = Default::default();
+
+    let old_watcher = state.watcher_handle.write().take();
+    drop_watcher_off_thread(old_watcher);
+
+    if let Some(settings) = state.settings.write().as_mut() {
+        settings.clear_workspace();
+    }
+
+    let (indexed, dirs) = crate::virtual_workspace::index_workspace(&workspace);
+    let file_count = indexed.len();
+    *state.file_index.write() = indexed;
+    *state.dirs_with_markdown.write() = dirs;
+    state.index_ready.store(true, Ordering::Relaxed);
+
+    let _ = save_recent_workspace(app, &workspace_uri);
+    let _ = app.emit_to(label, "index:complete", file_count);
+
+    Ok(WorkspaceInfo {
+        root: workspace_uri,
+        name: workspace.name,
+        file_count,
+        is_virtual: true,
+    })
+}
+
+fn virtual_error(err: VirtualWorkspaceError) -> AppError {
+    match err {
+        VirtualWorkspaceError::MissingWorkspace(_) | VirtualWorkspaceError::NotFound(_) => {
+            AppError::NotFound(err.to_string())
+        }
+        VirtualWorkspaceError::AlreadyExists(_) => AppError::AlreadyExists(err.to_string()),
+        _ => AppError::Io(err.to_string()),
+    }
 }
 
 /// Background bootstrap for a freshly-opened workspace: starts the file
@@ -393,6 +463,10 @@ pub fn open_workspace_in_new_window(
     file: Option<String>,
     app: tauri::AppHandle,
 ) -> Result<(), AppError> {
+    if is_virtual_workspace_uri(&path) {
+        return crate::open_new_workspace_window(&app, path, file);
+    }
+
     let workspace = PathBuf::from(&path);
     if !workspace.exists() || !workspace.is_dir() {
         return Err(AppError::NotFound(path.clone()));

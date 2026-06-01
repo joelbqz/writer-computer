@@ -52,6 +52,19 @@ pub fn resolve_path(path: &Path) -> Option<PendingOpenPayload> {
     classify(path).ok()
 }
 
+/// Resolve an OS argv string. In addition to real filesystem paths, this
+/// accepts Writer's virtual workspace URI so the CLI can launch the desktop
+/// app on a saved virtual workspace without materializing a folder on disk.
+pub fn resolve_arg(arg: &str) -> Option<PendingOpenPayload> {
+    if crate::virtual_workspace::is_virtual_workspace_uri(arg) {
+        return Some(PendingOpenPayload {
+            workspace: arg.to_string(),
+            file: None,
+        });
+    }
+    resolve_path(Path::new(arg))
+}
+
 /// Strict variant used by the CLI. Produces a typed error the caller can
 /// turn into a stderr message.
 pub fn validate_and_resolve(path: &Path) -> Result<PendingOpenPayload, OpenTargetError> {
@@ -171,5 +184,12 @@ mod tests {
     fn lenient_resolver_returns_none_for_missing() {
         let dir = tempdir().unwrap();
         assert!(resolve_path(&dir.path().join("nope")).is_none());
+    }
+
+    #[test]
+    fn arg_resolver_accepts_virtual_workspace_uri() {
+        let payload = resolve_arg("writer-workspace://Drafts").unwrap();
+        assert_eq!(payload.workspace, "writer-workspace://Drafts");
+        assert!(payload.file.is_none());
     }
 }

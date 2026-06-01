@@ -1,6 +1,7 @@
 use crate::config::Settings;
 use crate::ignore::WorkspaceIgnore;
 use crate::open_target::PendingOpenPayload;
+use crate::virtual_workspace::VirtualWorkspace;
 use notify::RecommendedWatcher;
 use parking_lot::{Mutex, RwLock};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -17,6 +18,7 @@ use std::time::Instant;
 /// without clobbering each other.
 pub struct WorkspaceState {
     pub workspace_root: RwLock<Option<PathBuf>>,
+    pub virtual_workspace: RwLock<Option<VirtualWorkspace>>,
     pub file_index: RwLock<Vec<IndexedFile>>,
     pub dirs_with_markdown: RwLock<HashSet<PathBuf>>,
     /// Set to `true` after the first full index completes.
@@ -62,6 +64,7 @@ impl Default for WorkspaceState {
     fn default() -> Self {
         Self {
             workspace_root: RwLock::new(None),
+            virtual_workspace: RwLock::new(None),
             file_index: RwLock::new(Vec::new()),
             dirs_with_markdown: RwLock::new(HashSet::new()),
             index_ready: AtomicBool::new(false),

@@ -1,6 +1,7 @@
 use crate::error::AppError;
 use crate::ignore::WorkspaceIgnore;
 use crate::state::{AppState, WorkspaceState};
+use crate::virtual_workspace::{VirtualDirectoryEntry, VirtualReferenceKind};
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -12,8 +13,10 @@ use tauri::Manager;
 pub struct DirEntry {
     pub name: String,
     pub path: String,
+    pub source_path: String,
     pub is_dir: bool,
     pub is_markdown: bool,
+    pub missing: bool,
     pub modified_at: u64,
     /// Document title extracted from frontmatter `title:` or leading `# ` heading.
     /// `None` for directories or files without a recognizable title.
@@ -167,6 +170,16 @@ pub fn read_directory_impl(
     path: &str,
     state: Option<&WorkspaceState>,
 ) -> Result<Vec<DirEntry>, AppError> {
+    if let Some(state) = state {
+        if let Some(workspace) = state.virtual_workspace.read().clone() {
+            if crate::virtual_workspace::is_virtual_workspace_uri(path) {
+                let entries = crate::virtual_workspace::read_directory(&workspace, path)
+                    .map_err(|err| AppError::Io(err.to_string()))?;
+                return Ok(entries.into_iter().map(dir_entry_from_virtual).collect());
+            }
+        }
+    }
+
     let dir_path = PathBuf::from(path);
     if !dir_path.exists() {
         return Err(AppError::NotFound(path.to_string()));
@@ -208,8 +221,10 @@ pub fn read_directory_impl(
                 dirs.push(DirEntry {
                     name,
                     path: entry_path.to_string_lossy().to_string(),
+                    source_path: entry_path.to_string_lossy().to_string(),
                     is_dir: true,
                     is_markdown: false,
+                    missing: false,
                     modified_at: modified_time(&entry_path),
                     title: None,
                 });
@@ -221,8 +236,10 @@ pub fn read_directory_impl(
                 files.push(DirEntry {
                     name,
                     path: entry_path.to_string_lossy().to_string(),
+                    source_path: entry_path.to_string_lossy().to_string(),
                     is_dir: false,
                     is_markdown: true,
+                    missing: false,
                     modified_at: modified_time(&entry_path),
                     title,
                 });
@@ -235,6 +252,30 @@ pub fn read_directory_impl(
     files.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     dirs.extend(files);
     Ok(dirs)
+}
+
+fn dir_entry_from_virtual(entry: VirtualDirectoryEntry) -> DirEntry {
+    let source = PathBuf::from(&entry.source_path);
+    let title = if entry.kind == VirtualReferenceKind::File && !entry.missing {
+        extract_title(&source)
+    } else {
+        None
+    };
+
+    DirEntry {
+        name: entry.name,
+        path: entry.path,
+        source_path: entry.source_path,
+        is_dir: entry.kind == VirtualReferenceKind::Folder,
+        is_markdown: entry.is_markdown,
+        missing: entry.missing,
+        modified_at: if entry.missing {
+            0
+        } else {
+            modified_time(&source)
+        },
+        title,
+    }
 }
 
 #[tauri::command]
@@ -334,8 +375,10 @@ pub fn create_directory_impl(path: &str) -> Result<DirEntry, AppError> {
     Ok(DirEntry {
         name,
         path: path.to_string(),
+        source_path: path.to_string(),
         is_dir: true,
         is_markdown: false,
+        missing: false,
         modified_at: modified_time(&dir_path),
         title: None,
     })

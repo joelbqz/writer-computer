@@ -46,7 +46,7 @@ export function CommandPalette() {
   const search = useCommandPaletteSearch();
   const setSearch = useSetCommandPaletteSearch();
   const { toggleSidebar } = useSidebar();
-  const { root, isIndexing, openWorkspace, closeWorkspace } = useWorkspace();
+  const { root, isVirtual, isIndexing, openWorkspace, closeWorkspace } = useWorkspace();
   const openFile = useOpenFile();
   const closeActiveTab = useCloseActiveTab();
   const closeTab = useCloseTab();
@@ -59,7 +59,7 @@ export function CommandPalette() {
   const trimmedSearch = search.trim();
   const fileQuery = isCreateIntent ? "" : search;
   const results = useFuzzySearch(fileQuery);
-  const createPath = root && trimmedSearch ? toCreatePath(root, trimmedSearch) : null;
+  const createPath = root && !isVirtual && trimmedSearch ? toCreatePath(root, trimmedSearch) : null;
 
   function matchesSearch(text: string, q: string) {
     return text.toLowerCase().includes(q.toLowerCase());
@@ -100,12 +100,13 @@ export function CommandPalette() {
         close();
       },
     },
-    root && {
-      id: "new-file",
-      label: "Create New File",
-      description: "Command",
-      run: () => openCommandPalette("create-file"),
-    },
+    root &&
+      !isVirtual && {
+        id: "new-file",
+        label: "Create New File",
+        description: "Command",
+        run: () => openCommandPalette("create-file"),
+      },
     activeTabId && {
       id: "close-tab",
       label: "Close Current Tab",
