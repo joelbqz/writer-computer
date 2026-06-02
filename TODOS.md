@@ -6,6 +6,7 @@
 
 ## Done
 
+- Symlink support: [`SPECs/symlink-support-spec.md`](SPECs/symlink-support-spec.md) — show symlinked markdown files/folders in the sidebar and search index, preserve symlinks on save, and translate watcher target events back to visible workspace paths.
 - Table virtualization scroll stability: [`SPECs/table-virtualization-scroll-stability-spec.md`](SPECs/table-virtualization-scroll-stability-spec.md) — give folded markdown table widgets stable CodeMirror height estimates so scrolling through virtualized documents with tables does not suddenly resize the document or scrollbar.
 - Sidebar file label setting — add an `appearance.sidebar-file-label` enum (`title` | `filename`, default `title`) and have the sidebar file tree render the filename stem or the title-fallback chain accordingly. Also expose a "Rename..." action in the file context menu (files reuse the inline-rename flow folders already had).
 - Desktop dev script — make the root `dev` script delegate to the desktop package's Tauri dev workflow and keep desktop build/preview scripts on Vite+ commands.

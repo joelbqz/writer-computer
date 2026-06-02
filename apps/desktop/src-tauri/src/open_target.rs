@@ -80,14 +80,27 @@ fn classify(path: &Path) -> Result<PendingOpenPayload, OpenTargetError> {
         let canonical_parent = parent
             .canonicalize()
             .unwrap_or_else(|_| parent.to_path_buf());
-        let canonical_file = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        let file_path = visible_file_path(path, &canonical_parent);
         return Ok(PendingOpenPayload {
             workspace: canonical_parent.to_string_lossy().to_string(),
-            file: Some(canonical_file.to_string_lossy().to_string()),
+            file: Some(file_path.to_string_lossy().to_string()),
         });
     }
 
     Err(OpenTargetError::Unsupported(path.to_path_buf()))
+}
+
+fn visible_file_path(path: &Path, canonical_parent: &Path) -> PathBuf {
+    if path
+        .symlink_metadata()
+        .is_ok_and(|metadata| metadata.file_type().is_symlink())
+    {
+        if let Some(name) = path.file_name() {
+            return canonical_parent.join(name);
+        }
+    }
+
+    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 
 fn is_markdown(path: &Path) -> bool {
@@ -99,6 +112,8 @@ fn is_markdown(path: &Path) -> bool {
 mod tests {
     use super::*;
     use std::fs;
+    #[cfg(unix)]
+    use std::os::unix::fs::symlink;
     use tempfile::tempdir;
 
     #[test]
@@ -138,6 +153,33 @@ mod tests {
             let payload = validate_and_resolve(&path).unwrap();
             assert!(payload.file.is_some(), "{name} should resolve as file");
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_markdown_file_keeps_visible_workspace_path() {
+        let dir = tempdir().unwrap();
+        let target = tempdir().unwrap();
+        let real = target.path().join("real.md");
+        let link = dir.path().join("link.md");
+        fs::write(&real, "# Real").unwrap();
+        symlink(&real, &link).unwrap();
+
+        let payload = validate_and_resolve(&link).unwrap();
+
+        assert_eq!(
+            payload.workspace,
+            dir.path().canonicalize().unwrap().to_string_lossy()
+        );
+        assert_eq!(
+            payload.file.unwrap(),
+            dir.path()
+                .canonicalize()
+                .unwrap()
+                .join("link.md")
+                .to_string_lossy()
+                .to_string()
+        );
     }
 
     #[test]

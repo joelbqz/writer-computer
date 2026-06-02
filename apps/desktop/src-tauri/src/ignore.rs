@@ -59,6 +59,7 @@ impl WorkspaceIgnore {
             .git_global(false)
             .git_exclude(false)
             .parents(false)
+            .follow_links(true)
             .filter_entry(|entry| {
                 let name = entry.file_name().to_string_lossy();
                 name != ".git" && name != "node_modules"
@@ -135,6 +136,8 @@ pub fn is_gitignore_path(path: &Path) -> bool {
 mod tests {
     use super::*;
     use std::fs;
+    #[cfg(unix)]
+    use std::os::unix::fs::symlink;
     use tempfile::TempDir;
 
     fn touch(path: &Path, content: &str) {
@@ -239,6 +242,23 @@ mod tests {
             false
         ));
         assert!(!ignore.is_ignored(&dir.path().join("docs").join("final.md"), false));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn gitignore_inside_symlinked_directory_is_applied_to_link_path() {
+        let dir = TempDir::new().unwrap();
+        let target = TempDir::new().unwrap();
+        touch(&target.path().join(".gitignore"), "drafts/\n");
+        touch(&target.path().join("drafts").join("wip.md"), "# wip");
+        touch(&target.path().join("final.md"), "# final");
+        symlink(target.path(), dir.path().join("linked")).unwrap();
+
+        let ignore = WorkspaceIgnore::load(dir.path());
+
+        assert!(ignore.is_ignored(&dir.path().join("linked/drafts"), true));
+        assert!(ignore.is_ignored(&dir.path().join("linked/drafts/wip.md"), false));
+        assert!(!ignore.is_ignored(&dir.path().join("linked/final.md"), false));
     }
 
     #[test]

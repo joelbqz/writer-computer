@@ -6,6 +6,7 @@ mod error;
 mod ignore;
 pub mod open_target;
 mod state;
+mod symlink;
 #[cfg(desktop)]
 mod updater;
 mod watcher;

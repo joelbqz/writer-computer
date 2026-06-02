@@ -172,6 +172,7 @@ pub fn index_workspace_impl(
         .git_ignore(true)
         .git_global(true)
         .git_exclude(true)
+        .follow_links(true)
         .threads(threads)
         .build_parallel()
         .run(move || {
@@ -231,6 +232,8 @@ pub fn fuzzy_search_impl(query: &str, index: &[IndexedFile], limit: usize) -> Ve
 mod tests {
     use super::*;
     use std::fs;
+    #[cfg(unix)]
+    use std::os::unix::fs::symlink;
     use tempfile::TempDir;
 
     fn setup_workspace() -> TempDir {
@@ -271,6 +274,58 @@ mod tests {
         assert!(dirs.contains(&root.join("docs")));
         // .git should not be in the set
         assert!(!dirs.contains(&root.join(".git")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_index_workspace_follows_symlinked_markdown_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = tempfile::tempdir().unwrap();
+        let real = target.path().join("real.md");
+        fs::write(&real, "# Real").unwrap();
+        symlink(&real, dir.path().join("link.md")).unwrap();
+
+        let (index, dirs) = index_workspace_test(dir.path());
+
+        assert_eq!(index.len(), 1);
+        assert_eq!(index[0].relative_path, "link.md");
+        assert_eq!(index[0].path, dir.path().join("link.md"));
+        assert!(dirs.contains(dir.path()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_index_workspace_follows_symlinked_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = tempfile::tempdir().unwrap();
+        fs::create_dir_all(target.path().join("nested")).unwrap();
+        fs::write(target.path().join("nested/note.md"), "# Note").unwrap();
+        fs::write(target.path().join("nested/ignored.txt"), "text").unwrap();
+        symlink(target.path(), dir.path().join("linked")).unwrap();
+
+        let (index, dirs) = index_workspace_test(dir.path());
+
+        assert_eq!(index.len(), 1);
+        assert_eq!(index[0].relative_path, "linked/nested/note.md");
+        assert_eq!(index[0].path, dir.path().join("linked/nested/note.md"));
+        assert!(dirs.contains(&dir.path().join("linked")));
+        assert!(dirs.contains(&dir.path().join("linked/nested")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_index_workspace_symlink_loop_does_not_duplicate_root() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("a.md"), "# A").unwrap();
+        symlink(dir.path(), dir.path().join("loop")).unwrap();
+
+        let (index, _dirs) = index_workspace_test(dir.path());
+
+        let relative_paths: Vec<_> = index
+            .iter()
+            .map(|file| file.relative_path.as_str())
+            .collect();
+        assert_eq!(relative_paths, vec!["a.md"]);
     }
 
     #[test]

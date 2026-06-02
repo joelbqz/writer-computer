@@ -2,6 +2,7 @@ use crate::error::AppError;
 use crate::ignore::WorkspaceIgnore;
 use crate::state::{AppState, WorkspaceState};
 use serde::Serialize;
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
@@ -121,25 +122,44 @@ fn modified_time(path: &std::path::Path) -> u64 {
 /// workspace ignore matcher so ignored directories don't resurrect their
 /// parent in the sidebar.
 fn dir_contains_markdown_recursive(path: &Path, ignore: Option<&WorkspaceIgnore>) -> bool {
+    let mut visited_dirs = HashSet::new();
+    dir_contains_markdown_recursive_inner(path, ignore, &mut visited_dirs)
+}
+
+fn dir_contains_markdown_recursive_inner(
+    path: &Path,
+    ignore: Option<&WorkspaceIgnore>,
+    visited_dirs: &mut HashSet<PathBuf>,
+) -> bool {
+    let Ok(canonical) = path.canonicalize() else {
+        return false;
+    };
+    if !visited_dirs.insert(canonical) {
+        return false;
+    }
+
     let Ok(entries) = fs::read_dir(path) else {
         return false;
     };
     for entry in entries.flatten() {
-        let ft = entry.file_type();
-        let Ok(ft) = ft else { continue };
         let entry_path = entry.path();
+        let Ok(metadata) = crate::symlink::followed_metadata(&entry_path) else {
+            continue;
+        };
+        let is_dir = metadata.is_dir();
 
         if let Some(ignore) = ignore {
-            if ignore.is_ignored(&entry_path, ft.is_dir()) {
+            if ignore.is_ignored(&entry_path, is_dir) {
                 continue;
             }
         }
 
-        if ft.is_file() {
+        if metadata.is_file() {
             if entry_path.extension().and_then(|e| e.to_str()) == Some("md") {
                 return true;
             }
-        } else if ft.is_dir() && dir_contains_markdown_recursive(&entry_path, ignore) {
+        } else if is_dir && dir_contains_markdown_recursive_inner(&entry_path, ignore, visited_dirs)
+        {
             return true;
         }
     }
@@ -186,7 +206,6 @@ pub fn read_directory_impl(
     let mut files = Vec::new();
 
     for entry in fs::read_dir(&dir_path)?.flatten() {
-        let file_type = entry.file_type()?;
         let entry_path = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
 
@@ -197,13 +216,19 @@ pub fn read_directory_impl(
             continue;
         }
 
+        let metadata = match crate::symlink::followed_metadata(&entry_path) {
+            Ok(metadata) => metadata,
+            Err(_) => continue,
+        };
+        let is_dir = metadata.is_dir();
+
         if let Some(ignore) = ignore_matcher {
-            if ignore.is_ignored(&entry_path, file_type.is_dir()) {
+            if ignore.is_ignored(&entry_path, is_dir) {
                 continue;
             }
         }
 
-        if file_type.is_dir() {
+        if is_dir {
             if dir_contains_markdown(&entry_path, state) {
                 dirs.push(DirEntry {
                     name,
@@ -214,7 +239,7 @@ pub fn read_directory_impl(
                     title: None,
                 });
             }
-        } else if file_type.is_file() {
+        } else if metadata.is_file() {
             let is_markdown = entry_path.extension().and_then(|e| e.to_str()) == Some("md");
             if is_markdown {
                 let title = extract_title(&entry_path);
@@ -266,7 +291,8 @@ pub async fn read_file(path: String) -> Result<FileContent, AppError> {
 }
 
 pub fn write_file_impl(path: &str, content: &str) -> Result<WriteResult, AppError> {
-    let file_path = PathBuf::from(path);
+    let requested_path = PathBuf::from(path);
+    let file_path = crate::symlink::write_target_path(&requested_path)?;
 
     // Atomic write: write to temp file, then rename
     let dir = file_path
@@ -278,7 +304,7 @@ pub fn write_file_impl(path: &str, content: &str) -> Result<WriteResult, AppErro
 
     Ok(WriteResult {
         path: path.to_string(),
-        modified_at: modified_time(&file_path),
+        modified_at: modified_time(&requested_path),
     })
 }
 
@@ -294,7 +320,13 @@ pub async fn write_file(
     // the echo — if another window is watching the same workspace it
     // still sees a genuine file-changed event.
     let state = app.state::<AppState>().get_or_create(webview.label());
-    crate::watcher::record_write(&state, &PathBuf::from(&path));
+    let requested_path = PathBuf::from(&path);
+    crate::watcher::record_write(&state, &requested_path);
+    if let Ok(target_path) = crate::symlink::write_target_path(&requested_path) {
+        if target_path != requested_path {
+            crate::watcher::record_write(&state, &target_path);
+        }
+    }
 
     blocking(move || write_file_impl(&path, &content)).await
 }
@@ -433,6 +465,8 @@ pub async fn reveal_in_file_manager(path: String) -> Result<(), AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    use std::os::unix::fs::symlink;
     use tempfile::TempDir;
 
     fn setup_test_dir() -> TempDir {
@@ -501,6 +535,60 @@ mod tests {
         assert_eq!(result[0].name, "notes");
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn read_directory_includes_symlinked_markdown_file() {
+        let dir = TempDir::new().unwrap();
+        let target = TempDir::new().unwrap();
+        let real = target.path().join("target.md");
+        let link = dir.path().join("link.md");
+        fs::write(&real, "# Linked Title").unwrap();
+        symlink(&real, &link).unwrap();
+
+        let result = read_directory_impl(&dir.path().to_string_lossy(), None).unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].name, "link.md");
+        assert!(!result[0].is_dir);
+        assert!(result[0].is_markdown);
+        assert_eq!(result[0].title.as_deref(), Some("Linked Title"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn read_directory_includes_symlinked_directory_with_markdown() {
+        let dir = TempDir::new().unwrap();
+        let target = TempDir::new().unwrap();
+        fs::write(target.path().join("note.md"), "# Linked Note").unwrap();
+        fs::write(target.path().join("ignored.txt"), "text").unwrap();
+        let link = dir.path().join("linked");
+        symlink(target.path(), &link).unwrap();
+
+        let root_entries = read_directory_impl(&dir.path().to_string_lossy(), None).unwrap();
+        assert_eq!(root_entries.len(), 1);
+        assert_eq!(root_entries[0].name, "linked");
+        assert!(root_entries[0].is_dir);
+
+        let linked_entries = read_directory_impl(&link.to_string_lossy(), None).unwrap();
+        assert_eq!(linked_entries.len(), 1);
+        assert_eq!(linked_entries[0].name, "note.md");
+        assert_eq!(
+            linked_entries[0].path,
+            link.join("note.md").to_string_lossy()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn read_directory_symlink_cycle_does_not_recurse_forever() {
+        let dir = TempDir::new().unwrap();
+        symlink(dir.path(), dir.path().join("loop")).unwrap();
+
+        let result = read_directory_impl(&dir.path().to_string_lossy(), None).unwrap();
+
+        assert!(result.is_empty());
+    }
+
     #[test]
     fn test_read_file_returns_content() {
         let dir = TempDir::new().unwrap();
@@ -529,6 +617,27 @@ mod tests {
 
         let content = fs::read_to_string(&path).unwrap();
         assert_eq!(content, "new content");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_file_preserves_symlink_and_updates_target() {
+        let dir = TempDir::new().unwrap();
+        let target = TempDir::new().unwrap();
+        let real = target.path().join("target.md");
+        let link = dir.path().join("link.md");
+        fs::write(&real, "old").unwrap();
+        symlink(&real, &link).unwrap();
+
+        let result = write_file_impl(&link.to_string_lossy(), "new content").unwrap();
+
+        assert_eq!(result.path, link.to_string_lossy().to_string());
+        assert!(fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert_eq!(fs::read_to_string(&real).unwrap(), "new content");
+        assert_eq!(fs::read_to_string(&link).unwrap(), "new content");
     }
 
     #[test]

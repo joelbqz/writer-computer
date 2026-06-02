@@ -2,6 +2,7 @@ use crate::ignore::{is_gitignore_path, WorkspaceIgnore};
 use crate::state::{self, AppState, WorkspaceState};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
+use std::collections::HashSet;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
@@ -232,6 +233,111 @@ fn event_kind_str(kind: &EventKind) -> Option<&'static str> {
     }
 }
 
+fn watch_symlink_targets(
+    watcher: &mut RecommendedWatcher,
+    root: &Path,
+    aliases: &[crate::symlink::SymlinkAlias],
+) {
+    let mut watched = HashSet::new();
+    for alias in aliases {
+        if alias.target_path.starts_with(root) {
+            continue;
+        }
+        if !watched.insert(alias.target_path.clone()) {
+            continue;
+        }
+        watch_symlink_target(watcher, alias);
+    }
+}
+
+fn watch_symlink_target(watcher: &mut RecommendedWatcher, alias: &crate::symlink::SymlinkAlias) {
+    let mode = if alias.is_dir {
+        RecursiveMode::Recursive
+    } else {
+        RecursiveMode::NonRecursive
+    };
+    match watcher.watch(&alias.target_path, mode) {
+        Ok(()) => wlog!(
+            "watch symlink target: {} -> {}",
+            alias.link_path.display(),
+            alias.target_path.display()
+        ),
+        Err(err) => wlog!(
+            "watch symlink target failed: {} -> {} ({err})",
+            alias.link_path.display(),
+            alias.target_path.display()
+        ),
+    }
+}
+
+fn watch_symlink_target_from_state(
+    state: &WorkspaceState,
+    root: &Path,
+    alias: &crate::symlink::SymlinkAlias,
+    captured_epoch: u64,
+) {
+    if alias.target_path.starts_with(root) {
+        return;
+    }
+    if state.workspace_epoch.load(Ordering::SeqCst) != captured_epoch {
+        return;
+    }
+
+    let mut guard = state.watcher_handle.write();
+    if state.workspace_epoch.load(Ordering::SeqCst) != captured_epoch {
+        return;
+    }
+    let Some(watcher) = guard.as_mut() else {
+        wlog!(
+            "watch symlink target deferred; watcher not installed yet: {} -> {}",
+            alias.link_path.display(),
+            alias.target_path.display()
+        );
+        return;
+    };
+    watch_symlink_target(watcher, alias);
+}
+
+fn sync_symlink_alias_for_path(
+    state: &WorkspaceState,
+    root: &Path,
+    aliases: &mut Vec<crate::symlink::SymlinkAlias>,
+    path: &Path,
+    captured_epoch: u64,
+) {
+    let existing_index = aliases.iter().position(|alias| alias.link_path == path);
+    let next_alias = crate::symlink::alias_for_path(path);
+
+    match next_alias {
+        Some(alias) => {
+            if existing_index.is_some_and(|index| aliases[index] == alias) {
+                return;
+            }
+
+            let target_already_aliased = aliases.iter().enumerate().any(|(index, existing)| {
+                Some(index) != existing_index && existing.target_path == alias.target_path
+            });
+
+            if let Some(index) = existing_index {
+                aliases[index] = alias.clone();
+            } else {
+                aliases.push(alias.clone());
+            }
+            aliases.sort_by_key(|alias| std::cmp::Reverse(alias.target_path.components().count()));
+
+            if !target_already_aliased {
+                watch_symlink_target_from_state(state, root, &alias, captured_epoch);
+            }
+        }
+        None => {
+            if let Some(index) = existing_index {
+                let removed = aliases.remove(index);
+                wlog!("removed symlink alias: {}", removed.link_path.display());
+            }
+        }
+    }
+}
+
 /// Start a file watcher targeted at a specific window. All emitted events
 /// are routed via `emit_to(&window_label, ...)` so two windows hosting
 /// different workspaces don't cross-talk on file events. The watcher
@@ -255,6 +361,12 @@ pub fn start_watcher(
     )?;
 
     watcher.watch(&root_path, RecursiveMode::Recursive)?;
+
+    let mut symlink_aliases = crate::symlink::collect_symlink_aliases(&root_path);
+    watch_symlink_targets(&mut watcher, &root_path, &symlink_aliases);
+    if !symlink_aliases.is_empty() {
+        wlog!("loaded {} symlink aliases", symlink_aliases.len());
+    }
 
     let captured_epoch = epoch;
 
@@ -311,138 +423,167 @@ pub fn start_watcher(
             let root_for_filter = state.workspace_root.read().clone();
 
             for event in pending.drain(..) {
-                for path in &event.paths {
-                    if let Some(ref root) = root_for_filter {
-                        if should_ignore(path, root) {
-                            wlog!("filter[should_ignore]: {}", path.display());
-                            continue;
-                        }
-                    }
-
-                    // `.gitignore` changes defer to a background rebuild.
-                    if is_gitignore_path(path) {
-                        wlog!("filter[gitignore-change]: {}", path.display());
-                        rebuild_ignore = true;
-                        continue;
-                    }
-
-                    // FSEvents reports the path as it was at event time; by
-                    // the time we read it the file may already be gone, so
-                    // `path.is_dir()` is unreliable. Trust the event kind
-                    // first, fall back to the live stat. Computed up here
-                    // because `is_workspace_ignored` needs an accurate
-                    // is_dir to match dir-only gitignore rules (e.g. `dist/`)
-                    // against deleted directories.
-                    let is_folder_event = matches!(
-                        event.kind,
-                        EventKind::Remove(notify::event::RemoveKind::Folder)
-                    ) || matches!(
-                        event.kind,
-                        EventKind::Create(notify::event::CreateKind::Folder)
-                    );
-                    let is_dir = is_folder_event || path.is_dir();
-
-                    if is_workspace_ignored(&state, path, is_dir) {
-                        wlog!("filter[workspace_ignore]: {}", path.display());
-                        continue;
-                    }
-
-                    if is_self_write(&state, path) {
-                        continue;
-                    }
-
-                    let kind_str = match event_kind_str(&event.kind) {
-                        Some(k) => k,
-                        None => {
-                            wlog!("filter[unmapped_kind]: {:?} {}", event.kind, path.display());
-                            continue;
-                        }
-                    };
-
-                    let payload = FileChangeEvent {
-                        path: path.to_string_lossy().to_string(),
-                        kind: kind_str.to_string(),
-                    };
-
-                    if is_dir {
-                        wlog!(
-                            "emit fs:directory-changed kind={kind_str} {}",
-                            path.display()
-                        );
-                        let _ = handle.emit_to(label.clone(), "fs:directory-changed", &payload);
+                for raw_path in &event.paths {
+                    let logical_paths = if let Some(ref root) = root_for_filter {
+                        crate::symlink::logical_paths_for_event(raw_path, root, &symlink_aliases)
                     } else {
-                        // `.writer/config` changes reload settings instead.
-                        if is_config_file(path) {
-                            wlog!("emit settings:changed {}", path.display());
-                            if let Some(ref mut s) = *state.settings.write() {
-                                s.reload_workspace();
-                            }
-                            let _ = handle.emit_to(label.clone(), "settings:changed", ());
-                            continue;
-                        }
+                        vec![raw_path.clone()]
+                    };
 
-                        wlog!("emit fs:file-changed kind={kind_str} {}", path.display());
-                        let _ = handle.emit_to(label.clone(), "fs:file-changed", &payload);
-                    }
-
-                    // Treat Create, Remove, and Rename (Modify(Name)) as
-                    // directory-membership changes. Finder's "Move to Trash"
-                    // and `mv file /elsewhere` arrive as Modify(Name(_)) on
-                    // macOS — not Remove — so the previous code missed them
-                    // entirely.
-                    let is_membership_change = matches!(
-                        event.kind,
-                        EventKind::Create(_)
-                            | EventKind::Remove(_)
-                            | EventKind::Modify(notify::event::ModifyKind::Name(_))
-                    );
-                    if !is_membership_change {
+                    if logical_paths.is_empty() {
+                        wlog!("filter[outside_unmapped]: {}", raw_path.display());
                         continue;
                     }
 
-                    // Maintain the file index by reading current ground truth
-                    // (`path.exists()`) instead of trusting the event kind.
-                    // FSEvents coalesces Create+Remove for the same path
-                    // within one watch window, and Modify(Name) doesn't tell
-                    // us which side of the rename this path is.
-                    let is_md = path.extension().and_then(|e| e.to_str()) == Some("md");
-                    let path_exists = path.exists();
-                    if let Some(ref root) = root_for_filter {
-                        if is_md {
-                            if path_exists {
-                                add_to_index(&state, path, root);
-                            } else {
-                                remove_from_index(&state, path, root);
+                    for path in logical_paths {
+                        if let Some(ref root) = root_for_filter {
+                            if should_ignore(&path, root) {
+                                wlog!("filter[should_ignore]: {}", path.display());
+                                continue;
                             }
-                        } else if path_exists && is_dir {
-                            // A folder entered the watched tree (Create or
-                            // rename-in). FSEvents won't re-emit Create events
-                            // for descendants, so walk now to keep the index
-                            // in sync.
-                            add_subtree_to_index(&state, path, root);
-                        } else if !path_exists {
-                            // A vanished non-`.md` path could be a renamed-
-                            // away folder; FSEvents may not emit per-child
-                            // events for the descendants, so prune anything
-                            // the index still holds under it.
-                            remove_subtree_from_index(&state, path, root);
                         }
-                    }
 
-                    // Refresh the parent directory's listing. Without this,
-                    // non-`.md` file changes, folder deletes, and Finder
-                    // moves never trigger a sidebar refresh.
-                    if !is_dir {
-                        if let Some(parent) = path.parent() {
-                            wlog!("emit fs:directory-changed (parent) {}", parent.display());
-                            let _ = handle.emit_to(
-                                label.clone(),
-                                "fs:directory-changed",
-                                &FileChangeEvent {
-                                    path: parent.to_string_lossy().to_string(),
-                                    kind: "modified".to_string(),
-                                },
+                        // `.gitignore` changes defer to a background rebuild.
+                        if is_gitignore_path(&path) {
+                            wlog!("filter[gitignore-change]: {}", path.display());
+                            rebuild_ignore = true;
+                            continue;
+                        }
+
+                        // FSEvents reports the path as it was at event time; by
+                        // the time we read it the file may already be gone, so
+                        // `path.is_dir()` is unreliable. Trust the event kind
+                        // first, fall back to the live stat. Computed up here
+                        // because `is_workspace_ignored` needs an accurate
+                        // is_dir to match dir-only gitignore rules (e.g. `dist/`)
+                        // against deleted directories.
+                        let is_folder_event = matches!(
+                            event.kind,
+                            EventKind::Remove(notify::event::RemoveKind::Folder)
+                        ) || matches!(
+                            event.kind,
+                            EventKind::Create(notify::event::CreateKind::Folder)
+                        );
+                        let is_dir = is_folder_event || path.is_dir();
+
+                        if is_workspace_ignored(&state, &path, is_dir) {
+                            wlog!("filter[workspace_ignore]: {}", path.display());
+                            continue;
+                        }
+
+                        if is_self_write(&state, &path) {
+                            continue;
+                        }
+
+                        let kind_str = match event_kind_str(&event.kind) {
+                            Some(k) => k,
+                            None => {
+                                wlog!("filter[unmapped_kind]: {:?} {}", event.kind, path.display());
+                                continue;
+                            }
+                        };
+
+                        let payload = FileChangeEvent {
+                            path: path.to_string_lossy().to_string(),
+                            kind: kind_str.to_string(),
+                        };
+
+                        if is_dir {
+                            wlog!(
+                                "emit fs:directory-changed kind={kind_str} {}",
+                                path.display()
                             );
+                            let _ = handle.emit_to(label.clone(), "fs:directory-changed", &payload);
+                        } else {
+                            // `.writer/config` changes reload settings instead.
+                            if is_config_file(&path) {
+                                wlog!("emit settings:changed {}", path.display());
+                                if let Some(ref mut s) = *state.settings.write() {
+                                    s.reload_workspace();
+                                }
+                                let _ = handle.emit_to(label.clone(), "settings:changed", ());
+                                continue;
+                            }
+
+                            wlog!("emit fs:file-changed kind={kind_str} {}", path.display());
+                            let _ = handle.emit_to(label.clone(), "fs:file-changed", &payload);
+                        }
+
+                        // Treat Create, Remove, and Rename (Modify(Name)) as
+                        // directory-membership changes. Finder's "Move to Trash"
+                        // and `mv file /elsewhere` arrive as Modify(Name(_)) on
+                        // macOS — not Remove — so the previous code missed them
+                        // entirely.
+                        let is_membership_change = matches!(
+                            event.kind,
+                            EventKind::Create(_)
+                                | EventKind::Remove(_)
+                                | EventKind::Modify(notify::event::ModifyKind::Name(_))
+                        );
+                        if !is_membership_change {
+                            continue;
+                        }
+
+                        // Maintain the symlink alias map before touching the
+                        // index. A newly-created link should immediately map
+                        // target events back to the visible workspace path;
+                        // a removed/replaced link should stop doing so even if
+                        // its supplementary target watch keeps running until
+                        // workspace close.
+                        if let Some(ref root) = root_for_filter {
+                            sync_symlink_alias_for_path(
+                                &state,
+                                root,
+                                &mut symlink_aliases,
+                                &path,
+                                captured_epoch,
+                            );
+                        }
+
+                        // Maintain the file index by reading current ground truth
+                        // (`path.exists()`) instead of trusting the event kind.
+                        // FSEvents coalesces Create+Remove for the same path
+                        // within one watch window, and Modify(Name) doesn't tell
+                        // us which side of the rename this path is.
+                        let is_md = path.extension().and_then(|e| e.to_str()) == Some("md");
+                        let path_exists = path.exists();
+                        if let Some(ref root) = root_for_filter {
+                            if is_md {
+                                if path_exists {
+                                    add_to_index(&state, &path, root);
+                                } else {
+                                    remove_from_index(&state, &path, root);
+                                }
+                            } else if path_exists && is_dir {
+                                // A folder entered the watched tree (Create or
+                                // rename-in). FSEvents won't re-emit Create events
+                                // for descendants, so walk now to keep the index
+                                // in sync.
+                                add_subtree_to_index(&state, &path, root);
+                            } else if !path_exists {
+                                // A vanished non-`.md` path could be a renamed-
+                                // away folder; FSEvents may not emit per-child
+                                // events for the descendants, so prune anything
+                                // the index still holds under it.
+                                remove_subtree_from_index(&state, &path, root);
+                            }
+                        }
+
+                        // Refresh the parent directory's listing. Without this,
+                        // non-`.md` file changes, folder deletes, and Finder
+                        // moves never trigger a sidebar refresh.
+                        if !is_dir {
+                            if let Some(parent) = path.parent() {
+                                wlog!("emit fs:directory-changed (parent) {}", parent.display());
+                                let _ = handle.emit_to(
+                                    label.clone(),
+                                    "fs:directory-changed",
+                                    &FileChangeEvent {
+                                        path: parent.to_string_lossy().to_string(),
+                                        kind: "modified".to_string(),
+                                    },
+                                );
+                            }
                         }
                     }
                 }
@@ -507,6 +648,8 @@ pub fn drop_watcher_off_thread(watcher: Option<RecommendedWatcher>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    use std::os::unix::fs::symlink;
     use std::path::PathBuf;
 
     const ROOT: &str = "/workspace";
@@ -665,6 +808,52 @@ mod tests {
         add_subtree_to_index(&state, &root, &root);
         add_subtree_to_index(&state, &root, &root);
         assert_eq!(state.file_index.read().len(), 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn add_subtree_indexes_symlinked_directory_under_link_path() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let target = tempfile::TempDir::new().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        std::fs::create_dir_all(target.path().join("nested")).unwrap();
+        std::fs::write(target.path().join("nested/a.md"), "# a").unwrap();
+        let link = root.join("linked");
+        symlink(target.path(), &link).unwrap();
+
+        let state = WorkspaceState::default();
+        add_subtree_to_index(&state, &link, &root);
+
+        let index = state.file_index.read();
+        assert_eq!(index.len(), 1);
+        assert_eq!(index[0].path, link.join("nested/a.md"));
+        assert_eq!(index[0].relative_path, "linked/nested/a.md");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn sync_symlink_alias_adds_new_link_and_removes_deleted_link() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let target = tempfile::TempDir::new().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let real = target.path().join("target.md");
+        let link = root.join("link.md");
+        std::fs::write(&real, "# target").unwrap();
+        symlink(&real, &link).unwrap();
+
+        let state = WorkspaceState::default();
+        let mut aliases = Vec::new();
+        sync_symlink_alias_for_path(&state, &root, &mut aliases, &link, 0);
+
+        assert_eq!(aliases.len(), 1);
+        assert_eq!(aliases[0].link_path, link);
+        assert_eq!(aliases[0].target_path, real.canonicalize().unwrap());
+
+        std::fs::remove_file(&aliases[0].link_path).unwrap();
+        let link = root.join("link.md");
+        sync_symlink_alias_for_path(&state, &root, &mut aliases, &link, 0);
+
+        assert!(aliases.is_empty());
     }
 
     #[test]
