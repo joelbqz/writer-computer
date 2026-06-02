@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-06-02
+
+- Support symlinked Markdown files and symlinked directories in workspaces. The sidebar and search index now preserve the logical workspace path, show a symlink badge in the file tree, skip broken/recursive links, save through live file symlinks without replacing the link, and translate watcher events from canonical targets back to the visible symlink path.
+
 ## 2026-06-01
 
 - Stabilize scrolling through documents with folded Markdown tables. Table preview widgets now provide CodeMirror with a deterministic height estimate before they enter the measured viewport, so the editor no longer suddenly changes document height, scrollbar thumb size, or scroll position as tables virtualize in.

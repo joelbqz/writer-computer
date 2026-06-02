@@ -1,5 +1,6 @@
 use crate::error::AppError;
 use crate::state::{self, AppState, IndexedFile};
+use crate::symlink::{classify_path, is_markdown_path, SymlinkMap};
 use ignore::WalkBuilder;
 use parking_lot::Mutex;
 use serde::Serialize;
@@ -42,7 +43,7 @@ pub fn index_workspace(
     let epoch = state.workspace_epoch.load(Ordering::SeqCst);
 
     let start = std::time::Instant::now();
-    let (indexed, dirs) = index_workspace_impl(&root, cancel);
+    let (indexed, dirs, symlink_targets) = index_workspace_impl(&root, cancel);
     let file_count = indexed.len();
     let duration_ms = start.elapsed().as_millis() as u64;
 
@@ -55,7 +56,9 @@ pub fn index_workspace(
 
     *state.file_index.write() = indexed;
     *state.dirs_with_markdown.write() = dirs;
+    *state.symlink_targets.write() = symlink_targets;
     state.index_ready.store(true, Ordering::Relaxed);
+    crate::watcher::sync_symlink_watches(&state);
 
     Ok(IndexStats {
         file_count,
@@ -156,15 +159,17 @@ fn fuzzy_search_from(
 pub fn index_workspace_impl(
     root: &Path,
     cancel: Arc<AtomicBool>,
-) -> (Vec<IndexedFile>, HashSet<PathBuf>) {
+) -> (Vec<IndexedFile>, HashSet<PathBuf>, SymlinkMap) {
     let root = root.to_path_buf();
     let results: Arc<Mutex<Vec<IndexedFile>>> = Arc::new(Mutex::new(Vec::new()));
+    let symlink_targets: Arc<Mutex<SymlinkMap>> = Arc::new(Mutex::new(SymlinkMap::default()));
 
     let threads = std::thread::available_parallelism()
         .map(|n| n.get().min(8))
         .unwrap_or(4);
 
     let results_ref = Arc::clone(&results);
+    let symlink_targets_ref = Arc::clone(&symlink_targets);
     let root_ref = root.clone();
 
     WalkBuilder::new(&root)
@@ -172,10 +177,12 @@ pub fn index_workspace_impl(
         .git_ignore(true)
         .git_global(true)
         .git_exclude(true)
+        .follow_links(true)
         .threads(threads)
         .build_parallel()
         .run(move || {
             let results = Arc::clone(&results_ref);
+            let symlink_targets = Arc::clone(&symlink_targets_ref);
             let root = root_ref.clone();
             let cancel = Arc::clone(&cancel);
             Box::new(move |entry| {
@@ -186,16 +193,30 @@ pub fn index_workspace_impl(
                     Ok(e) => e,
                     Err(_) => return ignore::WalkState::Continue,
                 };
+                let info = match classify_path(entry.path()) {
+                    Ok(Some(info)) => info,
+                    Ok(None) => return ignore::WalkState::Continue,
+                    Err(_) => return ignore::WalkState::Continue,
+                };
+
+                if info.is_symlink {
+                    if let Some(canonical) = info.canonical_path.clone() {
+                        symlink_targets.lock().insert(
+                            entry.path().to_path_buf(),
+                            canonical,
+                            info.is_dir,
+                        );
+                    }
+                }
+
                 // Safety net: skip node_modules even without .gitignore
-                if entry.file_type().is_some_and(|ft| ft.is_dir()) {
+                if info.is_dir {
                     if entry.file_name() == "node_modules" {
                         return ignore::WalkState::Skip;
                     }
                     return ignore::WalkState::Continue;
                 }
-                if entry.file_type().is_some_and(|ft| ft.is_file())
-                    && entry.path().extension().and_then(|e| e.to_str()) == Some("md")
-                {
+                if info.is_file && is_markdown_path(entry.path()) {
                     let rel = entry
                         .path()
                         .strip_prefix(&root)
@@ -206,6 +227,8 @@ pub fn index_workspace_impl(
                         path: entry.path().to_path_buf(),
                         relative_path: rel,
                         name: entry.file_name().to_string_lossy().to_string(),
+                        is_symlink: info.is_symlink,
+                        canonical_path: info.canonical_path,
                     });
                 }
                 ignore::WalkState::Continue
@@ -213,13 +236,14 @@ pub fn index_workspace_impl(
         });
 
     let indexed = Arc::try_unwrap(results).unwrap().into_inner();
+    let symlink_targets = Arc::try_unwrap(symlink_targets).unwrap().into_inner();
     let dirs = state::rebuild_dirs_from_index(&indexed, &root);
-    (indexed, dirs)
+    (indexed, dirs, symlink_targets)
 }
 
 /// Test-only convenience: run an uncancellable index.
 #[cfg(test)]
-fn index_workspace_test(root: &Path) -> (Vec<IndexedFile>, HashSet<PathBuf>) {
+fn index_workspace_test(root: &Path) -> (Vec<IndexedFile>, HashSet<PathBuf>, SymlinkMap) {
     index_workspace_impl(root, Arc::new(AtomicBool::new(false)))
 }
 
@@ -249,14 +273,14 @@ mod tests {
     #[test]
     fn test_index_workspace_counts_md_files() {
         let dir = setup_workspace();
-        let (index, _dirs) = index_workspace_test(dir.path());
+        let (index, _dirs, _symlinks) = index_workspace_test(dir.path());
         assert_eq!(index.len(), 3); // readme.md, notes.md, docs/guide.md
     }
 
     #[test]
     fn test_index_workspace_ignores_hidden() {
         let dir = setup_workspace();
-        let (index, _dirs) = index_workspace_test(dir.path());
+        let (index, _dirs, _symlinks) = index_workspace_test(dir.path());
         // Should not include .git/config.md
         assert!(!index.iter().any(|f| f.relative_path.contains(".git")));
     }
@@ -265,7 +289,7 @@ mod tests {
     fn test_index_workspace_builds_dirs_with_markdown() {
         let dir = setup_workspace();
         let root = dir.path().to_path_buf();
-        let (_index, dirs) = index_workspace_test(dir.path());
+        let (_index, dirs, _symlinks) = index_workspace_test(dir.path());
         // The root and docs/ should be in the set
         assert!(dirs.contains(&root));
         assert!(dirs.contains(&root.join("docs")));
@@ -273,14 +297,62 @@ mod tests {
         assert!(!dirs.contains(&root.join(".git")));
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn test_index_workspace_follows_symlinked_markdown_file() {
+        let dir = TempDir::new().unwrap();
+        let target = dir.path().join("target.md");
+        let link = dir.path().join("linked.md");
+        fs::write(&target, "# target").unwrap();
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        let (index, _dirs, symlinks) = index_workspace_test(dir.path());
+
+        let linked = index.iter().find(|file| file.name == "linked.md").unwrap();
+        assert!(linked.is_symlink);
+        assert_eq!(linked.path, link);
+        assert!(!symlinks.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_index_workspace_follows_symlinked_directory() {
+        let dir = TempDir::new().unwrap();
+        let external = TempDir::new().unwrap();
+        fs::write(external.path().join("external.md"), "# external").unwrap();
+        std::os::unix::fs::symlink(external.path(), dir.path().join("external")).unwrap();
+
+        let (index, dirs, symlinks) = index_workspace_test(dir.path());
+
+        assert!(index
+            .iter()
+            .any(|file| file.relative_path == "external/external.md"));
+        assert!(dirs.contains(&dir.path().join("external")));
+        assert!(!symlinks.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_index_workspace_skips_symlink_loop() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("root.md"), "# root").unwrap();
+        std::os::unix::fs::symlink(dir.path(), dir.path().join("loop")).unwrap();
+
+        let (index, _dirs, _symlinks) = index_workspace_test(dir.path());
+
+        let root_hits = index.iter().filter(|file| file.name == "root.md").count();
+        assert_eq!(root_hits, 1);
+    }
+
     #[test]
     fn test_cancel_flag_short_circuits_walk() {
         // Pre-cancelled walker should return before visiting any file.
         let dir = setup_workspace();
         let cancel = Arc::new(AtomicBool::new(true));
-        let (index, dirs) = index_workspace_impl(dir.path(), cancel);
+        let (index, dirs, symlinks) = index_workspace_impl(dir.path(), cancel);
         assert!(index.is_empty());
         assert!(dirs.is_empty());
+        assert!(symlinks.is_empty());
     }
 
     #[test]
@@ -298,7 +370,7 @@ mod tests {
     #[test]
     fn test_fuzzy_search_ranks_by_relevance() {
         let dir = setup_workspace();
-        let (index, _dirs) = index_workspace_test(dir.path());
+        let (index, _dirs, _symlinks) = index_workspace_test(dir.path());
         let results = fuzzy_search_impl("readme", &index, 50);
         assert!(!results.is_empty());
         assert_eq!(results[0].filename, "readme.md");
@@ -308,7 +380,7 @@ mod tests {
     fn test_fuzzy_search_matches_space_separated_names() {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("No prior experience.md"), "# Note").unwrap();
-        let (index, _dirs) = index_workspace_test(dir.path());
+        let (index, _dirs, _symlinks) = index_workspace_test(dir.path());
 
         let results = fuzzy_search_impl("No prior experience", &index, 50);
 
@@ -319,7 +391,7 @@ mod tests {
     #[test]
     fn test_fuzzy_search_returns_match_indices() {
         let dir = setup_workspace();
-        let (index, _dirs) = index_workspace_test(dir.path());
+        let (index, _dirs, _symlinks) = index_workspace_test(dir.path());
         let results = fuzzy_search_impl("guide", &index, 50);
         assert!(!results.is_empty());
         assert!(!results[0].match_indices.is_empty());
@@ -328,7 +400,7 @@ mod tests {
     #[test]
     fn test_fuzzy_search_empty_query() {
         let dir = setup_workspace();
-        let (index, _dirs) = index_workspace_test(dir.path());
+        let (index, _dirs, _symlinks) = index_workspace_test(dir.path());
         let results = fuzzy_search_impl("", &index, 50);
         assert!(results.is_empty());
     }
@@ -336,7 +408,7 @@ mod tests {
     #[test]
     fn test_fuzzy_search_respects_limit() {
         let dir = setup_workspace();
-        let (index, _dirs) = index_workspace_test(dir.path());
+        let (index, _dirs, _symlinks) = index_workspace_test(dir.path());
         let results = fuzzy_search_impl("md", &index, 1);
         assert!(results.len() <= 1);
     }

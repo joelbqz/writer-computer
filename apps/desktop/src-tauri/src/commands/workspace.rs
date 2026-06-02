@@ -87,6 +87,8 @@ fn prepare_workspace_state(
     *state.workspace_root.write() = Some(root.clone());
     *state.file_index.write() = Vec::new();
     *state.dirs_with_markdown.write() = Default::default();
+    *state.symlink_targets.write() = Default::default();
+    *state.symlink_watch_paths.write() = Default::default();
     state.index_ready.store(false, Ordering::Relaxed);
 
     // Install a cheap bootstrap matcher synchronously so the first
@@ -185,7 +187,7 @@ fn run_workspace_bootstrap(
 
     // Walk the tree. The `cancel` flag lets a concurrent workspace switch
     // stop this walk at the next directory boundary.
-    let (indexed, dirs) = index_workspace_impl(&root, Arc::clone(&cancel));
+    let (indexed, dirs, symlink_targets) = index_workspace_impl(&root, Arc::clone(&cancel));
     if cancel.load(Ordering::Relaxed) {
         return;
     }
@@ -196,7 +198,9 @@ fn run_workspace_bootstrap(
     }
     *state.file_index.write() = indexed;
     *state.dirs_with_markdown.write() = dirs;
+    *state.symlink_targets.write() = symlink_targets;
     state.index_ready.store(true, Ordering::Relaxed);
+    crate::watcher::sync_symlink_watches(&state);
 
     let _ = handle.emit_to(label, "index:complete", file_count);
 }

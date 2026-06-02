@@ -1,6 +1,7 @@
 use crate::error::AppError;
 use crate::ignore::WorkspaceIgnore;
 use crate::state::{AppState, WorkspaceState};
+use crate::symlink::{classify_path, write_target};
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -14,6 +15,7 @@ pub struct DirEntry {
     pub path: String,
     pub is_dir: bool,
     pub is_markdown: bool,
+    pub is_symlink: bool,
     pub modified_at: u64,
     /// Document title extracted from frontmatter `title:` or leading `# ` heading.
     /// `None` for directories or files without a recognizable title.
@@ -121,25 +123,41 @@ fn modified_time(path: &std::path::Path) -> u64 {
 /// workspace ignore matcher so ignored directories don't resurrect their
 /// parent in the sidebar.
 fn dir_contains_markdown_recursive(path: &Path, ignore: Option<&WorkspaceIgnore>) -> bool {
+    let mut visited = std::collections::HashSet::new();
+    dir_contains_markdown_recursive_inner(path, ignore, &mut visited)
+}
+
+fn dir_contains_markdown_recursive_inner(
+    path: &Path,
+    ignore: Option<&WorkspaceIgnore>,
+    visited: &mut std::collections::HashSet<PathBuf>,
+) -> bool {
+    let canonical = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    if !visited.insert(canonical) {
+        return false;
+    }
+
     let Ok(entries) = fs::read_dir(path) else {
         return false;
     };
     for entry in entries.flatten() {
-        let ft = entry.file_type();
-        let Ok(ft) = ft else { continue };
         let entry_path = entry.path();
+        let Ok(Some(info)) = classify_path(&entry_path) else {
+            continue;
+        };
 
         if let Some(ignore) = ignore {
-            if ignore.is_ignored(&entry_path, ft.is_dir()) {
+            if ignore.is_ignored(&entry_path, info.is_dir) {
                 continue;
             }
         }
 
-        if ft.is_file() {
-            if entry_path.extension().and_then(|e| e.to_str()) == Some("md") {
+        if info.is_file {
+            if info.is_markdown {
                 return true;
             }
-        } else if ft.is_dir() && dir_contains_markdown_recursive(&entry_path, ignore) {
+        } else if info.is_dir && dir_contains_markdown_recursive_inner(&entry_path, ignore, visited)
+        {
             return true;
         }
     }
@@ -184,9 +202,9 @@ pub fn read_directory_impl(
 
     let mut dirs = Vec::new();
     let mut files = Vec::new();
+    let mut symlink_entries = Vec::new();
 
     for entry in fs::read_dir(&dir_path)?.flatten() {
-        let file_type = entry.file_type()?;
         let entry_path = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
 
@@ -197,36 +215,61 @@ pub fn read_directory_impl(
             continue;
         }
 
+        let Some(info) = classify_path(&entry_path)? else {
+            continue;
+        };
+
         if let Some(ignore) = ignore_matcher {
-            if ignore.is_ignored(&entry_path, file_type.is_dir()) {
+            if ignore.is_ignored(&entry_path, info.is_dir) {
                 continue;
             }
         }
 
-        if file_type.is_dir() {
+        if info.is_dir {
             if dir_contains_markdown(&entry_path, state) {
+                if info.is_symlink {
+                    if let Some(canonical) = info.canonical_path.clone() {
+                        symlink_entries.push((entry_path.clone(), canonical, info.is_dir));
+                    }
+                }
                 dirs.push(DirEntry {
                     name,
                     path: entry_path.to_string_lossy().to_string(),
                     is_dir: true,
                     is_markdown: false,
+                    is_symlink: info.is_symlink,
                     modified_at: modified_time(&entry_path),
                     title: None,
                 });
             }
-        } else if file_type.is_file() {
-            let is_markdown = entry_path.extension().and_then(|e| e.to_str()) == Some("md");
-            if is_markdown {
-                let title = extract_title(&entry_path);
-                files.push(DirEntry {
-                    name,
-                    path: entry_path.to_string_lossy().to_string(),
-                    is_dir: false,
-                    is_markdown: true,
-                    modified_at: modified_time(&entry_path),
-                    title,
-                });
+        } else if info.is_file && info.is_markdown {
+            if info.is_symlink {
+                if let Some(canonical) = info.canonical_path.clone() {
+                    symlink_entries.push((entry_path.clone(), canonical, info.is_dir));
+                }
             }
+            let title = extract_title(&entry_path);
+            files.push(DirEntry {
+                name,
+                path: entry_path.to_string_lossy().to_string(),
+                is_dir: false,
+                is_markdown: true,
+                is_symlink: info.is_symlink,
+                modified_at: modified_time(&entry_path),
+                title,
+            });
+        }
+    }
+
+    if let Some(state) = state {
+        if !symlink_entries.is_empty() {
+            {
+                let mut targets = state.symlink_targets.write();
+                for (logical, canonical, is_dir) in symlink_entries {
+                    targets.insert(logical, canonical, is_dir);
+                }
+            }
+            crate::watcher::sync_symlink_watches(state);
         }
     }
 
@@ -266,7 +309,8 @@ pub async fn read_file(path: String) -> Result<FileContent, AppError> {
 }
 
 pub fn write_file_impl(path: &str, content: &str) -> Result<WriteResult, AppError> {
-    let file_path = PathBuf::from(path);
+    let logical_path = PathBuf::from(path);
+    let file_path = write_target(&logical_path)?;
 
     // Atomic write: write to temp file, then rename
     let dir = file_path
@@ -278,7 +322,7 @@ pub fn write_file_impl(path: &str, content: &str) -> Result<WriteResult, AppErro
 
     Ok(WriteResult {
         path: path.to_string(),
-        modified_at: modified_time(&file_path),
+        modified_at: modified_time(&logical_path),
     })
 }
 
@@ -294,7 +338,13 @@ pub async fn write_file(
     // the echo — if another window is watching the same workspace it
     // still sees a genuine file-changed event.
     let state = app.state::<AppState>().get_or_create(webview.label());
-    crate::watcher::record_write(&state, &PathBuf::from(&path));
+    let logical_path = PathBuf::from(&path);
+    crate::watcher::record_write(&state, &logical_path);
+    if let Ok(target) = write_target(&logical_path) {
+        if target != logical_path {
+            crate::watcher::record_write(&state, &target);
+        }
+    }
 
     blocking(move || write_file_impl(&path, &content)).await
 }
@@ -336,6 +386,7 @@ pub fn create_directory_impl(path: &str) -> Result<DirEntry, AppError> {
         path: path.to_string(),
         is_dir: true,
         is_markdown: false,
+        is_symlink: false,
         modified_at: modified_time(&dir_path),
         title: None,
     })
@@ -489,9 +540,11 @@ mod tests {
 
         // Build index
         let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let (indexed, dirs) = crate::commands::search::index_workspace_impl(dir.path(), cancel);
+        let (indexed, dirs, symlinks) =
+            crate::commands::search::index_workspace_impl(dir.path(), cancel);
         *state.file_index.write() = indexed;
         *state.dirs_with_markdown.write() = dirs;
+        *state.symlink_targets.write() = symlinks;
         state.index_ready.store(true, Ordering::Relaxed);
 
         let result = read_directory_impl(&dir.path().to_string_lossy(), Some(&state)).unwrap();
@@ -529,6 +582,92 @@ mod tests {
 
         let content = fs::read_to_string(&path).unwrap();
         assert_eq!(content, "new content");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_read_directory_includes_markdown_file_symlink() {
+        let dir = TempDir::new().unwrap();
+        let target = dir.path().join("target.md");
+        let link = dir.path().join("linked.md");
+        fs::write(&target, "# Linked").unwrap();
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        let result = read_directory_impl(&dir.path().to_string_lossy(), None).unwrap();
+        let linked = result
+            .iter()
+            .find(|entry| entry.name == "linked.md")
+            .unwrap();
+
+        assert!(!linked.is_dir);
+        assert!(linked.is_markdown);
+        assert!(linked.is_symlink);
+        assert_eq!(linked.title.as_deref(), Some("Linked"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_read_directory_includes_symlinked_dir_with_markdown() {
+        let dir = TempDir::new().unwrap();
+        let external = TempDir::new().unwrap();
+        fs::write(external.path().join("note.md"), "# Note").unwrap();
+        let link = dir.path().join("external");
+        std::os::unix::fs::symlink(external.path(), &link).unwrap();
+
+        let result = read_directory_impl(&dir.path().to_string_lossy(), None).unwrap();
+        let linked = result
+            .iter()
+            .find(|entry| entry.name == "external")
+            .unwrap();
+
+        assert!(linked.is_dir);
+        assert!(linked.is_symlink);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_read_directory_hides_broken_symlink() {
+        let dir = TempDir::new().unwrap();
+        std::os::unix::fs::symlink(dir.path().join("missing.md"), dir.path().join("broken.md"))
+            .unwrap();
+
+        let result = read_directory_impl(&dir.path().to_string_lossy(), None).unwrap();
+
+        assert!(!result.iter().any(|entry| entry.name == "broken.md"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_write_file_preserves_symlink_and_updates_target() {
+        let dir = TempDir::new().unwrap();
+        let target = dir.path().join("target.md");
+        let link = dir.path().join("linked.md");
+        fs::write(&target, "old").unwrap();
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        write_file_impl(&link.to_string_lossy(), "new").unwrap();
+
+        assert!(fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert_eq!(fs::read_to_string(&target).unwrap(), "new");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_write_file_does_not_replace_broken_symlink() {
+        let dir = TempDir::new().unwrap();
+        let link = dir.path().join("broken.md");
+        std::os::unix::fs::symlink(dir.path().join("missing.md"), &link).unwrap();
+
+        let result = write_file_impl(&link.to_string_lossy(), "new");
+
+        assert!(result.is_err());
+        assert!(fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink());
     }
 
     #[test]

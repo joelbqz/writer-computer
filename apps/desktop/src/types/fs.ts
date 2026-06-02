@@ -3,6 +3,7 @@ export interface DirEntry {
   path: string;
   is_dir: boolean;
   is_markdown: boolean;
+  is_symlink: boolean;
   modified_at: number;
   title: string | null;
 }

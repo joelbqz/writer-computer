@@ -1,6 +1,7 @@
 use crate::config::Settings;
 use crate::ignore::WorkspaceIgnore;
 use crate::open_target::PendingOpenPayload;
+use crate::symlink::{SymlinkMap, WatchPath};
 use notify::RecommendedWatcher;
 use parking_lot::{Mutex, RwLock};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -29,6 +30,12 @@ pub struct WorkspaceState {
     /// Gitignore matcher for the current workspace. Rebuilt when any
     /// `.gitignore` file changes. `None` until the first workspace is opened.
     pub workspace_ignore: RwLock<Option<Arc<WorkspaceIgnore>>>,
+    /// Logical workspace symlink paths keyed by canonical target paths. The
+    /// watcher uses this to translate target events back to visible paths.
+    pub symlink_targets: RwLock<SymlinkMap>,
+    /// Extra symlink target watch registrations currently added to
+    /// `watcher_handle`. Cleared on workspace switch with the watcher itself.
+    pub symlink_watch_paths: RwLock<HashSet<WatchPath>>,
     /// Monotonic counter incremented on every workspace switch inside this
     /// window. Background tasks capture it at launch and re-check before
     /// writing; stale results are dropped. Watcher closures capture it too
@@ -65,6 +72,8 @@ pub struct IndexedFile {
     pub path: PathBuf,
     pub relative_path: String,
     pub name: String,
+    pub is_symlink: bool,
+    pub canonical_path: Option<PathBuf>,
 }
 
 impl Default for WorkspaceState {
@@ -77,6 +86,8 @@ impl Default for WorkspaceState {
             watcher_handle: RwLock::new(None),
             recent_writes: RwLock::new(HashMap::new()),
             workspace_ignore: RwLock::new(None),
+            symlink_targets: RwLock::new(SymlinkMap::default()),
+            symlink_watch_paths: RwLock::new(HashSet::new()),
             workspace_epoch: AtomicU64::new(0),
             cancel_index: RwLock::new(Arc::new(AtomicBool::new(false))),
             settings: RwLock::new(None),

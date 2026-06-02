@@ -44,6 +44,26 @@ function FileIcon() {
   return <HugeiconsIcon icon={File02Icon} size={16} color="currentColor" strokeWidth={1.8} />;
 }
 
+function SymlinkBadge() {
+  return (
+    <span
+      title="Symlink"
+      className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-[var(--bg-base)] text-[var(--text-muted)] ring-1 ring-[var(--bg-base)]"
+      aria-hidden="true"
+    >
+      <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
+        <path
+          d="M4.4 7.6 7.6 4.4M5 3.1l.6-.6a2 2 0 0 1 2.8 2.8l-.7.7M7 8.9l-.6.6a2 2 0 0 1-2.8-2.8l.7-.7"
+          stroke="currentColor"
+          strokeWidth="1.35"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
+  );
+}
+
 interface FileTreeNodeProps {
   entry: DirEntry;
   depth: number;
@@ -130,10 +150,11 @@ export const FileTreeNode = memo(function FileTreeNode({
         style={{ paddingLeft: depth === 0 ? 10 : depth * 12 + 6 }}
       >
         <span
-          className="flex w-5 antialiased shrink-0 items-center justify-center text-current"
+          className="relative flex w-5 antialiased shrink-0 items-center justify-center text-current"
           aria-hidden="true"
         >
           {entry.is_dir ? <FolderIcon isExpanded={isExpanded} /> : <FileIcon />}
+          {entry.is_symlink ? <SymlinkBadge /> : null}
         </span>
         <input
           ref={inputRef}
@@ -169,7 +190,11 @@ export const FileTreeNode = memo(function FileTreeNode({
       data-tree-path={entry.path}
       aria-selected={isActive}
       aria-expanded={entry.is_dir ? isExpanded : undefined}
-      aria-label={entry.is_dir ? `${entry.name} folder` : displayName}
+      aria-label={
+        entry.is_dir
+          ? `${entry.name}${entry.is_symlink ? " symlink" : ""} folder`
+          : `${displayName}${entry.is_symlink ? " symlink" : ""}`
+      }
       onMouseDown={(e) => e.preventDefault()}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
@@ -197,6 +222,7 @@ export const FileTreeNode = memo(function FileTreeNode({
             <FileIcon />
           </span>
         )}
+        {entry.is_symlink ? <SymlinkBadge /> : null}
       </span>
       <span
         className={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${isHighlighted ? "opacity-100" : "opacity-60 group-hover:opacity-100"}`}
