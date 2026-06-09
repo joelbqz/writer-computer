@@ -210,6 +210,37 @@ describe("editor-store", () => {
     expect(file?.titleSource).toBe("h1");
   });
 
+  test("updateScrollAnchor stores the anchor and bails out on identical values", async () => {
+    mockedInvoke.mockResolvedValue({
+      path: "/test/file.md",
+      content: "Hello",
+      modified_at: 1000,
+    });
+    await useEditorStore.getState().openFile("/test/file.md");
+
+    expect(useEditorStore.getState().openFiles.get("/test/file.md")?.scrollAnchor).toBeNull();
+
+    useEditorStore.getState().updateScrollAnchor("/test/file.md", { pos: 120, offsetPx: 8 });
+    const afterSet = useEditorStore.getState();
+    expect(afterSet.openFiles.get("/test/file.md")?.scrollAnchor).toEqual({
+      pos: 120,
+      offsetPx: 8,
+    });
+
+    // identical anchor → no state change (selector bail-out)
+    useEditorStore.getState().updateScrollAnchor("/test/file.md", { pos: 120, offsetPx: 8 });
+    expect(useEditorStore.getState().openFiles).toBe(afterSet.openFiles);
+
+    useEditorStore.getState().updateScrollAnchor("/test/file.md", null);
+    expect(useEditorStore.getState().openFiles.get("/test/file.md")?.scrollAnchor).toBeNull();
+  });
+
+  test("updateScrollAnchor for an unopened path is a no-op", () => {
+    const before = useEditorStore.getState().openFiles;
+    useEditorStore.getState().updateScrollAnchor("/nope.md", { pos: 1, offsetPx: 0 });
+    expect(useEditorStore.getState().openFiles).toBe(before);
+  });
+
   test("openNewTab appends and activates a launcher tab", () => {
     useEditorStore.getState().openNewTab();
 
@@ -915,6 +946,7 @@ describe("workspace-store closeWorkspace", () => {
             saveError: null,
             reloadVersion: 0,
             scrollPos: 0,
+            scrollAnchor: null,
             cursorPos: 0,
             displayDate: null,
             stats: { words: 0, characters: 0, paragraphs: 0 },

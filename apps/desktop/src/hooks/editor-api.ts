@@ -1,6 +1,7 @@
 import { getEditorSessionSnapshot, useEditorStore } from "@/stores/editor-store";
 export type { OpenFile, Tab, SessionTab } from "@/stores/editor-store";
 import type { SessionTab } from "@/stores/editor-store";
+import type { ScrollAnchor } from "@/components/editor-area/editor-scroll-geometry";
 
 export function getOpenFile(path: string) {
   return useEditorStore.getState().openFiles.get(path) ?? null;
@@ -48,6 +49,10 @@ export function updateCursorPos(path: string, pos: number) {
 
 export function updateScrollPos(path: string, pos: number) {
   useEditorStore.getState().updateScrollPos(path, pos);
+}
+
+export function updateScrollAnchor(path: string, anchor: ScrollAnchor | null) {
+  useEditorStore.getState().updateScrollAnchor(path, anchor);
 }
 
 export function updateFrontmatter(path: string, frontmatter: string | null) {

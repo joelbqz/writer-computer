@@ -17,6 +17,7 @@ import {
   type Location,
   type SerializedLocation,
 } from "@/components/editor-area/page-kinds";
+import type { ScrollAnchor } from "@/components/editor-area/editor-scroll-geometry";
 
 export interface OpenFile {
   path: string;
@@ -30,6 +31,11 @@ export interface OpenFile {
   saveError: string | null;
   reloadVersion: number;
   scrollPos: number;
+  // Content-anchored scroll position ({pos, offsetPx} of the top visible
+  // line), saved at navigation time. Preferred over the raw pixel
+  // scrollPos on restore: pixels go stale when the heightmap re-estimates
+  // after a document swap. Null until the file is first navigated away from.
+  scrollAnchor: ScrollAnchor | null;
   cursorPos: number;
   displayDate: string | null;
   stats: DocumentStats;
@@ -85,6 +91,7 @@ interface EditorState {
   setSaveError: (path: string, error: string | null) => void;
   reloadFromDisk: (path: string, rawContent: string) => void;
   updateScrollPos: (path: string, pos: number) => void;
+  updateScrollAnchor: (path: string, anchor: ScrollAnchor | null) => void;
   updateCursorPos: (path: string, pos: number) => void;
 }
 
@@ -138,6 +145,7 @@ function createLoadingFile(path: string): OpenFile {
     saveError: null,
     reloadVersion: 0,
     scrollPos: 0,
+    scrollAnchor: null,
     cursorPos: 0,
     displayDate: null,
     stats: EMPTY_STATS,
@@ -1129,6 +1137,22 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
       const files = new Map(state.openFiles);
       files.set(path, { ...file, scrollPos: pos });
+      return { openFiles: files };
+    });
+  },
+
+  updateScrollAnchor: (path: string, anchor: ScrollAnchor | null) => {
+    set((state) => {
+      const file = state.openFiles.get(path);
+      if (!file) return state;
+      const prev = file.scrollAnchor;
+      if (prev === anchor) return state;
+      if (prev && anchor && prev.pos === anchor.pos && prev.offsetPx === anchor.offsetPx) {
+        return state;
+      }
+
+      const files = new Map(state.openFiles);
+      files.set(path, { ...file, scrollAnchor: anchor });
       return { openFiles: files };
     });
   },

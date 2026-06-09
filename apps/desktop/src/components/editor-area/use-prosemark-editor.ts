@@ -74,7 +74,12 @@ import { consumePendingAnchor, setPendingAnchor } from "@/lib/pending-anchor";
 import { logTimeline, mark } from "@/lib/startup-metrics";
 import * as tauri from "@/lib/tauri";
 import { showAnchorWarning } from "./anchor-warning-store";
-import { findOuterScroller, findScrollContainer } from "./editor-scroll-geometry";
+import {
+  deriveScrollAnchor,
+  findOuterScroller,
+  findScrollContainer,
+  scrollTopForDocPixel,
+} from "./editor-scroll-geometry";
 import { heightmapDebug, heightmapDebugEnabled } from "./heightmap-debug";
 import { startHeightmapWarmup, type WarmupHandle, type WarmupTarget } from "./heightmap-warmup";
 
@@ -271,12 +276,8 @@ function scrollHeadingIntoView(
 ) {
   const pos = Math.min(heading.pos, view.state.doc.length);
   const block = view.lineBlockAt(pos);
-  const screenY = view.documentTop + block.top;
-  const scrollerRect = scroller.getBoundingClientRect();
-  const delta = screenY - scrollerRect.top - EDITOR_SAFE_SCROLL_MARGIN;
-  const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-  const next = Math.max(0, Math.min(scroller.scrollTop + delta, max));
-  scroller.scrollTo({ top: next, behavior });
+  const top = scrollTopForDocPixel(view, scroller, block.top - EDITOR_SAFE_SCROLL_MARGIN);
+  scroller.scrollTo({ top, behavior });
 }
 
 function scrollSameDocAnchor(view: EditorView, filePath: string, anchor: string) {
@@ -655,6 +656,13 @@ export function useProsemarkEditor(
       scrollCleanupRef.current = null;
       const view = viewRef.current;
       if (view) {
+        // Save the content anchor before teardown so reopening this file
+        // (in a fresh pane) restores the same visible content even though
+        // the new heightmap starts from estimates.
+        const scroller = findOuterScroller(view);
+        if (scroller && scroller.clientHeight > 0) {
+          editorApi.updateScrollAnchor(filePathRef.current, deriveScrollAnchor(view, scroller));
+        }
         closeEditorSearch({ view });
         view.destroy();
       }
@@ -701,7 +709,9 @@ export function useProsemarkEditor(
       warmupRef.current = startHeightmapWarmup({
         view,
         scroller: scrollContainer,
-        target: { kind: "px", top: file?.scrollPos ?? 0 },
+        target: file?.scrollAnchor
+          ? { kind: "anchor", ...file.scrollAnchor }
+          : { kind: "px", top: file?.scrollPos ?? 0 },
         isDisposed: () => disposedRef.current,
       });
 
@@ -733,6 +743,18 @@ export function useProsemarkEditor(
     warmupRef.current?.cancel();
     warmupRef.current = null;
 
+    const scrollContainer = resolveScrollContainer(
+      view.dom.parentElement!,
+      getScrollContainerRef.current,
+    );
+
+    // Remember where the outgoing doc was as content (line + offset).
+    // Raw pixels go stale the moment the replace re-estimates the heightmap.
+    const prevPath = prevPathRef.current;
+    if (pathChanged && prevPath && scrollContainer && scrollContainer.clientHeight > 0) {
+      editorApi.updateScrollAnchor(prevPath, deriveScrollAnchor(view, scrollContainer));
+    }
+
     prevPathRef.current = filePath;
     prevReloadVersionRef.current = reloadVersion;
 
@@ -762,10 +784,6 @@ export function useProsemarkEditor(
       scrollIntoView: false,
     });
 
-    const scrollContainer = resolveScrollContainer(
-      view.dom.parentElement!,
-      getScrollContainerRef.current,
-    );
     if (scrollContainer) {
       let target: WarmupTarget;
       if (pathChanged) {
@@ -780,7 +798,9 @@ export function useProsemarkEditor(
             // top (clear of the fade mask), pinned there while the new
             // doc's heightmap converges.
             { kind: "anchor", pos: heading.pos, offsetPx: -EDITOR_SAFE_SCROLL_MARGIN }
-          : { kind: "px", top: file?.scrollPos ?? 0 };
+          : file?.scrollAnchor
+            ? { kind: "anchor", ...file.scrollAnchor }
+            : { kind: "px", top: file?.scrollPos ?? 0 };
       } else {
         // External reload: the scroller didn't move, but the replace reset
         // the heightmap — pin whatever is on screen and re-converge.
