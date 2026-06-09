@@ -151,16 +151,78 @@ function sanitizeHTML(html: string): string {
   });
 }
 
+/* Estimated height for the folded HTML widget (see
+   SPECs/scrollbar-stability-spec.md). Without an estimate CodeMirror
+   heightmaps the widget at ~0 and the document height jumps when it
+   renders. The constants mirror `htmlBlockTheme` below — if the theme's
+   vertical metrics change, change these with them. A deterministic
+   heuristic over the sanitized markup is enough: close beats exact, and
+   nested containers double-counting slightly is acceptable. */
+const HTML_FONT_PX = 16;
+const HTML_LINE_PX = HTML_FONT_PX * 1.6; // .cm-html-block-widget lineHeight
+const HTML_WIDGET_PADDING_PX = HTML_FONT_PX * 0.25 * 2; // padding: 0.25em 0
+const HTML_IMG_HEIGHT_PX = 150;
+const HTML_HEADING_SCALE: Record<string, number> = {
+  h1: 1.6,
+  h2: 1.4,
+  h3: 1.2,
+  h4: 1,
+  h5: 1,
+  h6: 1,
+};
+
+export function estimateHtmlBlockHeight(sanitizedHtml: string): number {
+  let height = 0;
+
+  for (const match of sanitizedHtml.matchAll(/<(h[1-6])\b/gi)) {
+    const scale = HTML_HEADING_SCALE[match[1].toLowerCase()] ?? 1;
+    // line-height 1.3 + margins 0.5em + 0.25em
+    height += HTML_FONT_PX * scale * 1.3 + HTML_FONT_PX * 0.75;
+  }
+
+  const lineBlocks = sanitizedHtml.match(/<(p|li|tr|dt|dd|blockquote|summary|figcaption)\b/gi);
+  height += (lineBlocks?.length ?? 0) * HTML_LINE_PX;
+
+  // paragraph margins: 0.5em top + bottom
+  const paragraphs = sanitizedHtml.match(/<p\b/gi);
+  height += (paragraphs?.length ?? 0) * HTML_FONT_PX;
+
+  // pre: one code line per newline + 0.75em vertical padding x2
+  for (const match of sanitizedHtml.matchAll(/<pre\b[^>]*>([\s\S]*?)<\/pre>/gi)) {
+    const lines = (match[1].match(/\n/g)?.length ?? 0) + 1;
+    height += lines * HTML_LINE_PX + HTML_FONT_PX * 1.5;
+  }
+
+  const images = sanitizedHtml.match(/<img\b/gi);
+  height += (images?.length ?? 0) * HTML_IMG_HEIGHT_PX;
+
+  // hr: 1px border + 0.75em margins x2
+  const rules = sanitizedHtml.match(/<hr\b/gi);
+  height += (rules?.length ?? 0) * (1 + HTML_FONT_PX * 1.5);
+
+  // ul/ol margins: 0.25em x2
+  const lists = sanitizedHtml.match(/<(ul|ol)\b/gi);
+  height += (lists?.length ?? 0) * HTML_FONT_PX * 0.5;
+
+  // At minimum the widget renders one line of inline content.
+  return Math.ceil(Math.max(height, HTML_LINE_PX) + HTML_WIDGET_PADDING_PX);
+}
+
 class HtmlBlockWidget extends WidgetType {
   constructor(
     readonly sanitizedHtml: string,
     readonly rawText: string,
+    private readonly heightEstimate: number,
   ) {
     super();
   }
 
   eq(other: HtmlBlockWidget): boolean {
     return this.rawText === other.rawText;
+  }
+
+  get estimatedHeight(): number {
+    return this.heightEstimate;
   }
 
   toDOM(): HTMLElement {
@@ -206,7 +268,7 @@ const htmlBlockFoldExtension = foldableSyntaxFacet.of({
     if (!sanitized.trim()) return undefined;
 
     return Decoration.replace({
-      widget: new HtmlBlockWidget(sanitized, text),
+      widget: new HtmlBlockWidget(sanitized, text, estimateHtmlBlockHeight(sanitized)),
       block: true,
       inclusiveStart: true,
     }).range(node.from, node.to);

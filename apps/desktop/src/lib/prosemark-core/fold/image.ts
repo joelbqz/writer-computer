@@ -1,7 +1,29 @@
 import { Decoration, WidgetType } from "@codemirror/view";
+import type { EditorView } from "@codemirror/view";
 import { normalizeMarkdownDestination } from "@/lib/paths";
 import { foldableSyntaxFacet, selectAllDecorationsOnSelectExtension } from "./core";
 import { iterChildren } from "../utils";
+
+/* Without `estimatedHeight`, CodeMirror heightmaps an unmeasured image
+   widget at ~0, so the document height jumps once when the widget first
+   renders and again when the async <img> finishes loading (see
+   SPECs/scrollbar-stability-spec.md). Remember the rendered height per
+   URL so later encounters estimate exactly; unseen images use a fixed
+   default. Keyed by the markdown destination, so two docs referencing the
+   same relative path share an entry — close enough for an estimate, and
+   the real measure corrects any collision. */
+const DEFAULT_IMAGE_HEIGHT_PX = 200;
+const IMAGE_HEIGHT_CACHE_MAX = 500;
+const imageHeightCache = new Map<string, number>();
+
+function recordImageHeight(url: string, height: number) {
+  if (height <= 0) return;
+  if (!imageHeightCache.has(url) && imageHeightCache.size >= IMAGE_HEIGHT_CACHE_MAX) {
+    const oldest = imageHeightCache.keys().next().value;
+    if (oldest !== undefined) imageHeightCache.delete(oldest);
+  }
+  imageHeightCache.set(url, height);
+}
 
 class ImageWidget extends WidgetType {
   constructor(
@@ -15,7 +37,11 @@ class ImageWidget extends WidgetType {
     return this.url === other.url && this.block === other.block;
   }
 
-  toDOM() {
+  get estimatedHeight(): number {
+    return imageHeightCache.get(this.url) ?? DEFAULT_IMAGE_HEIGHT_PX;
+  }
+
+  toDOM(view: EditorView) {
     const elem = document.createElement(this.block ? "div" : "span");
     elem.className = "cm-image";
     if (this.block) {
@@ -23,6 +49,12 @@ class ImageWidget extends WidgetType {
     }
     const image = document.createElement("img");
     image.src = this.url;
+    image.addEventListener("load", () => {
+      recordImageHeight(this.url, elem.getBoundingClientRect().height);
+      // CodeMirror doesn't observe async <img> growth; request a measure
+      // pass so the height correction lands now, not on the next scroll.
+      view.requestMeasure();
+    });
     elem.appendChild(image);
     return elem;
   }
@@ -68,3 +100,10 @@ export const imageExtension = [
   }),
   selectAllDecorationsOnSelectExtension("cm-image"),
 ];
+
+export const __testImageWidget = {
+  imageHeightCache,
+  recordImageHeight,
+  DEFAULT_IMAGE_HEIGHT_PX,
+  IMAGE_HEIGHT_CACHE_MAX,
+};

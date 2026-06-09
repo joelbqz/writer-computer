@@ -122,6 +122,17 @@ Combine with `ignoreEvent: true` on the widget so CM skips its own pointer/click
 
 **Gotcha: `mousedown.stopPropagation` does not stop `pointerdown`.** They're separate event types — the browser dispatches both for a click, and stopping one doesn't filter the other. If you wire an editor-level handler on `pointerdown` (e.g., a drag-selection gate that listens on `view.contentDOM`), the in-widget button's `mousedown` stop won't suppress it. Filter inside the editor-level handler instead — typically `event.target instanceof Element && event.target.closest('.cm-your-widget')`. See `mermaid-decorations.ts`'s `shouldStartDragGate` for the canonical filter.
 
+## Block widgets must declare `estimatedHeight`
+
+A widget without `estimatedHeight` is heightmapped at ~0 until it renders and gets measured; when it scrolls into the viewport buffer the document height jumps and the scrollbar thumb resizes (see `SPECs/scrollbar-stability-spec.md`). Derive the estimate deterministically from the same data the widget renders:
+
+- exact from parsed content — `table-decorations.ts` (rows × row height)
+- fixed by design — `mermaid-decorations.ts` (fixed canvas height)
+- cached from a previous render — `fold/image.ts` (per-URL measured height + default; async `<img>` growth also needs `view.requestMeasure()` on `load`, since CodeMirror doesn't observe it)
+- heuristic over markup — `html-block-decorations.ts`
+
+If the widget's vertical metrics come from a theme block, keep the estimate constants next to that theme and change them together.
+
 ## Heightmap-shifting transitions: include `view.scrollSnapshot()`
 
 Any decoration switch that changes block heights (replace ↔ widget, fold/unfold, widget appearing/disappearing) shifts the heightmap. Without compensation the viewport jumps.
