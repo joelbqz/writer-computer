@@ -2,11 +2,11 @@
 
 ## In Progress
 
-- Scrollbar stability: [`SPECs/scrollbar-stability-spec.md`](SPECs/scrollbar-stability-spec.md) — stop document height/scrollbar thumb jumps while scrolling: height estimates for image/HTML block widgets, a bounded invisible heightmap warm-up after open/switch/reload, and line-anchored scroll save/restore.
 - Reveal-in-sidebar + residual external-watcher misses: [`SPECs/reveal-in-sidebar-and-external-watcher-spec.md`](SPECs/reveal-in-sidebar-and-external-watcher-spec.md) — keep the explicit tab-context-menu "Reveal in sidebar" action working, leave ordinary file opens from expanding the Everything tree, and characterize the remaining external-file-watcher miss cases through a logging + manual-repro pass before patching further.
 
 ## Done
 
+- Scrollbar stability: [`SPECs/scrollbar-stability-spec.md`](SPECs/scrollbar-stability-spec.md) — stop document height/scrollbar thumb jumps while scrolling: height estimates for image/HTML block widgets, a bounded invisible heightmap warm-up after open/switch/reload, and line-anchored scroll save/restore.
 - Floating card shadow polish — add a large subtle shadow to the shared command-palette/popover card surface.
 - Sidebar sections redesign: [`SPECs/sidebar-sections-spec.md`](SPECs/sidebar-sections-spec.md) — split the sidebar into collapsible Pinned, Recents, and Everything sections; keep the existing file tree under Everything; add per-workspace pinned files and compact metadata-backed recent files with Show More pagination.
 - Table virtualization scroll stability: [`SPECs/table-virtualization-scroll-stability-spec.md`](SPECs/table-virtualization-scroll-stability-spec.md) — give folded markdown table widgets stable CodeMirror height estimates so scrolling through virtualized documents with tables does not suddenly resize the document or scrollbar.

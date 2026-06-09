@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-06-09
+
+- Stabilize the scrollbar while scrolling long markdown documents ([`SPECs/scrollbar-stability-spec.md`](SPECs/scrollbar-stability-spec.md)). CodeMirror estimates unmeasured line heights uniformly, but Writer's typography diverges (taller headings, collapsed blank separator lines), so the document height — and the scrollbar thumb — kept changing as lines were measured during scrolling, and re-converged on every file switch or external reload. The editor now warms the heightmap right after a document is opened, switched, or reloaded: a bounded (≤250ms) invisible sweep forces every line to be measured before the user scrolls, pinning the on-screen content the whole time and aborting if the user scrolls mid-sweep.
+- Give image and HTML block widgets deterministic height estimates (the same treatment tables and mermaid canvases already had): images remember their rendered height per URL and request a re-measure when the async `<img>` load lands; HTML blocks estimate from their sanitized markup.
+- Restore scroll positions by content anchor (top visible line + offset) instead of raw pixels when switching between files, so returning to a document lands on the exact same content even though its heightmap restarts from estimates. Heading-anchor navigation now stays pinned to the heading while the destination document converges.
+- Add a dev-only heightmap diagnostic (`localStorage.setItem("writer:debug-heightmap", "1")`) that logs every height-changing measure cycle with line-type attribution.
+
 ## 2026-06-03
 
 - Redesign the sidebar into collapsible `Pinned`, `Recents`, and `Everything` sections. The existing file tree now lives under Everything; files can be pinned/unpinned into Pinned; Recents is metadata-sorted from the workspace index with cached pagination so Show More does not rescan the workspace.
