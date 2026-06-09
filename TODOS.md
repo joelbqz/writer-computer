@@ -2,6 +2,7 @@
 
 ## In Progress
 
+- Scrollbar stability: [`SPECs/scrollbar-stability-spec.md`](SPECs/scrollbar-stability-spec.md) — stop document height/scrollbar thumb jumps while scrolling: height estimates for image/HTML block widgets, a bounded invisible heightmap warm-up after open/switch/reload, and line-anchored scroll save/restore.
 - Reveal-in-sidebar + residual external-watcher misses: [`SPECs/reveal-in-sidebar-and-external-watcher-spec.md`](SPECs/reveal-in-sidebar-and-external-watcher-spec.md) — keep the explicit tab-context-menu "Reveal in sidebar" action working, leave ordinary file opens from expanding the Everything tree, and characterize the remaining external-file-watcher miss cases through a logging + manual-repro pass before patching further.
 
 ## Done
