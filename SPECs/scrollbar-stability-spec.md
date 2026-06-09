@@ -8,11 +8,11 @@ Scrolling a long markdown document (repro: `SPECs/reveal-in-sidebar-and-external
 
 CodeMirror 6 virtualizes rendering: unmeasured lines get a uniform estimate (`HeightOracle.heightForLine` ≈ 28.8px here: 16px font × 1.8 line-height, × a wrap-count guess). Writer's typography makes real lines diverge systematically:
 
-| Line type | Actual height | Estimate error | Source |
-| --- | --- | --- | --- |
-| H1/H2/H3 heading | 44.8–62px | +16 to +33px each | `1.6/1.4/1.2em` font scale (`syntaxHighlighting.ts`) + `padding-top: 1rem` on `.cm-markdown-heading` (`prosemark-theme.css`) |
-| Blank separator line | ~16px | −12.8px each | `.cm-line:has(> br:only-child) { line-height: 1 }` (`prosemark-theme.css`) |
-| Long wrapped list item | varies | ± one or more rows | hanging indent vs the oracle's wrap guess |
+| Line type              | Actual height | Estimate error     | Source                                                                                                                       |
+| ---------------------- | ------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| H1/H2/H3 heading       | 44.8–62px     | +16 to +33px each  | `1.6/1.4/1.2em` font scale (`syntaxHighlighting.ts`) + `padding-top: 1rem` on `.cm-markdown-heading` (`prosemark-theme.css`) |
+| Blank separator line   | ~16px         | −12.8px each       | `.cm-line:has(> br:only-child) { line-height: 1 }` (`prosemark-theme.css`)                                                   |
+| Long wrapped list item | varies        | ± one or more rows | hanging indent vs the oracle's wrap guess                                                                                    |
 
 Scrolling converts estimates to measurements in viewport-sized chunks of mixed sign, so `scrollHeight` changes continuously and the thumb dances. Compounding causes:
 

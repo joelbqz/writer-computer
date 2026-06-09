@@ -74,6 +74,8 @@ import { consumePendingAnchor, setPendingAnchor } from "@/lib/pending-anchor";
 import { logTimeline, mark } from "@/lib/startup-metrics";
 import * as tauri from "@/lib/tauri";
 import { showAnchorWarning } from "./anchor-warning-store";
+import { findOuterScroller, findScrollContainer } from "./editor-scroll-geometry";
+import { heightmapDebug, heightmapDebugEnabled } from "./heightmap-debug";
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 
@@ -81,26 +83,6 @@ const VIEWPORT_OVERSHOOT = 2000;
 const VIEWPORT_PARSE_BUDGET_MS = 50;
 const IDLE_PARSE_BUDGET_MS = 50;
 const IDLE_PARSE_TIMEOUT_MS = 2000;
-
-function findScrollContainer(root: HTMLElement) {
-  let node: HTMLElement | null = root.parentElement;
-  while (node) {
-    const { overflowY } = getComputedStyle(node);
-    if (overflowY === "auto" || overflowY === "scroll") return node;
-    node = node.parentElement;
-  }
-  return null;
-}
-
-function findOuterScroller(view: EditorView): HTMLElement | null {
-  let el: HTMLElement | null = view.dom.parentElement;
-  while (el) {
-    const { overflowY } = getComputedStyle(el);
-    if (overflowY === "auto" || overflowY === "scroll") return el;
-    el = el.parentElement;
-  }
-  return null;
-}
 
 // True when the latest transaction was a search/replace navigation
 // (`select.search` from findNext/findPrevious/jumpToMatch, or
@@ -643,6 +625,8 @@ function createEditorExtensions(
     }),
 
     focusOnRevealExtension(isDisposed),
+
+    ...(heightmapDebugEnabled() ? [heightmapDebug] : []),
   ];
 }
 
