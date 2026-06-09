@@ -76,6 +76,7 @@ import * as tauri from "@/lib/tauri";
 import { showAnchorWarning } from "./anchor-warning-store";
 import { findOuterScroller, findScrollContainer } from "./editor-scroll-geometry";
 import { heightmapDebug, heightmapDebugEnabled } from "./heightmap-debug";
+import { startHeightmapWarmup, type WarmupHandle, type WarmupTarget } from "./heightmap-warmup";
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 
@@ -141,19 +142,6 @@ function restoreCursorPosition(view: EditorView, cursorPos: number) {
     pos = 0;
   }
   view.dispatch({ selection: { anchor: pos } });
-}
-
-function restoreScrollPosition(
-  scrollContainer: HTMLElement,
-  scrollPos: number,
-  isDisposed: () => boolean,
-) {
-  requestAnimationFrame(() => {
-    if (isDisposed()) return;
-
-    // Always apply the initial scroll so a new file can reset a reused container back to the top.
-    scrollContainer.scrollTo(0, Math.max(0, scrollPos));
-  });
 }
 
 function advanceViewportParse(view: EditorView, isDisposed: () => boolean) {
@@ -637,6 +625,7 @@ export function useProsemarkEditor(
   onViewChange?: (view: EditorView | null) => void,
 ) {
   const viewRef = useRef<EditorView | null>(null);
+  const warmupRef = useRef<WarmupHandle | null>(null);
   const scrollCleanupRef = useRef<(() => void) | null>(null);
   const disposedRef = useRef(false);
   const filePathRef = useRef(filePath);
@@ -660,6 +649,8 @@ export function useProsemarkEditor(
   const mountRef = useCallback((el: HTMLDivElement | null) => {
     if (!el) {
       disposedRef.current = true;
+      warmupRef.current?.cancel();
+      warmupRef.current = null;
       scrollCleanupRef.current?.();
       scrollCleanupRef.current = null;
       const view = viewRef.current;
@@ -707,9 +698,17 @@ export function useProsemarkEditor(
 
     const scrollContainer = resolveScrollContainer(el, getScrollContainerRef.current);
     if (scrollContainer) {
-      restoreScrollPosition(scrollContainer, file?.scrollPos ?? 0, () => disposedRef.current);
+      warmupRef.current = startHeightmapWarmup({
+        view,
+        scroller: scrollContainer,
+        target: { kind: "px", top: file?.scrollPos ?? 0 },
+        isDisposed: () => disposedRef.current,
+      });
 
       const handleScroll = () => {
+        // Warm-up sweeps the scroller through the document; only user
+        // scrolling should update the saved position.
+        if (warmupRef.current?.active) return;
         editorApi.updateScrollPos(filePathRef.current, scrollContainer.scrollTop);
       };
       scrollContainer.addEventListener("scroll", handleScroll, { passive: true });
@@ -728,6 +727,11 @@ export function useProsemarkEditor(
     const reloaded = !pathChanged && reloadVersion !== prevReloadVersionRef.current;
 
     if (!pathChanged && !reloaded) return;
+
+    // The replace below resets the heightmap; a sweep over the old doc's
+    // geometry must not keep running across it.
+    warmupRef.current?.cancel();
+    warmupRef.current = null;
 
     prevPathRef.current = filePath;
     prevReloadVersionRef.current = reloadVersion;
@@ -758,28 +762,36 @@ export function useProsemarkEditor(
       scrollIntoView: false,
     });
 
-    if (pathChanged) {
-      const scrollContainer = resolveScrollContainer(
-        view.dom.parentElement!,
-        getScrollContainerRef.current,
-      );
-      if (scrollContainer) {
+    const scrollContainer = resolveScrollContainer(
+      view.dom.parentElement!,
+      getScrollContainerRef.current,
+    );
+    if (scrollContainer) {
+      let target: WarmupTarget;
+      if (pathChanged) {
         const pendingAnchor = consumePendingAnchor(filePath);
-        if (pendingAnchor !== undefined) {
-          const heading = findHeadingBySlug(content, pendingAnchor);
-          if (heading) {
-            requestAnimationFrame(() => {
-              if (disposedRef.current) return;
-              scrollHeadingIntoView(view, scrollContainer, heading, "auto");
-            });
-          } else {
-            scrollContainer.scrollTo({ top: 0, behavior: "auto" });
-            showAnchorWarning(`Heading "#${pendingAnchor}" not found in ${getFileName(filePath)}`);
-          }
-        } else {
-          restoreScrollPosition(scrollContainer, file?.scrollPos ?? 0, () => disposedRef.current);
+        const heading =
+          pendingAnchor !== undefined ? findHeadingBySlug(content, pendingAnchor) : undefined;
+        if (pendingAnchor !== undefined && !heading) {
+          showAnchorWarning(`Heading "#${pendingAnchor}" not found in ${getFileName(filePath)}`);
         }
+        target = heading
+          ? // Land the heading EDITOR_SAFE_SCROLL_MARGIN below the content
+            // top (clear of the fade mask), pinned there while the new
+            // doc's heightmap converges.
+            { kind: "anchor", pos: heading.pos, offsetPx: -EDITOR_SAFE_SCROLL_MARGIN }
+          : { kind: "px", top: file?.scrollPos ?? 0 };
+      } else {
+        // External reload: the scroller didn't move, but the replace reset
+        // the heightmap — pin whatever is on screen and re-converge.
+        target = { kind: "px", top: scrollContainer.scrollTop };
       }
+      warmupRef.current = startHeightmapWarmup({
+        view,
+        scroller: scrollContainer,
+        target,
+        isDisposed: () => disposedRef.current,
+      });
     }
 
     advanceViewportParse(view, () => disposedRef.current);

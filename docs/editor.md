@@ -146,6 +146,18 @@ view.dispatch({
 
 `scrollSnapshot` captures the viewport-top doc anchor and its screen offset; CM applies the resulting `StateEffect` after the heightmap rebuild and re-scrolls so the same anchor lands at the same screen Y. Don't roll your own `coordsAtPos`-delta scroll math — it depends on layout being flushed and is brittle.
 
+## Heightmap warm-up after document swaps
+
+A full-document replace (tab switch's `writer.swap`, watcher's `writer.reload`) resets the heightmap to per-line estimates; Writer's typography diverges from the uniform estimate (headings taller, blank separator lines shorter), so subsequent scrolling keeps changing the document height and dancing the scrollbar thumb. `heightmap-warmup.ts` converges the heightmap right after the swap:
+
+- Each rAF chunk is one task that sweeps `scroller.scrollTop` through the doc, forcing a synchronous render+measure per step via `view.requestMeasure()` + `view.elementAtHeight(0)` (which flushes the measure queue).
+- Every chunk exit (`try/finally`) restores the target scroll position, so paints and coalesced scroll events only ever observe the target — no visual freeze needed.
+- Progress is tracked in document positions (`view.viewport.to`), never pixels: estimate→measured corrections and CM's own anchor compensation shift pixel space mid-sweep.
+- Bounded (250ms total / 14ms per chunk / 200 steps) and best-effort: stopping early leaves the covered region stable. It aborts when the user scrolls between chunks.
+- Restore targets are content anchors (`{pos, offsetPx}`, see `editor-scroll-geometry.ts`), not raw pixels — pixel offsets are meaningless against a re-estimated heightmap.
+
+Debugging: `localStorage.setItem("writer:debug-heightmap", "1")` in a dev build logs every height-changing measure cycle with line-type attribution (`heightmap-debug.ts`). A correctly warmed doc logs zero `heightChanged` deltas while scrolling.
+
 ## Synchronous render in `toDOM` beats IntersectionObserver-deferred
 
 If your renderer is sync and cache-backed (or cheap to call), paint in `toDOM`. The async-deferred path adds a "Loading…" gap users see, can re-fire after a toggle (producing a visible flash), and has no real benefit when the cache makes repeat renders O(map lookup). CM only calls `toDOM` for widgets in its viewport buffer anyway.
