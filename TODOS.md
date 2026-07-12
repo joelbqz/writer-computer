@@ -6,6 +6,7 @@
 
 ## Done
 
+- Quick Look extension: [`SPECs/quicklook-extension-spec.md`](SPECs/quicklook-extension-spec.md) — macOS Quick Look preview appex (issue #80): Swift `QLPreviewProvider` rendering markdown to HTML via JavaScriptCore + `marked`, built by `src-tauri/quicklook/build.sh` (`beforeBundleCommand`) and embedded via `bundle.macOS.files`; the build script signs the appex itself since tauri-bundler skips `.appex` bundles.
 - Sidebar drag-and-drop move: [`SPECs/sidebar-drag-and-drop-move-spec.md`](SPECs/sidebar-drag-and-drop-move-spec.md) — drag files/folders in the `Everything` tree to re-parent them (drop on folder → inside, on file → its folder, on empty space → workspace root), with multi-select batches, open-tab/pin/expanded-state rewrites, and collision reporting. Pointer-event based so it coexists with the existing Finder-drop-to-open; inline rename and drag-move now share one write path (`use-move-entry`).
 - Compact picker recents polish — add a plain non-hovering Recents label using sidebar section styling, remove the search field, per-row opened time, Open other file row, and active file entry, then keep the row remove affordance small so the picker is a direct global recents list.
 - Global-scoped compact mode: [`SPECs/global-compact-mode-spec.md`](SPECs/global-compact-mode-spec.md) — compact windows are fully workspace-free (no root, no indexing, parent-dir single-file watcher), the picker shows a persisted global recent-files list, and the workspace-scoped compact setting is replaced by an "Open File in Compact Window" command.

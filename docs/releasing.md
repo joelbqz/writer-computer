@@ -62,6 +62,8 @@ The script will, in order:
 
 Expect the whole script to take several minutes — most of it is the cargo release build and Apple notarization.
 
+Note on the Quick Look extension: `tauri build` runs `src-tauri/quicklook/build.sh` (as `beforeBundleCommand`) which compiles and signs `WriterQuickLook.appex` before it is embedded at `Writer.app/Contents/PlugIns/`. The script signs the appex with `APPLE_SIGNING_IDENTITY` (hardened runtime + sandbox entitlements) when that env var is set — which `distribute.sh` guarantees — because tauri-bundler's nested-code signing does not cover `.appex` bundles. An ad-hoc-signed appex inside a release build will fail notarization; if notarization reports an unsigned or ad-hoc binary at `Contents/PlugIns/WriterQuickLook.appex`, check that the env var was exported when the appex was built.
+
 ## Step 4 — Review and publish on GitHub
 
 Open the draft URL printed by `distribute.sh`. Confirm:

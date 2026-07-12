@@ -7,6 +7,7 @@
     "beforeDevCommand": "vp dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "vp build",
+    "beforeBundleCommand": "bash src-tauri/quicklook/build.sh",
     "frontendDist": "../dist"
   },
   "app": {
@@ -46,7 +47,10 @@
       "entitlements": "./Entitlements.plist",
       "signingIdentity": null,
       "hardenedRuntime": true,
-      "minimumSystemVersion": "10.15"
+      "minimumSystemVersion": "10.15",
+      "files": {
+        "PlugIns/WriterQuickLook.appex": "target/quicklook/WriterQuickLook.appex"
+      }
     },
     "fileAssociations": [
       {

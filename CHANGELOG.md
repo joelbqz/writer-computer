@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-07-11
+
+- Add macOS Quick Look support (issue #80): pressing Space on a `.md`/`.markdown` file in Finder now shows a rendered markdown preview instead of plain text. A Quick Look app extension (`WriterQuickLook.appex`, embedded in `Writer.app/Contents/PlugIns`) renders GFM — tables, task lists, fenced code — via JavaScriptCore + `marked`, strips YAML frontmatter, caps input at 2 MB with a truncation notice, and styles output like Writer's editor with light/dark support. The extension is built by `src-tauri/quicklook/build.sh` (Tauri `beforeBundleCommand`), embedded via `bundle.macOS.files`, and signed by the build script itself since tauri-bundler does not sign nested `.appex` bundles.
+
 ## 2026-06-22
 
 - Code-health pass across the desktop app and marketing site (now scoring 100/100 on React Doctor). Mostly internal, with a few user-relevant effects: more screen-reader labels on editor and settings controls, semantic landmarks in the editor chrome, a lighter backdrop blur on the anchor-warning banner, and DOMPurify sanitization of rendered Mermaid diagram SVG. Also broke several module import cycles (notably by splitting page-kind views from their behavior so the stores no longer pull in the editor UI), removed unused dependencies (`motion`, `react-resizable-panels`) and dead code, and parallelized a few independent file reads.
