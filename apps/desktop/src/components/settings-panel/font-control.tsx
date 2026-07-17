@@ -20,12 +20,14 @@ interface PickerPosition {
   right: number;
 }
 
-/** Font-stack control: a free-text stack input plus a picker listing every
- *  font installed on the system. Picking a family swaps the stack's primary
- *  family and keeps the schema default as the fallback tail. */
+/** Font control: a select-style button showing the stack's primary family,
+ *  opening a searchable picker of every font installed on the system.
+ *  Picking a family swaps the stack's primary family and keeps the schema
+ *  default as the fallback tail. */
 export function FontControl({ def, value, onChange }: FontControlProps) {
   const [pickerPos, setPickerPos] = useState<PickerPosition | null>(null);
   const anchorRef = useRef<HTMLDivElement>(null);
+  const family = firstFamily(value);
 
   function togglePicker(event: React.MouseEvent<HTMLButtonElement>) {
     if (pickerPos) {
@@ -37,29 +39,27 @@ export function FontControl({ def, value, onChange }: FontControlProps) {
   }
 
   return (
-    <div ref={anchorRef} className="flex items-center gap-1">
-      <input
-        type="text"
-        value={value}
-        aria-label="Font stack"
-        onChange={(e) => onChange(e.target.value)}
-        className="h-9 w-56 rounded-lg border border-transparent bg-[var(--surface-input)] px-3 text-[13px] text-[var(--text-secondary)] font-[inherit] outline-none focus:border-[var(--focus-border)] focus-visible:outline-none"
-      />
+    <div ref={anchorRef}>
       <button
         type="button"
         onClick={togglePicker}
         aria-label="Choose installed font"
+        aria-haspopup="listbox"
         aria-expanded={pickerPos !== null}
-        className="h-9 w-8 shrink-0 rounded-lg bg-[var(--surface-input)] bg-[image:var(--select-chevron)] bg-[length:12px_12px] bg-center bg-no-repeat hover:bg-[var(--surface-subtle-strong)]"
-      />
+        className="flex h-9 w-56 items-center rounded-lg border border-transparent bg-[var(--surface-input)] bg-[image:var(--select-chevron)] bg-[length:12px_12px] bg-[position:right_10px_center] bg-no-repeat pl-3 pr-8 text-left text-[13px] text-[var(--text-secondary)] outline-none hover:bg-[var(--surface-subtle-strong)] focus:border-[var(--focus-border)] focus-visible:outline-none"
+      >
+        <span className="truncate" style={{ fontFamily: value }}>
+          {family}
+        </span>
+      </button>
       {pickerPos &&
         createPortal(
           <FontPickerPopover
             position={pickerPos}
             anchorRef={anchorRef}
-            currentFamily={firstFamily(value)}
-            onPick={(family) => {
-              onChange(stackWithFamily(family, String(def.default)));
+            currentFamily={family}
+            onPick={(picked) => {
+              onChange(stackWithFamily(picked, String(def.default)));
               setPickerPos(null);
             }}
             onClose={() => setPickerPos(null)}

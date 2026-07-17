@@ -1,8 +1,9 @@
 import { ok, strictEqual } from "node:assert/strict";
 
-// Font picker verification: drives the settings panel's new "font" controls —
-// the picker popover listing installed system fonts (backed by the
-// `list_system_fonts` IPC command) and the stack rewrite on pick.
+// Font picker verification: drives the settings panel's "font" controls —
+// a select-style button opening a picker popover of installed system fonts
+// (backed by the `list_system_fonts` IPC command) and the stack rewrite on
+// pick.
 //
 // Requires a restorable workspace: seed
 // `~/Library/Application Support/com.writer-computer.e2e/recent_workspaces.json`
@@ -84,16 +85,14 @@ describe("Settings font picker", function () {
     const popover = await $('[role="dialog"][aria-label="Installed fonts"]');
     await browser.waitUntil(async () => !(await popover.isExisting()), { timeout: 5_000 });
 
-    // The row's stack input now leads with the picked family, default tail kept.
+    // The row's select button now shows the picked family.
     const mode = await browser.execute(() => document.documentElement.getAttribute("data-theme"));
     const heading = mode === "dark" ? "Dark Theme" : "Light Theme";
-    const stackInput = await $(
+    const selectButton = await $(
       `//section[.//h2[contains(., "${heading}")]]` +
-        `//div[div/div[text()="Monospace font"]]//input[@aria-label="Font stack"]`,
+        `//div[div/div[text()="Monospace font"]]//button[@aria-label="Choose installed font"]`,
     );
-    const stack = await stackInput.getValue();
-    ok(stack.startsWith("Menlo,"), `stack should lead with Menlo: ${stack}`);
-    ok(stack.includes("monospace"), `stack should keep the generic tail: ${stack}`);
+    strictEqual(await selectButton.getText(), "Menlo");
 
     // The active mode's --mono-font CSS var picked it up (theme.ts applyPrimaries).
     const cssVar = await browser.execute(() =>
@@ -101,15 +100,23 @@ describe("Settings font picker", function () {
     );
     ok(cssVar.includes("Menlo"), `--mono-font should contain Menlo: ${cssVar}`);
 
-    // And it persisted through the settings backend.
+    // And it persisted through the settings backend, leading with the picked
+    // family and keeping the schema-default generic tail.
     const persisted = await browser.executeAsync((key, done) => {
       window.__TAURI_INTERNALS__
         .invoke("get_setting", { key })
         .then((v) => done(JSON.stringify(v)))
         .catch((e) => done(`ERROR: ${e && e.message ? e.message : String(e)}`));
     }, `theme.${mode}.mono-font`);
-    ok(String(persisted).includes("Menlo"), `persisted setting should contain Menlo: ${persisted}`);
-    console.log(`[verify] stack="${stack}" cssVar="${cssVar.trim()}" persisted=${persisted}`);
+    ok(
+      String(persisted).includes("Menlo,"),
+      `persisted stack should lead with Menlo: ${persisted}`,
+    );
+    ok(
+      String(persisted).includes("monospace"),
+      `persisted stack should keep the tail: ${persisted}`,
+    );
+    console.log(`[verify] cssVar="${cssVar.trim()}" persisted=${persisted}`);
     if (process.env.VERIFY_SHOT_DIR) {
       await browser.saveScreenshot(`${process.env.VERIFY_SHOT_DIR}/font-picked.png`);
     }
@@ -136,27 +143,5 @@ describe("Settings font picker", function () {
       timeout: 5_000,
       timeoutMsg: "popover did not close on Escape",
     });
-  });
-
-  it("probe: free-text stack editing still works and reaches the CSS variable", async function () {
-    const mode = await browser.execute(() => document.documentElement.getAttribute("data-theme"));
-    const heading = mode === "dark" ? "Dark Theme" : "Light Theme";
-    const stackInput = await $(
-      `//section[.//h2[contains(., "${heading}")]]` +
-        `//div[div/div[text()="Monospace font"]]//input[@aria-label="Font stack"]`,
-    );
-    await stackInput.scrollIntoView({ block: "center" });
-    await stackInput.setValue("Courier, monospace");
-
-    await browser.waitUntil(
-      async () => {
-        const v = await browser.execute(() =>
-          getComputedStyle(document.documentElement).getPropertyValue("--mono-font"),
-        );
-        return v.includes("Courier");
-      },
-      { timeout: 5_000, timeoutMsg: "--mono-font never reflected the typed stack" },
-    );
-    strictEqual(await stackInput.getValue(), "Courier, monospace");
   });
 });

@@ -3,7 +3,7 @@
 ## 2026-07-11
 
 - Add a theme monospace font setting for code and inline code, including Mermaid source editing and rendered HTML blocks. Each theme mode (light/dark) gets a "Monospace font" field in Settings → Theme, applied through a new `--mono-font` CSS variable that all code surfaces consume.
-- Add a font picker to every theme font setting (UI, editor, and monospace). A new `font` setting type renders the stack input with a dropdown of all fonts installed on the system (enumerated by a new `list_system_fonts` Rust command, hidden `.`-prefixed macOS system families excluded), searchable and previewed in each font's own face. Picking a family puts it in front of the setting's default stack as the fallback tail; the stack stays editable as free text.
+- Add a font picker to every theme font setting (UI, editor, and monospace). A new `font` setting type renders a select-style button showing the current font family, opening a dropdown of all fonts installed on the system (enumerated by a new `list_system_fonts` Rust command, hidden `.`-prefixed macOS system families excluded), searchable and previewed in each font's own face. Picking a family puts it in front of the setting's default stack as the fallback tail.
 
 ## 2026-06-22
 
