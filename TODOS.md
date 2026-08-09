@@ -6,6 +6,7 @@
 
 ## Done
 
+- Sidebar empty-space context menu: [`SPECs/statusbar-sidebar-visibility-spec.md`](SPECs/statusbar-sidebar-visibility-spec.md) — root New File and New Folder actions immediately create an available untitled entry and start inline rename; Search and Recents remain checked visibility items.
 - Status bar + sidebar visibility toggles: [`SPECs/statusbar-sidebar-visibility-spec.md`](SPECs/statusbar-sidebar-visibility-spec.md) — hide/show each footer metric (words, characters, paragraphs) and the sidebar Search button and Recents section, via five new boolean settings and native right-click check-item menus on the footer and sidebar surface.
 - Select-only Typography font controls: [`SPECs/font-select-spec.md`](SPECs/font-select-spec.md) — replace the AppKit Font panel and editable stack field with a standard installed-family `<select>` matching the other settings controls; default UI/editor to SF Pro and the renamed Code font setting to SF Mono.
 - Native macOS font picker + Typography settings: [`SPECs/native-font-picker-spec.md`](SPECs/native-font-picker-spec.md) — replace the custom installed-font combobox with AppKit's system Font panel, route selections back to the originating settings row/window, preserve editable CSS fallback stacks, and rename the settings section from Fonts to Typography.
@@ -72,6 +73,7 @@ Previously-triaged work organized by phase. Pull into `Up Next` as capacity open
 #### Visual and media polish
 
 - [ ] Inline media preview: [`SPECs/inline-media-preview-spec.md`](SPECs/inline-media-preview-spec.md)
+- [ ] Command palette dialog accessibility metadata — add the required dialog title/description wiring so opening the palette no longer emits Radix accessibility warnings at runtime.
 
 #### Architectural bets
 

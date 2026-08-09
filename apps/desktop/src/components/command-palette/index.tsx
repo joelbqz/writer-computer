@@ -12,6 +12,7 @@ import {
   useCloseCommandPalette,
   useCommandPaletteIntent,
   useCommandPaletteSearch,
+  useCommandPaletteSession,
   useIsCommandPaletteOpen,
   useOpenCommandPalette,
   useSetCommandPaletteSearch,
@@ -31,16 +32,14 @@ import { useTheme } from "@/hooks/use-theme";
 import { useFuzzySearch } from "./use-fuzzy-search";
 import { useGlobalRecentFiles } from "@/hooks/use-global-recent-files";
 import { openStandaloneFile } from "@/hooks/use-open-drop";
+import { useCreateEntry } from "@/hooks/use-create-entry";
+import { getCommandPaletteSession } from "@/hooks/command-palette-api";
+import { runCreateRequest } from "./run-create-request";
 import { settingsKind } from "@/components/editor-area/page-kinds/settings";
 import { getFileName, getFileStem, getParentDir } from "@/lib/paths";
+import { getEntryCreationPath, planEntryCreation } from "@/lib/entry-creation";
 import * as tauri from "@/lib/tauri";
 import type { RecentFile } from "@/lib/tauri";
-
-function toCreatePath(root: string, rawName: string) {
-  const trimmed = rawName.trim();
-  const fileName = trimmed.endsWith(".md") ? trimmed : `${trimmed}.md`;
-  return `${root}/${fileName}`;
-}
 
 function matchesSearch(text: string, q: string) {
   return text.toLowerCase().includes(q.toLowerCase());
@@ -65,6 +64,7 @@ export function CommandPalette() {
   const openCommandPalette = useOpenCommandPalette();
   const intent = useCommandPaletteIntent();
   const search = useCommandPaletteSearch();
+  const paletteSession = useCommandPaletteSession();
   const setSearch = useSetCommandPaletteSearch();
   const { toggleSidebar } = useSidebar();
   const { root, isIndexing, openWorkspace, closeWorkspace } = useWorkspace();
@@ -77,8 +77,10 @@ export function CommandPalette() {
   const { toggleTheme } = useTheme();
   const openSettingsTab = useOpenSettingsTab();
   const isCompactFileMode = useIsCompactFileMode();
+  const createEntry = useCreateEntry();
 
-  const isCreateIntent = intent === "create-file";
+  const createKind = intent === "create-file" ? "file" : null;
+  const isCreateIntent = createKind !== null;
   const trimmedSearch = search.trim();
   const fileQuery = isCreateIntent ? "" : search;
   // Standalone compact windows have no workspace index — search filters the
@@ -87,8 +89,16 @@ export function CommandPalette() {
   const { files: globalRecents } = useGlobalRecentFiles(30, isOpen && isCompactFileMode);
   // In standalone mode new files are created next to the active file.
   const createBaseDir = root ?? (activeFilePath ? getParentDir(activeFilePath) : null);
-  const createPath =
-    createBaseDir && trimmedSearch ? toCreatePath(createBaseDir, trimmedSearch) : null;
+  const createPlan =
+    createBaseDir && createKind ? planEntryCreation(createBaseDir, search, createKind) : null;
+  const createTarget = createPlan?.ok ? createPlan.target : null;
+  const createPath = createTarget ? getEntryCreationPath(createTarget) : null;
+  const [createErrorState, setCreateErrorState] = useState<{
+    session: number;
+    message: string;
+  } | null>(null);
+  const createError =
+    createErrorState?.session === paletteSession ? createErrorState.message : null;
 
   function handleSelect(path: string) {
     void (isCompactFileMode ? openStandaloneFile(path) : openFile(path));
@@ -96,17 +106,42 @@ export function CommandPalette() {
   }
 
   function handleCreate() {
-    if (!createPath) return;
+    if (!createTarget) return;
 
-    close();
-    void (async () => {
-      await tauri.createFile(createPath);
-      if (isCompactFileMode) {
-        await openStandaloneFile(createPath);
-      } else {
-        await openFile(createPath);
-      }
-    })();
+    const requestSession = paletteSession;
+    setCreateErrorState(null);
+    void runCreateRequest({
+      create: () => createEntry(createTarget, isCompactFileMode ? "standalone" : "workspace"),
+      isCurrent: () => getCommandPaletteSession() === requestSession,
+      onCreated: (result) => {
+        close();
+
+        if (result.followUpFailures.length > 0) {
+          const failedSteps = [
+            result.followUpFailures.some((failure) => failure.step === "refresh")
+              ? "refresh the sidebar"
+              : null,
+            result.followUpFailures.some((failure) => failure.step === "open")
+              ? "open the file"
+              : null,
+          ].filter((step): step is string => Boolean(step));
+          const details = result.followUpFailures
+            .map((failure) =>
+              failure.error instanceof Error ? failure.error.message : String(failure.error),
+            )
+            .join("\n");
+          window.alert(
+            `Created "${createTarget.name}", but Writer could not ${failedSteps.join(" or ")}.\n${details}`,
+          );
+        }
+      },
+      onCreationError: (error) => {
+        setCreateErrorState({
+          session: requestSession,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      },
+    });
   }
 
   async function handleOpenWorkspace() {
@@ -222,8 +257,9 @@ export function CommandPalette() {
     : trimmedSearch
       ? commands.filter((c) => matchesSearch(c.label, trimmedSearch))
       : commands;
-  const firstValue =
-    visibleCommands[0]?.id ?? visibleFiles[0]?.path ?? visibleRecents[0]?.path ?? "";
+  const firstValue = isCreateIntent
+    ? (createPath ?? "")
+    : (visibleCommands[0]?.id ?? visibleFiles[0]?.path ?? visibleRecents[0]?.path ?? "");
 
   const listRef = useRef<HTMLDivElement>(null);
   const [selectedValue, setSelectedValue] = useState(firstValue);
@@ -239,7 +275,8 @@ export function CommandPalette() {
   }, [search, intent, firstValue]);
   /* eslint-enable react-doctor/no-derived-state */
 
-  const placeholder = isCreateIntent ? "Create a new note..." : "Search...";
+  const createLabel = "file";
+  const placeholder = isCreateIntent ? `Create a new ${createLabel}...` : "Search...";
 
   return (
     <CommandDialog
@@ -252,13 +289,23 @@ export function CommandPalette() {
       value={selectedValue}
       onValueChange={setSelectedValue}
     >
-      <CommandInput placeholder={placeholder} value={search} onValueChange={setSearch} />
+      <CommandInput
+        placeholder={placeholder}
+        value={search}
+        onValueChange={(value) => {
+          setCreateErrorState(null);
+          setSearch(value);
+        }}
+      />
       <CommandList ref={listRef}>
         {isCreateIntent ? (
           <>
-            {!trimmedSearch && <CommandEmpty>Type a note name to create it.</CommandEmpty>}
-            {createPath && (
-              <CommandGroup heading="Create note">
+            {createError && <CommandEmpty>{createError}</CommandEmpty>}
+            {!createError && createPlan && !createPlan.ok && (
+              <CommandEmpty>{createPlan.error}</CommandEmpty>
+            )}
+            {!createError && createTarget && createPath && (
+              <CommandGroup heading={`Create ${createLabel}`}>
                 <CommandItem value={createPath} onSelect={handleCreate}>
                   Create: {getFileName(createPath)}
                 </CommandItem>

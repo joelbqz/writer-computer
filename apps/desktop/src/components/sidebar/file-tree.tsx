@@ -10,6 +10,7 @@ import {
 import { createPortal } from "react-dom";
 import {
   useDirectoryCache,
+  useEnsureDirectoryExpanded,
   useExpandedDirs,
   useInvalidatePath,
   usePinnedFiles,
@@ -23,6 +24,7 @@ import { useOpenFile } from "@/hooks/use-tabs";
 import { useSetting } from "@/hooks/use-settings";
 import { useWorkspaceRoot } from "@/hooks/use-workspace";
 import * as tauri from "@/lib/tauri";
+import { validateEntryName } from "@/lib/entry-creation";
 import { getFileStem, getParentDir } from "@/lib/paths";
 import { useMoveEntry } from "./use-move-entry";
 import { useTreeDrag } from "./use-tree-drag";
@@ -37,6 +39,8 @@ interface FileTreeProps {
   rootPath: string;
   openFile?: (path: string) => Promise<void>;
   enableContextMenus?: boolean;
+  renamingPath: string | null;
+  setRenamingPath: (path: string | null) => void;
 }
 
 function getExtension(name: string): string {
@@ -49,6 +53,8 @@ export function FileTree({
   rootPath,
   openFile: openFileOverride,
   enableContextMenus = true,
+  renamingPath,
+  setRenamingPath,
 }: FileTreeProps) {
   const directoryCache = useDirectoryCache();
   const expandedDirs = useExpandedDirs();
@@ -56,6 +62,7 @@ export function FileTree({
   const defaultOpenFile = useOpenFile();
   const openFile = openFileOverride ?? defaultOpenFile;
   const refreshDirectory = useRefreshDirectory();
+  const ensureDirectoryExpanded = useEnsureDirectoryExpanded();
   const invalidatePath = useInvalidatePath();
   const { applyPathChange, moveEntry } = useMoveEntry();
   const removePinnedFile = useRemovePinnedFile();
@@ -64,7 +71,6 @@ export function FileTree({
   const togglePinnedFile = useTogglePinnedFile();
   const workspaceRoot = useWorkspaceRoot();
   const fileLabelMode = useSetting("appearance.sidebar-file-label");
-  const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   // Anchor for shift range-select. Only read inside handlers, never rendered,
   // so a ref avoids re-renders that a useState would trigger on every change.
@@ -186,10 +192,19 @@ export function FileTree({
 
   const handleRenameSubmit = useCallback(
     async (entry: DirEntry, nextValue: string) => {
-      setRenamingPath(null);
-
       const trimmed = nextValue.trim();
-      if (!trimmed) return;
+      if (!trimmed) {
+        setRenamingPath(null);
+        return;
+      }
+
+      const kind = entry.is_dir ? "folder" : "file";
+      const validation = validateEntryName(trimmed, kind);
+      if (!validation.ok) {
+        window.alert(validation.error);
+        return;
+      }
+      setRenamingPath(null);
 
       const parent = getParentDir(entry.path);
       let newPath: string;
@@ -234,8 +249,7 @@ export function FileTree({
       togglePinnedFile,
       removePinnedFile,
       removePinnedFilesWithPrefix,
-      expandedDirs,
-      toggleDirectory,
+      ensureDirectoryExpanded,
       refreshDirectory,
       invalidatePath,
       setRenamingPath,

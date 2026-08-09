@@ -58,6 +58,7 @@ describe("workspace-store", () => {
     vi.clearAllMocks();
     useWorkspaceStore.setState({
       root: null,
+      workspaceEpoch: 0,
       chromeMode: "workspace",
       directoryCache: new Map(),
       expandedDirs: new Set(),
@@ -105,6 +106,109 @@ describe("workspace-store", () => {
     // Collapse
     await useWorkspaceStore.getState().toggleDirectory("/test/dir");
     expect(useWorkspaceStore.getState().expandedDirs.has("/test/dir")).toBe(false);
+  });
+
+  test("refreshDirectory ignores a response after the workspace changes", async () => {
+    const deferred = createDeferred<
+      Array<{
+        name: string;
+        path: string;
+        is_dir: boolean;
+        is_markdown: boolean;
+        modified_at: number;
+      }>
+    >();
+    mockedInvoke.mockImplementation((cmd: string) =>
+      cmd === "read_directory" ? deferred.promise : Promise.resolve(null),
+    );
+    useWorkspaceStore.setState({ root: "/old", workspaceEpoch: 1, directoryCache: new Map() });
+
+    const refresh = useWorkspaceStore.getState().refreshDirectory("/old");
+    useWorkspaceStore.setState({
+      root: "/new",
+      workspaceEpoch: 2,
+      directoryCache: new Map([["/new", []]]),
+    });
+    deferred.resolve([
+      {
+        name: "stale.md",
+        path: "/old/stale.md",
+        is_dir: false,
+        is_markdown: true,
+        modified_at: 0,
+      },
+    ]);
+    await refresh;
+
+    const cache = useWorkspaceStore.getState().directoryCache;
+    expect(cache.has("/old")).toBe(false);
+    expect(cache.has("/new")).toBe(true);
+  });
+
+  test("ensureDirectoryExpanded refreshes a directory without collapsing it", async () => {
+    const freshEntry = {
+      name: "fresh.md",
+      path: "/test/dir/fresh.md",
+      is_dir: false,
+      is_markdown: true,
+      modified_at: 0,
+    };
+    mockedInvoke.mockResolvedValue([freshEntry]);
+    useWorkspaceStore.setState({
+      root: "/test",
+      workspaceEpoch: 1,
+      directoryCache: new Map([["/test/dir", []]]),
+      expandedDirs: new Set(["/test/dir"]),
+    });
+
+    await useWorkspaceStore.getState().ensureDirectoryExpanded("/test/dir");
+
+    expect(useWorkspaceStore.getState().directoryCache.get("/test/dir")).toEqual([freshEntry]);
+    expect(useWorkspaceStore.getState().expandedDirs).toEqual(new Set(["/test/dir"]));
+  });
+
+  test("ensureDirectoryExpanded ignores a response after the workspace changes", async () => {
+    const deferred = createDeferred<
+      Array<{
+        name: string;
+        path: string;
+        is_dir: boolean;
+        is_markdown: boolean;
+        modified_at: number;
+      }>
+    >();
+    mockedInvoke.mockImplementation((cmd: string) =>
+      cmd === "read_directory" ? deferred.promise : Promise.resolve(null),
+    );
+    useWorkspaceStore.setState({
+      root: "/old",
+      workspaceEpoch: 1,
+      directoryCache: new Map(),
+      expandedDirs: new Set(),
+    });
+
+    const ensureExpanded = useWorkspaceStore.getState().ensureDirectoryExpanded("/old/folder");
+    useWorkspaceStore.setState({
+      root: "/new",
+      workspaceEpoch: 2,
+      directoryCache: new Map([["/new", []]]),
+      expandedDirs: new Set(["/new/kept"]),
+    });
+    deferred.resolve([
+      {
+        name: "stale.md",
+        path: "/old/folder/stale.md",
+        is_dir: false,
+        is_markdown: true,
+        modified_at: 0,
+      },
+    ]);
+    await ensureExpanded;
+
+    const state = useWorkspaceStore.getState();
+    expect(state.directoryCache.has("/old/folder")).toBe(false);
+    expect(state.directoryCache.has("/new")).toBe(true);
+    expect(state.expandedDirs).toEqual(new Set(["/new/kept"]));
   });
 
   test("invalidatePath removes from cache", () => {
@@ -727,6 +831,7 @@ describe("ui-store", () => {
       isCommandPaletteOpen: false,
       commandPaletteIntent: "search",
       commandPaletteSearch: "",
+      commandPaletteSession: 0,
     });
 
     useSettingsStore.setState({
@@ -752,9 +857,11 @@ describe("ui-store", () => {
     useUIStore.getState().openCommandPalette();
     expect(useUIStore.getState().isCommandPaletteOpen).toBe(true);
     expect(useUIStore.getState().commandPaletteIntent).toBe("search");
+    expect(useUIStore.getState().commandPaletteSession).toBe(1);
 
     useUIStore.getState().openCommandPalette("create-file");
     expect(useUIStore.getState().commandPaletteIntent).toBe("create-file");
+    expect(useUIStore.getState().commandPaletteSession).toBe(2);
 
     useUIStore.getState().closeCommandPalette();
     expect(useUIStore.getState().isCommandPaletteOpen).toBe(false);

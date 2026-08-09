@@ -41,9 +41,19 @@ No settings-panel code changes: the generic boolean control renders them.
   (regardless of recent files existing).
 - Right-clicking the sidebar surface — empty space, section headers
   (including the Recents title), or the search button — opens a native
-  context menu with two check items, Search and Recents. File and folder rows
-  keep their existing menus (they stop propagation, so the surface menu never
-  fires for them).
+  context menu with root-level **New File** and **New Folder** actions,
+  followed by the Search and Recents check items. Each create action
+  immediately creates the next available `Untitled.md` or `Untitled Folder`
+  directly under the current workspace root, refreshes Everything, and starts
+  inline rename. File and folder rows keep their existing menus (they stop
+  propagation, so the surface menu never fires for them).
+- Inline rename accepts one visible basename only. Path separators, traversal
+  names, and leading-dot names remain in the rename flow with an explicit
+  validation error instead of moving the entry outside the workspace or
+  hiding it from the tree.
+- Newly created empty folders remain visible in Everything so the action has
+  an immediately usable result. Directories containing only non-Markdown
+  content remain filtered as before.
 - Hiding Recents does not clear recents metadata; re-enabling restores the
   section as it was.
 
@@ -57,7 +67,9 @@ narrows at runtime, replacing ad-hoc `as boolean | undefined` casts.
 ## Verification
 
 - Unit tests for both menu spec builders (`footer-context-menu.test.ts`,
-  `sidebar-surface-context-menu.test.ts`).
+  `sidebar-surface-context-menu.test.ts`), including surface-menu action order
+  and handler dispatch; the mixed native item renderer; root-name validation;
+  and the file/folder create, refresh, open, and failure sequences.
 - Runtime: `e2e/specs/visibility-settings.spec.js` drives the built app —
   default metric set, single-metric hide, all-hidden footer removal, Search
   button hide, Recents section hide. Native menu popups themselves are

@@ -126,14 +126,14 @@ describe("status bar and sidebar visibility settings", function () {
     await $("[data-settings-panel]").waitForExist({ timeout: 5_000 });
 
     const rows = await browser.execute(() => {
-      const labels = Array.from(
-        document.querySelectorAll("[data-settings-panel] section"),
-      ).flatMap((section) => {
-        const heading = section.querySelector("h2")?.textContent ?? "";
-        return Array.from(section.querySelectorAll("div.text-\\[13px\\].font-medium")).map(
-          (label) => `${heading}: ${label.textContent}`,
-        );
-      });
+      const labels = Array.from(document.querySelectorAll("[data-settings-panel] section")).flatMap(
+        (section) => {
+          const heading = section.querySelector("h2")?.textContent ?? "";
+          return Array.from(section.querySelectorAll("div.text-\\[13px\\].font-medium")).map(
+            (label) => `${heading}: ${label.textContent}`,
+          );
+        },
+      );
       return labels;
     });
     for (const expected of [

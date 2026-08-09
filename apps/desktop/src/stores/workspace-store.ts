@@ -10,6 +10,7 @@ export type WorkspaceChromeMode = "workspace" | "compact-file";
 
 interface WorkspaceState {
   root: string | null;
+  workspaceEpoch: number;
   chromeMode: WorkspaceChromeMode;
   fileCount: number;
   isIndexing: boolean;
@@ -28,6 +29,7 @@ interface WorkspaceState {
   setChromeMode: (mode: WorkspaceChromeMode) => void;
   setStartupResolved: () => void;
   refreshDirectory: (path: string) => Promise<void>;
+  ensureDirectoryExpanded: (path: string) => Promise<void>;
   toggleDirectory: (path: string) => Promise<void>;
   invalidatePath: (path: string) => void;
   rewriteExpandedDir: (oldPath: string, newPath: string) => void;
@@ -78,6 +80,7 @@ function dedupe(paths: string[]) {
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   root: null,
+  workspaceEpoch: 0,
   chromeMode: "workspace",
   fileCount: 0,
   isIndexing: false,
@@ -119,8 +122,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       tauri.readDirectory(info.root),
       tauri.getRecentWorkspaces(),
     ]);
-    set({
+    set((state) => ({
       root: info.root,
+      workspaceEpoch: state.workspaceEpoch + 1,
       chromeMode: "workspace",
       fileCount: info.file_count,
       isIndexing: true,
@@ -129,7 +133,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       pinnedFiles: [],
       sidebarMetadataVersion: 0,
       recentWorkspaces: recents,
-    });
+    }));
     void get().hydratePinnedFiles(info.root);
 
     const session = await loadSession(info.root);
@@ -152,8 +156,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       activeTabId: null,
       activeFilePath: null,
     });
-    set({
+    set((state) => ({
       root: null,
+      workspaceEpoch: state.workspaceEpoch + 1,
       chromeMode: "workspace",
       fileCount: 0,
       directoryCache: new Map(),
@@ -161,7 +166,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       pinnedFiles: [],
       sidebarMetadataVersion: 0,
       isIndexing: false,
-    });
+    }));
   },
 
   restoreFromBundle: async (bundle) => {
@@ -173,8 +178,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       activeFilePath: null,
     });
 
-    set({
+    set((state) => ({
       root: bundle.workspace.root,
+      workspaceEpoch: state.workspaceEpoch + 1,
       chromeMode: "workspace",
       fileCount: bundle.workspace.file_count,
       isIndexing: true,
@@ -183,7 +189,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       pinnedFiles: [],
       sidebarMetadataVersion: 0,
       recentWorkspaces: bundle.recent_workspaces,
-    });
+    }));
     void get().hydratePinnedFiles(bundle.workspace.root);
 
     if (bundle.session && bundle.session.tabs && bundle.session.tabs.length > 0) {
@@ -220,11 +226,26 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   setStartupResolved: () => set({ isStartupResolved: true }),
 
   refreshDirectory: async (path: string) => {
+    const { root: rootAtStart, workspaceEpoch: epochAtStart } = get();
     const entries = await tauri.readDirectory(path);
     set((state) => {
+      if (state.root !== rootAtStart || state.workspaceEpoch !== epochAtStart) return state;
       const cache = new Map(state.directoryCache);
       cache.set(path, entries);
       return { directoryCache: cache };
+    });
+  },
+
+  ensureDirectoryExpanded: async (path: string) => {
+    const { root: rootAtStart, workspaceEpoch: epochAtStart } = get();
+    const entries = await tauri.readDirectory(path);
+    set((state) => {
+      if (state.root !== rootAtStart || state.workspaceEpoch !== epochAtStart) return state;
+      const cache = new Map(state.directoryCache);
+      cache.set(path, entries);
+      const expandedDirs = new Set(state.expandedDirs);
+      expandedDirs.add(path);
+      return { directoryCache: cache, expandedDirs };
     });
   },
 

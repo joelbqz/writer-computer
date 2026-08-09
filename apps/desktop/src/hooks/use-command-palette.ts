@@ -22,6 +22,10 @@ export function useCommandPaletteSearch() {
   return useUIStore((s) => s.commandPaletteSearch);
 }
 
+export function useCommandPaletteSession() {
+  return useUIStore((s) => s.commandPaletteSession);
+}
+
 export function useSetCommandPaletteSearch() {
   return useUIStore((s) => s.setCommandPaletteSearch);
 }

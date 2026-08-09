@@ -163,6 +163,10 @@ fn dir_contains_markdown(path: &Path, state: Option<&WorkspaceState>) -> bool {
     dir_contains_markdown_recursive(path, None)
 }
 
+fn dir_is_empty(path: &Path) -> Result<bool, AppError> {
+    Ok(fs::read_dir(path)?.next().is_none())
+}
+
 pub fn read_directory_impl(
     path: &str,
     state: Option<&WorkspaceState>,
@@ -204,7 +208,7 @@ pub fn read_directory_impl(
         }
 
         if file_type.is_dir() {
-            if dir_contains_markdown(&entry_path, state) {
+            if dir_contains_markdown(&entry_path, state) || dir_is_empty(&entry_path)? {
                 dirs.push(DirEntry {
                     name,
                     path: entry_path.to_string_lossy().to_string(),
@@ -530,6 +534,8 @@ mod tests {
         // Create a subdirectory without markdown (should be filtered)
         fs::create_dir(dir.path().join("empty")).unwrap();
         fs::write(dir.path().join("empty").join("data.txt"), "data").unwrap();
+        // Truly empty directories stay visible so they can be populated.
+        fs::create_dir(dir.path().join("truly-empty")).unwrap();
         dir
     }
 
@@ -538,17 +544,19 @@ mod tests {
         let dir = setup_test_dir();
         let result = read_directory_impl(&dir.path().to_string_lossy(), None).unwrap();
 
-        // First entry should be the dir (notes), then files
+        // Directories come first, then files.
         assert!(result[0].is_dir);
         assert_eq!(result[0].name, "notes");
         assert!(result[0].title.is_none());
-        // Remaining should be files, sorted alphabetically
-        assert!(!result[1].is_dir);
-        assert_eq!(result[1].name, "hello.md");
-        assert_eq!(result[1].title.as_deref(), Some("Hello"));
+        assert!(result[1].is_dir);
+        assert_eq!(result[1].name, "truly-empty");
+        // Remaining files are sorted alphabetically.
         assert!(!result[2].is_dir);
-        assert_eq!(result[2].name, "world.md");
-        assert_eq!(result[2].title.as_deref(), Some("World"));
+        assert_eq!(result[2].name, "hello.md");
+        assert_eq!(result[2].title.as_deref(), Some("Hello"));
+        assert!(!result[3].is_dir);
+        assert_eq!(result[3].name, "world.md");
+        assert_eq!(result[3].title.as_deref(), Some("World"));
     }
 
     #[test]
@@ -556,9 +564,9 @@ mod tests {
         let dir = setup_test_dir();
         let result = read_directory_impl(&dir.path().to_string_lossy(), None).unwrap();
 
-        // Should have: notes/ dir, hello.md, world.md (3 total)
-        // NOT: readme.txt, empty/ dir
-        assert_eq!(result.len(), 3);
+        // Should have: notes/ dir, truly-empty/ dir, hello.md, world.md (4 total)
+        // NOT: readme.txt, empty/ dir (contains only non-Markdown content)
+        assert_eq!(result.len(), 4);
         for entry in &result {
             assert!(entry.is_dir || entry.is_markdown);
         }
@@ -578,9 +586,11 @@ mod tests {
 
         let result = read_directory_impl(&dir.path().to_string_lossy(), Some(&state)).unwrap();
 
-        assert_eq!(result.len(), 3);
+        assert_eq!(result.len(), 4);
         assert!(result[0].is_dir);
         assert_eq!(result[0].name, "notes");
+        assert!(result[1].is_dir);
+        assert_eq!(result[1].name, "truly-empty");
     }
 
     fn indexed_file(root: &Path, name: &str, modified_at: u64) -> crate::state::IndexedFile {

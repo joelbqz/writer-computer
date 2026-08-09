@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-09
+
+- Right-click the sidebar background to create a new Markdown file or folder directly in the workspace root, alongside the existing Search and Recents visibility toggles. Both actions immediately create the next available untitled entry and start safe basename-only inline rename, matching folder-row creation. Newly created empty folders remain visible in Everything while folders containing only non-Markdown content stay filtered.
+
 ## 2026-07-20
 
 - Hide status bar metrics and sidebar sections. Right-click the bottom status bar to toggle the word, character, and paragraph counts individually (the bar disappears when all three are off); right-click the sidebar background or a section title to toggle the Search button and the Recents section. All five toggles also live in Preferences — the metric toggles under a new "Status Bar" section, the sidebar ones under Appearance — and every menu lists hidden items as unchecked entries so they can be re-shown from the same place.

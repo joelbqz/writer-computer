@@ -1,4 +1,4 @@
-import type { MouseEvent } from "react";
+import { useState, type MouseEvent } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Search01Icon } from "@hugeicons/core-free-icons";
 import { useOpenCommandPalette } from "@/hooks/use-command-palette";
@@ -6,12 +6,15 @@ import { useBooleanSetting, useSetSetting } from "@/hooks/use-settings";
 import { ScrollFade } from "@/components/scroll-fade";
 import { SidebarNavigator } from "./sidebar-navigator";
 import { showSidebarSurfaceContextMenu } from "./sidebar-surface-context-menu";
+import { useRootSidebarEntryCreation } from "./use-root-sidebar-entry-creation";
 
 export function FileBrowser() {
   const openCommandPalette = useOpenCommandPalette();
   const setSetting = useSetSetting();
   const showSearch = useBooleanSetting("appearance.sidebar-show-search");
   const showRecents = useBooleanSetting("appearance.sidebar-show-recents");
+  const [renamingPath, setRenamingPath] = useState<string | null>(null);
+  const createRootEntry = useRootSidebarEntryCreation(setRenamingPath);
 
   // File and folder rows stop propagation from their own context menus, so
   // this only fires for the sidebar surface: empty space, section headers,
@@ -21,6 +24,8 @@ export function FileBrowser() {
     void showSidebarSurfaceContextMenu({
       showSearch,
       showRecents,
+      onNewFile: () => createRootEntry("file"),
+      onNewFolder: () => createRootEntry("folder"),
       onToggleSearch: (visible) => {
         void setSetting("appearance.sidebar-show-search", visible);
       },
@@ -61,7 +66,7 @@ export function FileBrowser() {
       )}
 
       <ScrollFade className="min-h-0 flex-1 overflow-y-scroll scrollbar-none">
-        <SidebarNavigator />
+        <SidebarNavigator renamingPath={renamingPath} setRenamingPath={setRenamingPath} />
       </ScrollFade>
     </div>
   );

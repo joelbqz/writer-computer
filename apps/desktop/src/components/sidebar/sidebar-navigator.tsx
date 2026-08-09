@@ -35,6 +35,8 @@ interface SidebarNavigatorProps {
   enableContextMenus?: boolean;
   onOpenFileComplete?: () => void;
   className?: string;
+  renamingPath: string | null;
+  setRenamingPath: (path: string | null) => void;
 }
 
 function getExtension(name: string): string {
@@ -48,6 +50,8 @@ export function SidebarNavigator({
   enableContextMenus = true,
   onOpenFileComplete,
   className = "flex flex-col gap-4 py-2",
+  renamingPath,
+  setRenamingPath,
 }: SidebarNavigatorProps) {
   const { root } = useWorkspace();
   const defaultOpenFile = useOpenFile();
@@ -252,6 +256,8 @@ export function SidebarNavigator({
           rootPath={root}
           openFile={openFileAndComplete}
           enableContextMenus={enableContextMenus}
+          renamingPath={renamingPath}
+          setRenamingPath={setRenamingPath}
         />
       </SidebarSection>
     </div>

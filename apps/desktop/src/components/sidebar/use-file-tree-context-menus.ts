@@ -7,29 +7,19 @@ import {
   removePathReferences,
   removePathsWithPrefix,
 } from "@/hooks/editor-api";
+import { getWorkspaceEpoch, getWorkspaceRoot } from "@/hooks/workspace-api";
 import * as tauri from "@/lib/tauri";
-import { getParentDir, getRelativePath } from "@/lib/paths";
+import { getFileName, getParentDir, getRelativePath } from "@/lib/paths";
 import { duplicateFile } from "./duplicate-file";
+import {
+  createUntitledSidebarEntry,
+  getSidebarCreationErrorMessage,
+  type SidebarEntryKind,
+} from "./sidebar-entry-creation";
 import { showFileContextMenu } from "./file-context-menu";
 import { showFolderContextMenu } from "./folder-context-menu";
 import { showBulkContextMenu } from "./bulk-context-menu";
 import type { DirEntry } from "@/types/fs";
-
-async function resolveUniqueName(
-  parentPath: string,
-  baseName: string,
-  extension: string,
-): Promise<string> {
-  const first = `${parentPath}/${baseName}${extension}`;
-  if (!(await tauri.fileExists(first))) return first;
-
-  for (let n = 2; n < 1000; n += 1) {
-    const candidate = `${parentPath}/${baseName} ${n}${extension}`;
-    if (!(await tauri.fileExists(candidate))) return candidate;
-  }
-
-  throw new Error(`Could not find an available name for "${baseName}" in ${parentPath}`);
-}
 
 interface UseFileTreeContextMenusArgs {
   openFile: (path: string) => Promise<void>;
@@ -38,8 +28,7 @@ interface UseFileTreeContextMenusArgs {
   togglePinnedFile: (path: string) => void;
   removePinnedFile: (path: string) => void;
   removePinnedFilesWithPrefix: (prefix: string) => void;
-  expandedDirs: Set<string>;
-  toggleDirectory: (path: string) => Promise<void>;
+  ensureDirectoryExpanded: (path: string) => Promise<void>;
   refreshDirectory: (path: string) => Promise<void>;
   invalidatePath: (path: string) => void;
   setRenamingPath: (path: string | null) => void;
@@ -53,8 +42,7 @@ export function useFileTreeContextMenus({
   togglePinnedFile,
   removePinnedFile,
   removePinnedFilesWithPrefix,
-  expandedDirs,
-  toggleDirectory,
+  ensureDirectoryExpanded,
   refreshDirectory,
   invalidatePath,
   setRenamingPath,
@@ -143,6 +131,39 @@ export function useFileTreeContextMenus({
     ],
   );
 
+  const createEntryInFolder = useCallback(
+    (entry: DirEntry, kind: SidebarEntryKind) => {
+      const activeRoot = workspaceRoot;
+      if (!activeRoot) return;
+      const activeEpoch = getWorkspaceEpoch();
+      const isCurrent = () =>
+        getWorkspaceRoot() === activeRoot && getWorkspaceEpoch() === activeEpoch;
+
+      void (async () => {
+        try {
+          const result = await createUntitledSidebarEntry(entry.path, kind, {
+            fileExists: tauri.fileExists,
+            createFile: tauri.createFile,
+            createFolder: tauri.createDirectory,
+            isCurrent,
+            revealEntry: () => ensureDirectoryExpanded(entry.path),
+            beginRenaming: setRenamingPath,
+          });
+          if ("followUpFailure" in result) {
+            window.alert(
+              `Created "${getFileName(result.path)}", but Writer could not update the sidebar: ${getSidebarCreationErrorMessage(result.followUpFailure)}`,
+            );
+          }
+        } catch (error) {
+          if (isCurrent()) {
+            window.alert(`Failed to create ${kind}: ${getSidebarCreationErrorMessage(error)}`);
+          }
+        }
+      })();
+    },
+    [ensureDirectoryExpanded, setRenamingPath, workspaceRoot],
+  );
+
   const handleFolderContextMenu = useCallback(
     (entry: DirEntry) => {
       const parent = getParentDir(entry.path);
@@ -150,42 +171,10 @@ export function useFileTreeContextMenus({
 
       void showFolderContextMenu({
         onNewFile: () => {
-          void (async () => {
-            try {
-              const filePath = await resolveUniqueName(entry.path, "Untitled", ".md");
-              await tauri.createFile(filePath);
-              // Expand the folder so the new file is visible
-              if (!expandedDirs.has(entry.path)) {
-                await toggleDirectory(entry.path);
-              } else {
-                await refreshDirectory(entry.path);
-              }
-              setRenamingPath(filePath);
-            } catch (error) {
-              window.alert(
-                `Failed to create file: ${error instanceof Error ? error.message : String(error)}`,
-              );
-            }
-          })();
+          createEntryInFolder(entry, "file");
         },
         onNewFolder: () => {
-          void (async () => {
-            try {
-              const folderPath = await resolveUniqueName(entry.path, "Untitled Folder", "");
-              await tauri.createDirectory(folderPath);
-              // Expand the parent folder so the new folder is visible
-              if (!expandedDirs.has(entry.path)) {
-                await toggleDirectory(entry.path);
-              } else {
-                await refreshDirectory(entry.path);
-              }
-              setRenamingPath(folderPath);
-            } catch (error) {
-              window.alert(
-                `Failed to create folder: ${error instanceof Error ? error.message : String(error)}`,
-              );
-            }
-          })();
+          createEntryInFolder(entry, "folder");
         },
         onCopyRelativePath: () => {
           void writeText(relative);
@@ -238,12 +227,11 @@ export function useFileTreeContextMenus({
       });
     },
     [
-      expandedDirs,
+      createEntryInFolder,
       invalidatePath,
       refreshDirectory,
       removePinnedFilesWithPrefix,
       setRenamingPath,
-      toggleDirectory,
       workspaceRoot,
     ],
   );

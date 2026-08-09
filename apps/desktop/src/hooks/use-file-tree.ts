@@ -16,6 +16,10 @@ export function useRefreshDirectory() {
   return useWorkspaceStore((s) => s.refreshDirectory);
 }
 
+export function useEnsureDirectoryExpanded() {
+  return useWorkspaceStore((s) => s.ensureDirectoryExpanded);
+}
+
 export function useInvalidatePath() {
   return useWorkspaceStore((s) => s.invalidatePath);
 }
