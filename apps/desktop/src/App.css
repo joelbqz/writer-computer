@@ -108,6 +108,14 @@
     var(--writer-editor-max-width) + var(--writer-editor-side-padding) +
       var(--writer-editor-side-padding)
   );
+  /* Room that stays free on each side of content which is legitimately wider
+     than the prose measure (today: rendered tables — see table-decorations.ts).
+     4rem clears the section rail, whose ticks sit 18–52px in from the pane edge.
+     The break-out width itself is composed at the point of use, not here: var()
+     references inside a custom property are substituted where the property is
+     *declared*, so a `:root` shorthand could never see the pane width that
+     `use-editor-settings.ts` publishes further down the tree. */
+  --writer-editor-breakout-gutter: 4rem;
   --writer-editor-font-family: var(--editor-font);
   --writer-editor-font-size: 16px;
   --writer-editor-line-height: 1.8;

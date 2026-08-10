@@ -71,10 +71,17 @@
      render in the page-padding gutter, so we relax the LEFT clip by the
      side-padding distance (clamped to 0). The selection rect's between-
      filler still needs clipping on the left, which we now do at the
-     selection-layer level — see `.cm-selectionLayer` below. The right
-     side stays at the strict text-col-inset.
-     See selection-rect-bleeds-past-text-spec.md and heading-hash-margin-
-     spec.md. */
+     selection-layer level — see `.cm-selectionLayer` below.
+
+     Both sides are additionally relaxed to the break-out gutter, because a
+     wide rendered table may overhang the measure (see table-decorations.ts)
+     and a clip at the text column would cut it off. That does not re-open the
+     selection-rect bleed: `.cm-selectionLayer` clips the rect symmetrically at
+     the strict text-col-inset, and everything else painted outside the text
+     column is empty space. The gutter clip stays as a backstop so nothing can
+     paint into the pane edges.
+     See selection-rect-bleeds-past-text-spec.md, heading-hash-margin-spec.md
+     and table-break-out-measure-spec.md. */
   --writer-text-col-inset: max(
     var(--writer-editor-side-padding, 4rem),
     calc(
@@ -83,8 +90,11 @@
     )
   );
   clip-path: inset(
-    0 var(--writer-text-col-inset) 0
-      max(0px, calc(var(--writer-text-col-inset) - var(--writer-editor-side-padding, 4rem)))
+    0 min(var(--writer-text-col-inset), var(--writer-editor-breakout-gutter, 4rem)) 0
+      min(
+        max(0px, calc(var(--writer-text-col-inset) - var(--writer-editor-side-padding, 4rem))),
+        var(--writer-editor-breakout-gutter, 4rem)
+      )
   );
 }
 

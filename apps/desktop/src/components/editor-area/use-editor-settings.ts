@@ -12,6 +12,22 @@ export function useEditorSettingsRef() {
     (el: HTMLDivElement | null) => {
       if (!el) return;
       el.style.setProperty("--writer-editor-max-width", editorWidth === "full" ? "100%" : "720px");
+
+      // Publish the pane width so content that may break out of the measure
+      // (rendered tables) knows how much room there actually is. Inside the
+      // editor every percentage resolves against the measure — `.cm-content` is
+      // the width-capped box — so this cannot be done in CSS without making an
+      // ancestor of the CodeMirror DOM a query container, which would also make
+      // it the containing block for CM's fixed-position tooltips. Until the
+      // first observation lands the var is unset and the break-out width in
+      // `table-decorations.ts` falls back to the measure, so nothing overhangs
+      // unmeasured.
+      if (typeof ResizeObserver === "undefined") return;
+      const observer = new ResizeObserver(([entry]) => {
+        el.style.setProperty("--writer-editor-pane-width", `${entry.contentRect.width}px`);
+      });
+      observer.observe(el);
+      return () => observer.disconnect();
     },
     [editorWidth],
   );

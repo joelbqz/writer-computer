@@ -31,6 +31,8 @@ const tableBorderWidthPx = 1;
 // nearly everything and its neighbours collapse toward their minimum. Capping
 // the demand lets the other columns keep their natural width instead.
 const tableCellMaxWidthCh = 48;
+// How much room stays free between a broken-out table and each pane edge.
+const breakoutGutter = "var(--writer-editor-breakout-gutter, 4rem)";
 
 function numericSettingDefault(key: string, fallback: number): number {
   const def = SETTINGS_SCHEMA.find((entry) => entry.key === key);
@@ -498,9 +500,33 @@ const tableFoldExtension = foldableSyntaxFacet.of({
 const tableTheme = EditorView.baseTheme({
   ".cm-table-widget": {
     padding: `${tableWidgetVerticalPaddingEm / 2}em 0`,
+    // A table wider than the editor measure breaks out of it instead of being
+    // compressed into prose width. The inner box is allowed to grow past this
+    // wrapper, and `justify-content: center` splits that overhang evenly, so a
+    // broken-out table stays centred on the measure.
+    display: "flex",
+    justifyContent: "center",
   },
   ".cm-table-inner": {
-    display: "inline-block",
+    // `min-width: 100%` keeps a table that already fits flush with the left
+    // edge of the measure: the box spans the measure and the table inside it is
+    // still shrink-wrapped, so narrow tables render exactly as before.
+    minWidth: "100%",
+    width: "max-content",
+    // Grow to the pane minus a gutter on each side, never below the measure
+    // (`100%` here — the wrapper's containing block is `.cm-content`'s content
+    // box). Composed here rather than in a `:root` custom property because
+    // var() references are substituted where a custom property is declared, and
+    // `--writer-editor-pane-width` is published on the editor pane, not on
+    // `:root`; a pre-composed shorthand would only ever see the fallback.
+    maxWidth: `max(100%, calc(var(--writer-editor-pane-width, 0px) - 2 * ${breakoutGutter}))`,
+    // Never let the flex layout shrink the box back to the measure.
+    flex: "none",
+    // Past the break-out ceiling the table scrolls inside its own box, so the
+    // document itself never scrolls sideways.
+    overflowX: "auto",
+    overscrollBehaviorX: "contain",
+    scrollbarGutter: "stable",
   },
   ".cm-table-widget table": {
     borderCollapse: "separate",
@@ -510,7 +536,11 @@ const tableTheme = EditorView.baseTheme({
     overflow: "hidden",
     fontFamily: "inherit",
     fontSize: "inherit",
-    width: "auto",
+    // `max-content`, not `auto`: an auto table shrinks to whatever box it is
+    // given, which is the compression this widget is trying to avoid. At
+    // max-content every column gets the width it asks for (bounded per cell by
+    // `tableCellMaxWidthCh`) and the inner box scrolls if the total doesn't fit.
+    width: "max-content",
   },
   ".cm-table-widget th, .cm-table-widget td": {
     padding: `${tableCellVerticalPaddingEm / 2}em 0.8em`,

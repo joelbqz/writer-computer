@@ -105,7 +105,8 @@ needed; `email:<canonical>` and `createLoginOtpSender` render intact.
 ## Follow-ups
 
 - **Phase B** — wide tables breaking out of the measure / horizontal scrolling.
-  Pending a design decision.
+  Done: `table-break-out-measure-spec.md`. It re-measured the 48ch cap and kept
+  it, and cut the drift below from 944px/425px to 344px/130px on its own fixture.
 - `estimateTableWidgetHeight` still assumes one visual line per row, so a
   document of prose-heavy tables grows under the reader on first scroll-through.
   Measured cold on the pathological fixture: 527px total drift with this change
