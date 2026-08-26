@@ -5,7 +5,6 @@ import { EditorScrollContainer } from "./editor-scroll-container";
 import { EditorSearchOverview } from "./editor-search-overview";
 import { SectionRail } from "./section-rail";
 import { useCloseEditorSearchWhenInactive } from "./use-close-editor-search-when-inactive";
-import { useEditorSettingsRef } from "./use-editor-settings";
 import { useIsFileLoading } from "@/hooks/use-tabs";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 
@@ -27,7 +26,6 @@ interface EditorPaneProps {
 
 export const EditorPane = memo(function EditorPane({ path, isActive }: EditorPaneProps) {
   const isLoading = useIsFileLoading(path);
-  const editorSettingsRef = useEditorSettingsRef();
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [editorView, setEditorView] = useState<EditorView | null>(null);
   useCloseEditorSearchWhenInactive(isActive);
@@ -67,14 +65,12 @@ export const EditorPane = memo(function EditorPane({ path, isActive }: EditorPan
         >
           <FrontmatterPanel filePath={path} />
         </div>
-        <div ref={editorSettingsRef}>
-          <ProseMarkEditor
-            filePath={path}
-            getScrollContainer={getScrollContainer}
-            autoFocus={isActive}
-            onViewChange={setEditorView}
-          />
-        </div>
+        <ProseMarkEditor
+          filePath={path}
+          getScrollContainer={getScrollContainer}
+          autoFocus={isActive}
+          onViewChange={setEditorView}
+        />
       </EditorScrollContainer>
       <SectionRail filePath={path} view={editorView} scrollContainerRef={scrollContainerRef} />
       {isActive && <EditorSearchOverview scrollContainerRef={scrollContainerRef} />}

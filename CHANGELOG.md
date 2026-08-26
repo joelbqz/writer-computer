@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-26
+
+- Add a **Content Width** slider under Preferences → Editor (480–1600px, default 734px) so the width of the text column is adjustable instead of a fixed Full/Narrow choice. The column never exceeds the pane, so the top of the range behaves as full width on a laptop. The frontmatter panel now shares the same width as the text column. An existing Editor Width preference migrates automatically (`narrow` → 720px, `full` → 1600px); the default changes from full width to a 734px reading column — drag the slider up if you preferred the wide layout.
+
 ## 2026-08-10
 
 - Fix rendered markdown tables starving columns and breaking words mid-word (`protectio` / `n`). Table cells inherited `overflow-wrap: anywhere` from the editor's line wrapping, and because that value counts toward a column's minimum width, the table layout was free to squeeze any column down to a single character while the longest-prose column took nearly all the width. Cells now wrap on word boundaries, so a column never gets narrower than its longest word. The blanket 6em minimum is gone — a `#` column is now as narrow as its digits instead of being padded out to the width of a real column — and no single column may demand more than about half the line, which leaves medium columns like "24 hours rolling per identity" enough room to read instead of stacking one word per line. Very long unbreakable tokens (a `sha256:` digest, a long path) still break, but only when they genuinely cannot fit, and the table stays within the editor width. Headers are also left-aligned to match their bodies (an explicit `:---:` or `---:` still wins), and cells align to the top of their row instead of floating in the middle.
