@@ -172,6 +172,7 @@ pub fn set_setting(
     } else {
         with_global_settings_mut(app.state::<AppState>().inner(), &state, persist)?
     };
+    sync_telemetry(&app, webview.label(), &key)?;
     Ok(config_value_to_json(&persisted))
 }
 
@@ -194,7 +195,20 @@ pub fn reset_setting(
         with_settings_mut(&app, webview.label(), reset)?
     } else {
         with_global_settings_mut(app.state::<AppState>().inner(), &state, reset)
+    }?;
+    sync_telemetry(&app, webview.label(), &key)
+}
+
+/// Push a `telemetry.*` write into the running telemetry client so toggling the
+/// preference takes effect immediately instead of at the next launch. Other
+/// keys short-circuit before touching the settings lock.
+fn sync_telemetry(app: &tauri::AppHandle, label: &str, key: &str) -> Result<(), AppError> {
+    if !key.starts_with("telemetry.") {
+        return Ok(());
     }
+    let (enabled, email) = with_settings(app, label, crate::telemetry::settings_snapshot)?;
+    crate::telemetry::apply_settings(enabled, email);
+    Ok(())
 }
 
 #[cfg(test)]

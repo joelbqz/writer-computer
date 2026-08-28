@@ -149,7 +149,10 @@
 [data-settings-panel] select:focus-visible,
 [data-settings-panel] button:focus-visible,
 [data-search-overlay] input:focus-visible,
-[data-search-overlay] button:focus-visible {
+[data-search-overlay] button:focus-visible,
+/* A modal card takes focus programmatically so it can handle Escape; the ring
+   is for keyboard-navigating controls, not for the container itself. */
+.surface-card-opaque:focus-visible {
   outline: none;
 }
 
@@ -255,6 +258,14 @@ body.tree-dragging [data-tree-path] {
   background: color-mix(in srgb, var(--bg-base) 55%, transparent);
   z-index: -1;
   pointer-events: none;
+}
+
+/* Modal variant of the card. `.surface-card` is deliberately translucent
+   chrome — right for popovers floating over content, wrong for a dialog that
+   demands a decision, where the page behind it shows through the copy. Opt in
+   with `surface-card surface-card-opaque`. */
+.surface-card-opaque::before {
+  background: var(--bg-base);
 }
 
 .compact-picker-shell {
