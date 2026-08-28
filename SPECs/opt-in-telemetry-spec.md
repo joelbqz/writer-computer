@@ -79,18 +79,25 @@ Secondary and compact windows never prompt.
 
 ### Events
 
-| Event              | Emitted from                         | Trigger                                                    |
-| ------------------ | ------------------------------------ | ---------------------------------------------------------- |
-| `app_opened`       | `lib.rs` setup                       | Once per process launch                                    |
-| `file_created`     | `fs::create_file_impl`               | Any path that creates a file                               |
-| `folder_created`   | `fs::create_directory_impl`          | Any path that creates a folder                             |
-| `workspace_opened` | `workspace::prepare_workspace_state` | A workspace root becomes active, including session restore |
+| Event              | Emitted from                                    | Trigger                                                    |
+| ------------------ | ----------------------------------------------- | ---------------------------------------------------------- |
+| `app_opened`       | `lib.rs` setup, and `apply_settings` on consent | Once per process launch                                    |
+| `file_created`     | `fs::create_file_impl`                          | Any path that creates a file                               |
+| `folder_created`   | `fs::create_directory_impl`                     | Any path that creates a folder                             |
+| `workspace_opened` | `workspace::prepare_workspace_state`            | A workspace root becomes active, including session restore |
 
 Every call site is the shared inner function, not the `#[tauri::command]`
 wrapper. `create_sidebar_entry` reuses `create_file_impl`, and the startup
 restore bundle reuses `prepare_workspace_state`, so those inner functions are
 the one place where each fact is true exactly once. Instrumenting the commands
 instead would miss the sidebar and restore paths.
+
+`app_opened` has two emit points because consent can arrive after startup. A
+user opting in during their first session enabled telemetry _after_ the startup
+call had already no-opped; without the second call that session would never be
+counted, and someone who opts in and never returns would be invisible in the
+stream entirely. A per-process flag, set only when the event is actually
+queued, keeps it to one per launch.
 
 ### Properties
 

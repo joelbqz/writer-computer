@@ -24,7 +24,7 @@ Four events. That is the whole list.
 
 | Event              | When                                                                        |
 | ------------------ | --------------------------------------------------------------------------- |
-| `app_opened`       | Once per app launch                                                         |
+| `app_opened`       | Once per app launch (or when you first turn telemetry on, if that is later) |
 | `workspace_opened` | A workspace becomes active, including restoring your last session at launch |
 | `file_created`     | A file is created                                                           |
 | `folder_created`   | A folder is created                                                         |

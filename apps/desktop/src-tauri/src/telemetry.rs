@@ -113,6 +113,10 @@ pub struct Telemetry {
     distinct_id: String,
     prompted: AtomicBool,
     enabled: AtomicBool,
+    /// Whether this process has already reported `app_opened`. Consent can
+    /// arrive after startup, so the event has two possible emit points and
+    /// this keeps it to one per launch.
+    session_opened_reported: AtomicBool,
     email: Mutex<Option<String>>,
     app_version: &'static str,
     sender: UnboundedSender<QueuedEvent>,
@@ -162,6 +166,7 @@ pub fn init(app: &tauri::AppHandle, enabled: bool, email: Option<String>) {
         distinct_id: identity.distinct_id,
         prompted: AtomicBool::new(identity.prompted),
         enabled: AtomicBool::new(enabled),
+        session_opened_reported: AtomicBool::new(false),
         email: Mutex::new(normalize_email(email)),
         app_version: env!("CARGO_PKG_VERSION"),
         sender,
@@ -193,6 +198,30 @@ pub fn track(name: &'static str) {
     let _ = telemetry.sender.send(QueuedEvent { name });
 }
 
+/// Report that the app launched, at most once per process.
+///
+/// Called twice on purpose: once at startup, and again whenever consent is
+/// granted. A user who opts in during their first session enabled telemetry
+/// *after* startup had already passed, so the startup call was a no-op —
+/// without the second call that first session would never be counted, and
+/// someone who opts in and never returns would be invisible in this stream.
+/// The flag is only set when the event is actually queued, so a disabled
+/// startup leaves the door open for the consent-time call.
+pub fn report_app_opened() {
+    let Some(telemetry) = instance() else { return };
+    if !telemetry.enabled.load(Ordering::Relaxed) {
+        return;
+    }
+    if telemetry
+        .session_opened_reported
+        .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+        .is_err()
+    {
+        return;
+    }
+    track("app_opened");
+}
+
 /// Apply a settings change to the running client so toggling the preference
 /// takes effect without a restart. Called from the settings write path.
 pub fn apply_settings(enabled: bool, email: Option<String>) {
@@ -201,6 +230,9 @@ pub fn apply_settings(enabled: bool, email: Option<String>) {
     let Some(telemetry) = instance() else { return };
     telemetry.enabled.store(enabled, Ordering::Relaxed);
     *telemetry.email.lock() = normalize_email(email);
+    // Covers consent granted mid-session; a no-op if this launch already
+    // reported, so re-enabling from Preferences does not double count.
+    report_app_opened();
 }
 
 /// Whether the first-run consent dialog still needs to be shown.
@@ -419,6 +451,12 @@ mod tests {
     fn omitted_email_sends_no_person_properties() {
         let properties = event_properties("install-1", "0.5.0", None);
         assert!(!properties.contains_key("$set"));
+    }
+
+    #[test]
+    fn app_opened_is_a_no_op_without_a_client() {
+        // The uninitialized case: a keyless build must not panic or mark state.
+        report_app_opened();
     }
 
     #[test]

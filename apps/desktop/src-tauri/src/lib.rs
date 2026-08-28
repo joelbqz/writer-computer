@@ -507,7 +507,7 @@ pub fn run() {
                     .map(telemetry::settings_snapshot)
                     .unwrap_or((false, None));
                 telemetry::init(app.handle(), enabled, email);
-                telemetry::track("app_opened");
+                telemetry::report_app_opened();
             }
 
             // On macOS, `open -a Writer /path` delivers the path via
