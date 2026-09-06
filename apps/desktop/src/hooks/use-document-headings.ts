@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useFileContent } from "@/hooks/use-tabs";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { createHeadingSlugger } from "@/lib/heading-slug";
 
 export interface DocumentHeading {
@@ -81,11 +82,15 @@ export function buildSlugIndex(headings: DocumentHeading[]): Map<string, Documen
   return index;
 }
 
+// Headings feed the section rail, which doesn't need keystroke-accurate
+// positions; debouncing keeps the full-document line scan off the typing path.
+const HEADINGS_DEBOUNCE_MS = 150;
+
 export function useDocumentHeadings(
   filePath: string | null,
   options: DocumentHeadingsOptions = {},
 ): DocumentHeading[] {
-  const content = useFileContent(filePath);
+  const content = useDebouncedValue(useFileContent(filePath), HEADINGS_DEBOUNCE_MS);
   const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
   return useMemo(
     () => parseDocumentHeadings(content, { maxDepth, slugDepth: FULL_DEPTH }),

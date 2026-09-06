@@ -39,34 +39,45 @@ interface MeasureData {
 function measureBlockQuotes(view: EditorView): MeasureData {
   const lineFroms: number[] = [];
   const nestedBorders: { pos: number; offset: number }[] = [];
+  // Only measure what's rendered: `coordsAtPos` is null outside the viewport
+  // anyway, and this runs on every edit. A blockquote can span several
+  // visible ranges, so dedupe by its start.
+  const seen = new Set<number>();
+  const tree = syntaxTree(view.state);
 
-  syntaxTree(view.state).iterate({
-    enter(node) {
-      if (node.type.name != "Blockquote") return;
+  for (const { from, to } of view.visibleRanges) {
+    tree.iterate({
+      from,
+      to,
+      enter(node) {
+        if (node.type.name != "Blockquote") return;
+        if (seen.has(node.from)) return false;
+        seen.add(node.from);
 
-      // Add a line decoration for each line in the blockquote
-      const startLine = view.state.doc.lineAt(node.from).number;
-      const endLine = view.state.doc.lineAt(node.to).number;
-      for (let i = startLine; i <= endLine; i++) {
-        const line = view.state.doc.line(i);
-        lineFroms.push(line.from);
-      }
+        // Add a line decoration for each line in the blockquote
+        const startLine = view.state.doc.lineAt(node.from).number;
+        const endLine = view.state.doc.lineAt(node.to).number;
+        for (let i = startLine; i <= endLine; i++) {
+          const line = view.state.doc.line(i);
+          lineFroms.push(line.from);
+        }
 
-      // Find any nested blockquotes and measure their visual offset
-      const cursor = node.node.cursor();
-      cursor.iterate((child) => {
-        if (child.type.name !== "QuoteMark") return;
-        const line = view.state.doc.lineAt(child.from);
-        if (child.from == line.from) return;
-        const offset =
-          (view.coordsAtPos(child.from)?.left ?? 0) - (view.coordsAtPos(line.from)?.left ?? 0);
+        // Find any nested blockquotes and measure their visual offset
+        const cursor = node.node.cursor();
+        cursor.iterate((child) => {
+          if (child.type.name !== "QuoteMark") return;
+          const line = view.state.doc.lineAt(child.from);
+          if (child.from == line.from) return;
+          const offset =
+            (view.coordsAtPos(child.from)?.left ?? 0) - (view.coordsAtPos(line.from)?.left ?? 0);
 
-        nestedBorders.push({ pos: child.from, offset });
-      });
+          nestedBorders.push({ pos: child.from, offset });
+        });
 
-      return false;
-    },
-  });
+        return false;
+      },
+    });
+  }
 
   return { lineFroms, nestedBorders };
 }

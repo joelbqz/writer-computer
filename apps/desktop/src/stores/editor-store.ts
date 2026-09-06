@@ -149,8 +149,30 @@ function withDerivedDate<T extends { frontmatter: string | null }>(file: T) {
   return { ...file, displayDate: getFrontmatterDisplayDate(file.frontmatter) };
 }
 
-function withDerivedStats<T extends { content: string }>(file: T) {
-  return { ...file, stats: getDocumentStats(file.content) };
+// Word/character/paragraph counts are display-only (status bar) and cost a
+// full-document pass, so edits refresh them on a trailing timer instead of
+// synchronously on every keystroke. Loads and reloads still derive them
+// eagerly via `withDerived`.
+const STATS_REFRESH_MS = 150;
+const statsRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function scheduleStatsRefresh(path: string, set: EditorStateSetter) {
+  const pending = statsRefreshTimers.get(path);
+  if (pending) clearTimeout(pending);
+  statsRefreshTimers.set(
+    path,
+    setTimeout(() => {
+      statsRefreshTimers.delete(path);
+      set((state) => {
+        const file = state.openFiles.get(path);
+        if (!file) return state;
+        const stats = getDocumentStats(file.content);
+        const files = new Map(state.openFiles);
+        files.set(path, { ...file, stats });
+        return { openFiles: files };
+      });
+    }, STATS_REFRESH_MS),
+  );
 }
 
 function withDerived<T extends { frontmatter: string | null; content: string }>(file: T) {
@@ -1094,19 +1116,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
       const { title, titleSource } = inferTitle(content, existing.frontmatter);
       const files = new Map(state.openFiles);
-      files.set(
-        path,
-        withDerivedStats({
-          ...existing,
-          content,
-          title,
-          titleSource,
-          isDirty: true,
-        }),
-      );
+      files.set(path, {
+        ...existing,
+        content,
+        title,
+        titleSource,
+        isDirty: true,
+      });
       return { openFiles: files };
     });
 
+    scheduleStatsRefresh(path, set as EditorStateSetter);
     scheduleSave(path);
   },
 

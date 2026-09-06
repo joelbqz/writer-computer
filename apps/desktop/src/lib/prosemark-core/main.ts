@@ -8,6 +8,8 @@ export * from "./clickLink";
 export * from "./tabWidthExtension";
 export * from "./codeFenceExtension";
 export * from "./list";
+export * from "./imageSrc";
+export * from "./links";
 
 export * from "./basicSetup";
 

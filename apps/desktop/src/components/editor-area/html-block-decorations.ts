@@ -1,8 +1,10 @@
 import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 import {
   foldableSyntaxFacet,
+  resolveImageSrc,
   selectAllDecorationsOnSelectExtension,
 } from "@/lib/prosemark-core/main";
+import { LruCache } from "@/lib/lru";
 import type { BlockParser, BlockContext, Line, MarkdownConfig } from "@lezer/markdown";
 import DOMPurify from "dompurify";
 import { dragFrozenSelectionField, rangesTouchInclusive } from "./drag-selection-gate";
@@ -143,14 +145,22 @@ function convertMarkdownInHtml(html: string): string {
   return doc.body.innerHTML;
 }
 
+// The fold field rebuilds on every doc and selection change, so sanitising
+// (DOMParser + tree walk + DOMPurify) must not run per rebuild per block.
+const sanitizedCache = new LruCache<string>(100);
+
 function sanitizeHTML(html: string): string {
+  const cached = sanitizedCache.get(html);
+  if (cached !== undefined) return cached;
   ensureSanitizer();
   const withMarkdown = convertMarkdownInHtml(html);
-  return DOMPurify.sanitize(withMarkdown, {
+  const sanitized = DOMPurify.sanitize(withMarkdown, {
     ALLOWED_TAGS,
     ALLOWED_ATTR,
     ALLOW_DATA_ATTR: false,
   });
+  sanitizedCache.set(html, sanitized);
+  return sanitized;
 }
 
 class HtmlBlockWidget extends WidgetType {
@@ -165,11 +175,15 @@ class HtmlBlockWidget extends WidgetType {
     return this.rawText === other.rawText;
   }
 
-  toDOM(): HTMLElement {
+  toDOM(view: EditorView): HTMLElement {
     const wrapper = document.createElement("div");
     wrapper.className = "cm-html-block-widget";
     wrapper.contentEditable = "false";
     wrapper.innerHTML = this.sanitizedHtml;
+    for (const img of wrapper.querySelectorAll("img")) {
+      const raw = img.getAttribute("src");
+      if (raw) img.src = resolveImageSrc(view.state, raw);
+    }
     return wrapper;
   }
 

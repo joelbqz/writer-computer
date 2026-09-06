@@ -69,9 +69,42 @@ interface NoGoZone {
 // fallback at mount/swap completion before `advanceViewportParse` has
 // populated the tree.
 function collectHeadingNoGoZones(state: EditorState, force = false): NoGoZone[] {
-  if (force) ensureSyntaxTree(state, state.doc.length, 50);
+  return collectZonesInRange(state, 0, state.doc.length, force);
+}
+
+// Zones are per line, so callers on the hot path (the transaction filter runs
+// on every selection change) pass only the lines their endpoints sit on. The
+// parse is then advanced only as far as those lines, not the whole document.
+function collectHeadingNoGoZonesAt(
+  state: EditorState,
+  positions: readonly number[],
+  force = false,
+): NoGoZone[] {
+  const lines = new Map<number, { from: number; to: number }>();
+  for (const pos of positions) {
+    const line = state.doc.lineAt(pos);
+    lines.set(line.from, line);
+  }
   const zones: NoGoZone[] = [];
-  syntaxTree(state).iterate({
+  for (const line of lines.values()) {
+    zones.push(...collectZonesInRange(state, line.from, line.to, force));
+  }
+  return zones;
+}
+
+function collectZonesInRange(
+  state: EditorState,
+  from: number,
+  to: number,
+  force: boolean,
+): NoGoZone[] {
+  // `ensureSyntaxTree` hands back the freshly advanced tree; `syntaxTree(state)`
+  // only reflects the last committed LanguageState (see docs/editor.md).
+  const tree = (force ? ensureSyntaxTree(state, to, 50) : null) ?? syntaxTree(state);
+  const zones: NoGoZone[] = [];
+  tree.iterate({
+    from,
+    to,
     enter(node) {
       if (!ATX_HEADING_RE.test(node.name)) return undefined;
       const hashEnd = findHeadingHashEnd(node.node);
@@ -82,6 +115,15 @@ function collectHeadingNoGoZones(state: EditorState, force = false): NoGoZone[] 
     },
   });
   return zones;
+}
+
+function endpointsThatCouldBeInZone(state: EditorState, selection: EditorSelection): number[] {
+  const positions: number[] = [];
+  for (const r of selection.ranges) {
+    if (couldBeInZone(state, r.anchor)) positions.push(r.anchor);
+    if (couldBeInZone(state, r.head)) positions.push(r.head);
+  }
+  return positions;
 }
 
 function couldBeInZone(state: EditorState, pos: number): boolean {
@@ -238,13 +280,14 @@ const marginClickHandler = Prec.highest(
 // no-go zone, so we never recurse.
 const headingSelectionGuard = EditorState.transactionFilter.of((tr) => {
   if (!tr.selection) return tr;
-  if (!anySelectionEndpointCouldBeInZone(tr.state, tr.newSelection)) return tr;
+  const positions = endpointsThatCouldBeInZone(tr.state, tr.newSelection);
+  if (positions.length === 0) return tr;
 
   // Force-parse on doc changes — the swap path dispatches a single transaction
   // that BOTH replaces the doc and sets the selection, and Lezer's lazy
   // parser leaves `syntaxTree(tr.state)` empty for the new content. Without
   // forcing, the filter finds no headings and the selection lands at 0.
-  const zones = collectHeadingNoGoZones(tr.state, tr.docChanged);
+  const zones = collectHeadingNoGoZonesAt(tr.state, positions, tr.docChanged);
   if (zones.length === 0) return tr;
 
   const { changed, ranges } = clampRangesToZones(tr.newSelection.ranges, zones);
@@ -262,7 +305,7 @@ function findZoneEndingAt(state: EditorState, pos: number): NoGoZone | null {
   if (pos - line.from > MAX_HEADING_HASH_PREFIX) return null;
   // No force-parse — escape-left runs on a user keystroke, not a doc-replace
   // transaction, so the tree is fresh.
-  for (const zone of collectHeadingNoGoZones(state)) {
+  for (const zone of collectHeadingNoGoZonesAt(state, [pos])) {
     if (zone.to === pos) return zone;
   }
   return null;
@@ -319,12 +362,13 @@ const escapeHashLeft = Prec.highest(
 // even a transaction the filter can see.
 export function clampSelectionToHeadings(view: EditorView): void {
   const sel = view.state.selection;
-  if (!anySelectionEndpointCouldBeInZone(view.state, sel)) return;
+  const positions = endpointsThatCouldBeInZone(view.state, sel);
+  if (positions.length === 0) return;
 
   // Always force-parse here — this helper is called as a fallback at the
   // end of mount/swap paths specifically because the tree may not have been
   // ready when the selection was first set. Don't trust it to be parsed.
-  const zones = collectHeadingNoGoZones(view.state, true);
+  const zones = collectHeadingNoGoZonesAt(view.state, positions, true);
   if (zones.length === 0) return;
 
   const { changed, ranges } = clampRangesToZones(sel.ranges, zones);
@@ -346,6 +390,7 @@ export const headingDecorations: Extension = [
 export const __test = {
   MAX_HEADING_HASH_PREFIX,
   collectHeadingNoGoZones,
+  collectHeadingNoGoZonesAt,
   clampRangesToZones,
   couldBeInZone,
   anySelectionEndpointCouldBeInZone,
