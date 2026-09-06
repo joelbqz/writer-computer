@@ -21,6 +21,19 @@
       "cssVar": "--writer-editor-line-height"
     },
     {
+      "key": "editor.content-width",
+      "label": "Content Width",
+      "description": "Maximum width of the text column in pixels",
+      "category": "Editor",
+      "type": "range",
+      "min": 480,
+      "max": 1600,
+      "step": 10,
+      "default": 734,
+      "cssVar": "--writer-editor-max-width",
+      "cssFormat": "px"
+    },
+    {
       "key": "editor.tab-size",
       "label": "Tab Size",
       "description": "Number of spaces per tab",
@@ -101,15 +114,6 @@
       "category": "Appearance",
       "type": "boolean",
       "default": true
-    },
-    {
-      "key": "appearance.editor-width",
-      "label": "Editor Width",
-      "description": "Editor content width mode",
-      "category": "Appearance",
-      "type": "enum",
-      "options": ["full", "narrow"],
-      "default": "full"
     },
     {
       "key": "fonts.ui",

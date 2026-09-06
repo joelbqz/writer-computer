@@ -169,7 +169,7 @@ function RangeControl({
         onChange={(e) => onChange(Number(e.target.value))}
         className="h-1 w-44 appearance-none rounded-full bg-[var(--surface-subtle)] accent-[var(--accent)] [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow"
       />
-      <span className="w-8 shrink-0 text-right text-[13px] tabular-nums text-[var(--text-muted)]">
+      <span className="w-10 shrink-0 text-right text-[13px] tabular-nums text-[var(--text-muted)]">
         {Math.round(value)}
       </span>
     </div>
