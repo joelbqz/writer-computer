@@ -5,6 +5,7 @@ import type { DecorationSet } from "@codemirror/view";
 import { WidgetType } from "@codemirror/view";
 import { type Extension } from "@codemirror/state";
 import { FRONTMATTER_LANGUAGE_LABEL, isFrontmatterNode } from "./markdown/frontmatter";
+import { treeChanged } from "./utils";
 
 const fallbackMonospaceCodeFont =
   "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
@@ -138,7 +139,7 @@ export const codeBlockDecorationsExtension: Extension = ViewPlugin.fromClass(
     }
 
     update(update: ViewUpdate) {
-      if (update.docChanged || update.viewportChanged) {
+      if (update.docChanged || update.viewportChanged || treeChanged(update)) {
         this.decorations = codeBlockDecorations(update.view);
       }
     }

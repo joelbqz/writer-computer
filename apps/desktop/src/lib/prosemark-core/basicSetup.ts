@@ -1,7 +1,7 @@
 import { keymap, dropCursor, EditorView } from "@codemirror/view";
 import { type Extension } from "@codemirror/state";
 import { indentOnInput, bracketMatching, foldGutter, foldKeymap } from "@codemirror/language";
-import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+import { defaultKeymap, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { searchKeymap } from "@codemirror/search";
 import {
   autocompletion,
@@ -37,8 +37,9 @@ export const prosemarkBasicSetup = (): Extension => [
   fixedTabWidthExtension,
   codeBlockDecorationsExtension,
 
-  // Basic CodeMirror Setup
-  history(),
+  // Basic CodeMirror Setup. `history()` is deliberately absent: the host
+  // provides it in its own compartment so undo history can be reset per
+  // document without tearing down everything else in this bundle.
   dropCursor(),
   indentOnInput(),
   bracketMatching(),

@@ -92,13 +92,12 @@ const DRAG_END_USER_EVENT = "select.pointer.drag-end";
  * (primary-button-only, isPrimary, in-widget skip, idempotent re-entry) is
  * testable without mounting a real `EditorView`.
  *
- * The `.cm-mermaid-widget` skip is **load-bearing**, not redundant: the canvas
- * viewport's own `pointerdown` (`mermaid-canvas.ts:160`) calls
- * `e.preventDefault()` but does NOT `stopPropagation`, so canvas-internal
- * pointerdowns DO bubble to `contentDOM`. The Edit-code button only stops
- * `mousedown`, not `pointerdown` — so without this skip, every Edit-code
- * click would activate the gate and freeze `editMode` for the very toggle the
- * click is about to dispatch.
+ * The `.cm-mermaid-widget` skip: the canvas owns every pointer interaction
+ * inside the widget (pan, zoom, the in-canvas editor) and its `pointerdown`
+ * handlers call `preventDefault()` without `stopPropagation()`, so they bubble
+ * to `contentDOM`. Without the skip, every pan or button press would arm the
+ * gate and the matching `pointerup` would dispatch a spurious drag-end
+ * selection transaction into the outer editor.
  */
 function shouldStartDragGate(
   state: EditorState,

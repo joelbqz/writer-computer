@@ -2,6 +2,7 @@
 
 ## In Progress
 
+- Editor audit follow-ups: [`SPECs/editor-audit-spec.md`](SPECs/editor-audit-spec.md) — confirmed bugs (titled links leak their title when folded, list prefix guard/Backspace fire inside code fences, tree-derived ViewPlugins skip parse-advance rebuilds, duplicated stale `foldTreeSync`), keystroke-path performance (full-doc stats/headings per keystroke, whole-tree fold/hide walks, heading guard force-parsing the whole doc), and consolidation of duplicated helpers/command registries. Ordered into five PRs in the spec.
 - Reveal-in-sidebar + residual external-watcher misses: [`SPECs/reveal-in-sidebar-and-external-watcher-spec.md`](SPECs/reveal-in-sidebar-and-external-watcher-spec.md) — keep the explicit tab-context-menu "Reveal in sidebar" action working, leave ordinary file opens from expanding the Everything tree, and characterize the remaining external-file-watcher miss cases through a logging + manual-repro pass before patching further.
 
 ## Done
@@ -61,7 +62,6 @@
 
 ## Up Next
 
--
 
 ## Backlog
 

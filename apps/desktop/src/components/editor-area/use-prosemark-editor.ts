@@ -11,11 +11,11 @@ import {
   type StateCommand,
 } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
+import { history } from "@codemirror/commands";
 import {
   HighlightStyle,
   forceParsing,
   syntaxHighlighting,
-  syntaxTree,
   syntaxTreeAvailable,
 } from "@codemirror/language";
 import { search } from "@codemirror/search";
@@ -27,6 +27,8 @@ import {
   useEditorSearchStore,
 } from "./editor-search-store";
 import { EDITOR_SAFE_SCROLL_MARGIN } from "./editor-scroll-container";
+import { findOuterScroller, scrollPosToSafeTop } from "./editor-scroll";
+import { linkUrlAt, rawUrlAt } from "@/lib/prosemark-core/links";
 
 // Invisible CodeMirror search panel: returning a hidden DOM here flips
 // `searchState.panel` to truthy, which is what gates the built-in match
@@ -71,12 +73,7 @@ import { getWorkspaceRoot } from "@/hooks/workspace-api";
 import { buildSlugIndex, parseDocumentHeadings } from "@/hooks/use-document-headings";
 import type { DocumentHeading } from "@/hooks/use-document-headings";
 import { parseDocument, parseFrontmatter } from "@/lib/frontmatter";
-import {
-  formatMarkdownDestination,
-  getFileName,
-  normalizeMarkdownDestination,
-  resolveLinkTarget,
-} from "@/lib/paths";
+import { formatMarkdownDestination, getFileName, resolveLinkTarget } from "@/lib/paths";
 import { consumePendingAnchor, setPendingAnchor } from "@/lib/pending-anchor";
 import { logTimeline, mark } from "@/lib/startup-metrics";
 import * as tauri from "@/lib/tauri";
@@ -88,26 +85,6 @@ const VIEWPORT_OVERSHOOT = 2000;
 const VIEWPORT_PARSE_BUDGET_MS = 50;
 const IDLE_PARSE_BUDGET_MS = 50;
 const IDLE_PARSE_TIMEOUT_MS = 2000;
-
-function findScrollContainer(root: HTMLElement) {
-  let node: HTMLElement | null = root.parentElement;
-  while (node) {
-    const { overflowY } = getComputedStyle(node);
-    if (overflowY === "auto" || overflowY === "scroll") return node;
-    node = node.parentElement;
-  }
-  return null;
-}
-
-function findOuterScroller(view: EditorView): HTMLElement | null {
-  let el: HTMLElement | null = view.dom.parentElement;
-  while (el) {
-    const { overflowY } = getComputedStyle(el);
-    if (overflowY === "auto" || overflowY === "scroll") return el;
-    el = el.parentElement;
-  }
-  return null;
-}
 
 // True when the latest transaction was a search/replace navigation
 // (`select.search` from findNext/findPrevious/jumpToMatch, or
@@ -124,7 +101,7 @@ const searchScrollIntent = StateField.define<boolean>({
 });
 
 function resolveScrollContainer(root: HTMLElement, getScrollContainer?: () => HTMLElement | null) {
-  return getScrollContainer?.() ?? findScrollContainer(root);
+  return getScrollContainer?.() ?? findOuterScroller(root);
 }
 
 function focusOnRevealExtension(isDisposed: () => boolean): Extension {
@@ -293,63 +270,8 @@ function handleFrontmatterStart(event: KeyboardEvent, view: EditorView, filePath
   return true;
 }
 
-function getLinkHref(view: EditorView, pos: number) {
-  let href: string | undefined;
-  syntaxTree(view.state).iterate({
-    from: pos,
-    to: pos,
-    enter(node) {
-      if (node.name !== "Link") return;
-
-      const cursor = node.node.cursor();
-      if (!cursor.firstChild()) return false;
-
-      do {
-        if (cursor.name === "URL") {
-          href = normalizeMarkdownDestination(view.state.doc.sliceString(cursor.from, cursor.to));
-          return false;
-        }
-      } while (cursor.nextSibling());
-
-      return false;
-    },
-  });
-  return href;
-}
-
-function getRawUrl(view: EditorView, pos: number) {
-  let href: string | undefined;
-  syntaxTree(view.state).iterate({
-    from: pos,
-    to: pos,
-    enter(node) {
-      if (node.name !== "URL") return;
-      if (node.node.parent?.name === "Link") return false;
-      href = normalizeMarkdownDestination(view.state.doc.sliceString(node.from, node.to));
-      return false;
-    },
-  });
-  return href;
-}
-
 function findHeadingBySlug(content: string, slug: string): DocumentHeading | undefined {
   return buildSlugIndex(parseDocumentHeadings(content, { maxDepth: 6, slugDepth: 6 })).get(slug);
-}
-
-function scrollHeadingIntoView(
-  view: EditorView,
-  scroller: HTMLElement,
-  heading: DocumentHeading,
-  behavior: ScrollBehavior,
-) {
-  const pos = Math.min(heading.pos, view.state.doc.length);
-  const block = view.lineBlockAt(pos);
-  const screenY = view.documentTop + block.top;
-  const scrollerRect = scroller.getBoundingClientRect();
-  const delta = screenY - scrollerRect.top - EDITOR_SAFE_SCROLL_MARGIN;
-  const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-  const next = Math.max(0, Math.min(scroller.scrollTop + delta, max));
-  scroller.scrollTo({ top: next, behavior });
 }
 
 function scrollSameDocAnchor(view: EditorView, filePath: string, anchor: string) {
@@ -360,9 +282,9 @@ function scrollSameDocAnchor(view: EditorView, filePath: string, anchor: string)
     showAnchorWarning(`Heading "#${anchor}" not found in this document`);
     return;
   }
-  const scroller = findOuterScroller(view);
+  const scroller = findOuterScroller(view.dom);
   if (!scroller) return;
-  scrollHeadingIntoView(view, scroller, heading, "smooth");
+  scrollPosToSafeTop(view, scroller, heading.pos, "smooth");
 }
 
 async function followLink(href: string | null, view: EditorView, filePath: string) {
@@ -417,7 +339,7 @@ function linkHrefAt(event: MouseEvent, view: EditorView): string | null {
   }
   const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
   if (pos === null) return null;
-  return (isRenderedLink ? getLinkHref(view, pos) : getRawUrl(view, pos)) ?? null;
+  return (isRenderedLink ? linkUrlAt(view.state, pos) : rawUrlAt(view.state, pos)) ?? null;
 }
 
 function linkNavigationExtension(getFilePath: () => string, isDisposed: () => boolean): Extension {
@@ -458,7 +380,7 @@ function editorBodyContextMenuExtension(
       const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
       let linkHref: string | null = null;
       if (pos !== null) {
-        linkHref = getLinkHref(view, pos) ?? getRawUrl(view, pos) ?? null;
+        linkHref = linkUrlAt(view.state, pos) ?? rawUrlAt(view.state, pos) ?? null;
       }
 
       const hasLink = linkHref !== null;
@@ -479,12 +401,6 @@ function editorBodyContextMenuExtension(
               void writeText(view.state.sliceDoc(from, to));
             },
             onPaste: () => {
-              void readText().then((text) => {
-                if (!text || isDisposed()) return;
-                view.dispatch(view.state.replaceSelection(text));
-              });
-            },
-            onPastePlain: () => {
               void readText().then((text) => {
                 if (!text || isDisposed()) return;
                 view.dispatch(view.state.replaceSelection(text));
@@ -534,7 +450,7 @@ function editorBodyContextMenuExtension(
 function createEditorExtensions(
   getFilePath: () => string,
   isDisposed: () => boolean,
-  setupCompartment: Compartment,
+  historyCompartment: Compartment,
 ): Extension[] {
   return [
     markdown({
@@ -543,7 +459,10 @@ function createEditorExtensions(
     }),
     linkNavigationExtension(getFilePath, isDisposed),
     editorBodyContextMenuExtension(getFilePath, isDisposed),
-    setupCompartment.of(prosemarkBasicSetup()),
+    // Undo history lives in its own compartment so a tab swap can reset it
+    // (reconfigure out and back in) without tearing down the rest of the setup.
+    historyCompartment.of(history()),
+    prosemarkBasicSetup(),
     // Freeze unfurl/fold decisions while a pointer drag is in flight, so the
     // text doesn't reflow under the cursor as the live selection sweeps
     // across markdown nodes. Drives prosemark's `unfurlFreezeFacet` from a
@@ -570,7 +489,7 @@ function createEditorExtensions(
     // CodeMirror's default scroll behavior run.
     EditorView.scrollHandler.of((view, range) => {
       if (!view.state.field(searchScrollIntent, false)) return false;
-      const scroller = findOuterScroller(view);
+      const scroller = findOuterScroller(view.dom);
       if (!scroller) return false;
       // Use lineBlockAt + documentTop (CodeMirror's layout model) rather
       // than coordsAtPos (rendered DOM): coordsAtPos returns null when the
@@ -714,8 +633,8 @@ export function useProsemarkEditor(
   const onViewChangeRef = useRef(onViewChange);
   const prevPathRef = useRef<string | null>(null);
   const prevReloadVersionRef = useRef<number>(0);
-  const setupCompartmentRef = useRef<Compartment | null>(null);
-  if (!setupCompartmentRef.current) setupCompartmentRef.current = new Compartment();
+  const historyCompartmentRef = useRef<Compartment | null>(null);
+  if (!historyCompartmentRef.current) historyCompartmentRef.current = new Compartment();
 
   const reloadVersion = useReloadVersion(filePath);
 
@@ -756,7 +675,7 @@ export function useProsemarkEditor(
         extensions: createEditorExtensions(
           () => filePathRef.current,
           () => disposedRef.current,
-          setupCompartmentRef.current!,
+          historyCompartmentRef.current!,
         ),
       }),
     });
@@ -811,14 +730,14 @@ export function useProsemarkEditor(
       : Math.min(view.state.selection.main.head, content.length);
 
     if (pathChanged) {
-      // Reset undo history per file. Removing the basicSetup compartment discards
-      // its state fields (including history); re-adding initializes them fresh.
-      // Doing this in-place preserves the language/syntax-tree state and the
-      // surrounding decoration plugins, so the swap doesn't flash raw markdown
-      // the way a full view.setState would.
-      const setupCompartment = setupCompartmentRef.current!;
-      view.dispatch({ effects: setupCompartment.reconfigure([]) });
-      view.dispatch({ effects: setupCompartment.reconfigure(prosemarkBasicSetup()) });
+      // Reset undo history per file. Removing the history compartment discards
+      // its state field; re-adding initializes it fresh. Only history is in the
+      // compartment, so the language state and every decoration field survive
+      // and the swap doesn't flash raw markdown the way a full view.setState
+      // would.
+      const historyCompartment = historyCompartmentRef.current!;
+      view.dispatch({ effects: historyCompartment.reconfigure([]) });
+      view.dispatch({ effects: historyCompartment.reconfigure(history()) });
     }
 
     view.dispatch({
@@ -841,7 +760,7 @@ export function useProsemarkEditor(
           if (heading) {
             requestAnimationFrame(() => {
               if (disposedRef.current) return;
-              scrollHeadingIntoView(view, scrollContainer, heading, "auto");
+              scrollPosToSafeTop(view, scrollContainer, heading.pos, "auto");
             });
           } else {
             scrollContainer.scrollTo({ top: 0, behavior: "auto" });

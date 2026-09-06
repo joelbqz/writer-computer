@@ -8,7 +8,8 @@ import { useActiveHeadings } from "./use-active-headings";
 import { useEscKey } from "./use-esc-key";
 import { useMountTransition } from "./use-mount-transition";
 import { showNativeContextMenu } from "./editor-context-menu";
-import { EDITOR_SAFE_SCROLL_MARGIN, EDITOR_SCROLLBAR_GUTTER } from "./editor-scroll-container";
+import { EDITOR_SCROLLBAR_GUTTER } from "./editor-scroll-container";
+import { scrollPosToSafeTop } from "./editor-scroll";
 import "./section-rail.css";
 
 const INACTIVE_WIDTH = 10;
@@ -27,17 +28,6 @@ interface SectionRailProps {
   filePath: string;
   view: EditorView | null;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
-}
-
-function scrollToHeading(view: EditorView, scroller: HTMLElement, heading: DocumentHeading) {
-  const pos = Math.min(heading.pos, view.state.doc.length);
-  const block = view.lineBlockAt(pos);
-  const screenY = view.documentTop + block.top;
-  const scrollerRect = scroller.getBoundingClientRect();
-  const delta = screenY - scrollerRect.top - EDITOR_SAFE_SCROLL_MARGIN;
-  const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-  const next = Math.max(0, Math.min(scroller.scrollTop + delta, max));
-  scroller.scrollTo({ top: next, behavior: "auto" });
 }
 
 function buildHeadingLink(heading: DocumentHeading) {
@@ -90,7 +80,7 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
   const handleTickClick = (heading: DocumentHeading) => {
     const scroller = scrollContainerRef.current;
     if (!view || !scroller) return;
-    scrollToHeading(view, scroller, heading);
+    scrollPosToSafeTop(view, scroller, heading.pos, "auto");
   };
 
   if (headings.length === 0) return null;

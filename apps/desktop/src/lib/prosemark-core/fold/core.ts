@@ -111,18 +111,24 @@ export const foldableSyntaxFacet = Facet.define<FoldableSyntaxSpec, FoldableSynt
   enables: foldExtension,
 });
 
-export const selectAllDecorationsOnSelectExtension = (widgetClass: string): Extension =>
+/** On mousedown inside a `widgetClass` element, range-select the fold
+ *  decoration under it so the source unfolds for editing (a plain mouse
+ *  selection would overshoot the widget's content range). `ignoreTarget` lets
+ *  widgets with interactive children (links, buttons, `<summary>`) keep those
+ *  clicks. */
+export const selectAllDecorationsOnSelectExtension = (
+  widgetClass: string,
+  ignoreTarget?: (target: Element) => boolean,
+): Extension =>
   EditorView.domEventHandlers(
     eventHandlersWithClass({
       mousedown: {
         [widgetClass]: (e: MouseEvent, view: EditorView) => {
-          // Change selection when appropriate so that the content can be edited
-          // (selection by mouse would overshoot the widget content range)
+          if (!view.state.selection.main.empty) return;
+          const target = e.target;
+          if (!(target instanceof Element)) return;
+          if (ignoreTarget?.(target)) return;
 
-          const ranges = view.state.selection.ranges;
-          if (ranges.length === 0 || ranges[0]?.anchor !== ranges[0]?.head) return;
-
-          const target = e.target as HTMLElement;
           const pos = view.posAtDOM(target);
 
           const decorations = view.state.field(foldExtension);

@@ -8,6 +8,7 @@ import {
   WidgetType,
   type DecorationSet,
 } from "@codemirror/view";
+import { treeChanged } from "./utils";
 
 class NestedBlockQuoteBorder extends WidgetType {
   constructor(public offset: number) {
@@ -101,7 +102,7 @@ export const blockQuoteExtension = ViewPlugin.fromClass(
         this.decorations = this.decorations.map(u.changes);
       }
 
-      if (u.docChanged || u.viewportChanged) {
+      if (u.docChanged || u.viewportChanged || treeChanged(u)) {
         this.requestMeasure(u.view);
       }
     }

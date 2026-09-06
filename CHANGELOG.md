@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-09-05
+
+- Fix titled links leaking their title into the rendered text: `[text](url "title")` folded to `text"title"` because the link hider skipped Lezer's `LinkTitle` node.
+- Fix heading padding, code-block backgrounds, and blockquote bars going missing after jumping into a not-yet-parsed part of a long document (Cmd+G, section rail, anchor links) until the next scroll. The tree-derived view plugins now rebuild when the parse advances, like the state fields already did.
+- Remove the stale `foldTreeSync` workaround from the table and mermaid decorations; the fold field has rebuilt on parse advance since the list rewrite, so it only tripled the decoration rebuild cost per parse commit.
+- Reset undo history on tab switch by reconfiguring only the history compartment instead of the whole prosemark setup, which was tearing down and rebuilding every decoration field twice per switch.
+- Remove the editor context menu's "Paste as plain text" item; it was identical to "Paste" (the editor is plain text).
+- Consolidate link-destination lookup (`prosemark-core/links.ts`), safe-zone scrolling (`editor-scroll.ts`), and the click-to-unfold helper (`selectAllDecorationsOnSelectExtension` now takes an `ignoreTarget` predicate, used by HTML blocks). Update `docs/editor.md` to match the current mermaid / table / image decoration shapes.
+
 ## 2026-08-10
 
 - Fix rendered markdown tables starving columns and breaking words mid-word (`protectio` / `n`). Table cells inherited `overflow-wrap: anywhere` from the editor's line wrapping, and because that value counts toward a column's minimum width, the table layout was free to squeeze any column down to a single character while the longest-prose column took nearly all the width. Cells now wrap on word boundaries, so a column never gets narrower than its longest word. The blanket 6em minimum is gone — a `#` column is now as narrow as its digits instead of being padded out to the width of a real column — and no single column may demand more than about half the line, which leaves medium columns like "24 hours rolling per identity" enough room to read instead of stacking one word per line. Very long unbreakable tokens (a `sha256:` digest, a long path) still break, but only when they genuinely cannot fit, and the table stays within the editor width. Headers are also left-aligned to match their bodies (an explicit `:---:` or `---:` still wins), and cells align to the top of their row instead of floating in the middle.

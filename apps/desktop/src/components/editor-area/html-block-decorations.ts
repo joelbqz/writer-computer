@@ -1,6 +1,8 @@
-import { EditorSelection } from "@codemirror/state";
 import { Decoration, EditorView, WidgetType } from "@codemirror/view";
-import { foldExtension, foldableSyntaxFacet } from "@/lib/prosemark-core/main";
+import {
+  foldableSyntaxFacet,
+  selectAllDecorationsOnSelectExtension,
+} from "@/lib/prosemark-core/main";
 import type { BlockParser, BlockContext, Line, MarkdownConfig } from "@lezer/markdown";
 import DOMPurify from "dompurify";
 import { dragFrozenSelectionField, rangesTouchInclusive } from "./drag-selection-gate";
@@ -176,11 +178,10 @@ class HtmlBlockWidget extends WidgetType {
   }
 }
 
-function isInteractiveHtmlTarget(target: EventTarget | null) {
+function isInteractiveHtmlTarget(target: Element) {
   return (
-    target instanceof Element &&
     target.closest("a,button,input,select,textarea,summary,video,audio,label,[role='button']") !==
-      null
+    null
   );
 }
 
@@ -285,27 +286,10 @@ const htmlBlockTheme = EditorView.baseTheme({
   },
 });
 
-const htmlBlockSelectOnMouseDown = EditorView.domEventHandlers({
-  mousedown(event, view) {
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) return false;
-    if (!target.closest(".cm-html-block-widget")) return false;
-    if (isInteractiveHtmlTarget(target)) return false;
-
-    const ranges = view.state.selection.ranges;
-    if (ranges.length === 0 || ranges[0]?.anchor !== ranges[0]?.head) return false;
-
-    const pos = view.posAtDOM(target);
-    view.state.field(foldExtension).between(pos, pos, (from, to) => {
-      setTimeout(() => {
-        view.dispatch({ selection: EditorSelection.single(to, from) });
-      }, 0);
-      return false;
-    });
-
-    return false;
-  },
-});
+const htmlBlockSelectOnMouseDown = selectAllDecorationsOnSelectExtension(
+  "cm-html-block-widget",
+  isInteractiveHtmlTarget,
+);
 
 /**
  * Custom block parser that recognizes self-closing HTML tags (e.g. <br/>, <img ... />)

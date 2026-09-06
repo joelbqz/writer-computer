@@ -1,5 +1,6 @@
-import { Decoration, EditorView, ViewPlugin, ViewUpdate, WidgetType } from "@codemirror/view";
+import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
+import type { SyntaxNodeRef } from "@lezer/common";
 import { foldableSyntaxFacet } from "@/lib/prosemark-core/main";
 import { renderMermaid } from "./mermaid-renderer";
 import { MERMAID_CANVAS_HEIGHT, MermaidCanvasHandle, mountMermaidCanvas } from "./mermaid-canvas";
@@ -16,8 +17,8 @@ const WIDGET_VERTICAL_PADDING = 16;
 const widgetHandles = new WeakMap<HTMLElement, MermaidCanvasHandle>();
 
 /**
- * Mermaid widget. Identity is `(body, fenceText)` — the body drives the SVG
- * cache and the fence text drives the inline editor's content. The Edit-code
+ * Mermaid widget. Identity is the fence text: it determines both the body
+ * (which drives the SVG cache) and the inline editor's content. The Edit-code
  * toggle lives entirely inside the canvas frame, so it never participates in
  * widget identity and a toggle never triggers a CodeMirror rebuild.
  */
@@ -30,7 +31,7 @@ class MermaidWidget extends WidgetType {
   }
 
   eq(other: MermaidWidget): boolean {
-    return this.body === other.body && this.fenceText === other.fenceText;
+    return this.fenceText === other.fenceText;
   }
 
   // Fixed height regardless of diagram size, so the heightmap settles on a
@@ -145,16 +146,7 @@ function writeFenceText(view: EditorView, host: HTMLElement, next: string): void
  */
 function parseFencedCode(
   state: { doc: { sliceString(from: number, to: number): string } },
-  node: {
-    node: {
-      firstChild: {
-        name: string;
-        from: number;
-        to: number;
-        nextSibling: typeof node.node.firstChild;
-      } | null;
-    };
-  },
+  node: SyntaxNodeRef,
 ): { info: string; source: string } | undefined {
   let info = "";
   let source = "";
@@ -198,24 +190,6 @@ const mermaidFoldExtension = foldableSyntaxFacet.of({
   },
 });
 
-/**
- * Workaround: foldExtension only rebuilds on docChanged/selection, not on syntax
- * tree progression. When the incremental parser finishes after initial load, folds
- * stay stale. This plugin detects tree changes and nudges a rebuild.
- * (Same pattern as table-decorations.ts)
- */
-const foldTreeSync = ViewPlugin.fromClass(
-  class {
-    update(update: ViewUpdate) {
-      if (!update.docChanged && syntaxTree(update.state) !== syntaxTree(update.startState)) {
-        setTimeout(() => {
-          update.view.dispatch({ selection: update.view.state.selection });
-        });
-      }
-    }
-  },
-);
-
 export function mermaidDecorations() {
-  return [mermaidFoldExtension, foldTreeSync];
+  return [mermaidFoldExtension];
 }

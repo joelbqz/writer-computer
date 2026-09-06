@@ -1,33 +1,9 @@
 import { EditorView } from "@codemirror/view";
-import { HighlightStyle, syntaxHighlighting, syntaxTree } from "@codemirror/language";
-import { eventHandlersWithClass, iterChildren } from "./utils";
+import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { eventHandlersWithClass } from "./utils";
 import { markdownTags } from "./markdown/tags";
 import { Facet } from "@codemirror/state";
-import { normalizeMarkdownDestination } from "@/lib/paths";
-
-function getUrlFromLink(view: EditorView, pos: number): string | undefined {
-  const tree = syntaxTree(view.state);
-
-  let url: string | undefined;
-
-  tree.iterate({
-    to: pos,
-    from: pos,
-    enter(node) {
-      if (node.name !== "Link") return;
-
-      iterChildren(node.node.cursor(), (cursor) => {
-        if (cursor.name === "URL") {
-          url = normalizeMarkdownDestination(view.state.doc.sliceString(cursor.from, cursor.to));
-          return true;
-        }
-      });
-      return true;
-    },
-  });
-
-  return url;
-}
+import { linkUrlAt, rawUrlAt } from "./links";
 
 export type ClickLinkHandler = (link: string) => void;
 
@@ -46,7 +22,7 @@ const clickFullLinkExtension = EditorView.domEventHandlers(
           return;
         }
 
-        const url = getUrlFromLink(view, pos);
+        const url = linkUrlAt(view.state, pos);
         if (!url) {
           return;
         }
@@ -58,26 +34,6 @@ const clickFullLinkExtension = EditorView.domEventHandlers(
     },
   }),
 );
-
-const getRawUrl = (view: EditorView, pos: number): string | undefined => {
-  const tree = syntaxTree(view.state);
-
-  let url: string | undefined;
-
-  tree.iterate({
-    to: pos,
-    from: pos,
-    enter(node) {
-      if (node.name !== "URL") return;
-      if (node.node.parent?.name === "Link") return;
-
-      url = normalizeMarkdownDestination(view.state.doc.sliceString(node.from, node.to));
-      return true;
-    },
-  });
-
-  return url;
-};
 
 const addClassToUrl = syntaxHighlighting(
   HighlightStyle.define([
@@ -97,7 +53,7 @@ const clickRawUrlExtension = EditorView.domEventHandlers(
           return;
         }
 
-        const url = getRawUrl(view, pos);
+        const url = rawUrlAt(view.state, pos);
         if (!url) {
           return;
         }

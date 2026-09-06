@@ -14,6 +14,7 @@ import {
   type SelectionRange,
 } from "@codemirror/state";
 import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
+import { treeChanged } from "@/lib/prosemark-core/utils";
 
 type SyntaxNode = ReturnType<typeof syntaxTree>["topNode"];
 
@@ -171,7 +172,7 @@ const headingPlugin = ViewPlugin.fromClass(
     }
 
     update(update: ViewUpdate) {
-      if (update.docChanged || update.viewportChanged) {
+      if (update.docChanged || update.viewportChanged || treeChanged(update)) {
         this.decorations = buildDecorations(update.view);
       }
     }

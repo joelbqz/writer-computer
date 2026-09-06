@@ -15,7 +15,6 @@ export type EditorBodyMenuActionId =
   | "cut"
   | "copy"
   | "paste"
-  | "paste-plain"
   | "select-all"
   | "open-link"
   | "copy-link";
@@ -24,7 +23,6 @@ export interface EditorBodyMenuHandlers {
   onCut: () => void;
   onCopy: () => void;
   onPaste: () => void;
-  onPastePlain: () => void;
   onSelectAll: () => void;
   onOpenLink?: () => void;
   onCopyLink?: () => void;
@@ -39,7 +37,6 @@ export function buildEditorBodyMenuItemsSpec(
     { kind: "item", id: "cut", text: "Cut", action: handlers.onCut },
     { kind: "item", id: "copy", text: "Copy", action: handlers.onCopy },
     { kind: "item", id: "paste", text: "Paste", action: handlers.onPaste },
-    { kind: "item", id: "paste-plain", text: "Paste as plain text", action: handlers.onPastePlain },
   ];
 
   if (handlers.onRunCommand) {
