@@ -8,7 +8,6 @@ import {
   Prec,
   StateField,
   Transaction,
-  type StateCommand,
 } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { history } from "@codemirror/commands";
@@ -57,16 +56,7 @@ import { dragFreezeExtensions } from "./drag-selection-gate";
 import { clampSelectionToHeadings, headingDecorations } from "./heading-decorations";
 import { imageSrcResolver } from "./image-src-resolver";
 import { wikiLinkExtension } from "./wiki-link-extension";
-import {
-  markdownFormatting,
-  formattingCommands,
-  clearInlineFormatting,
-  toggleFencedCodeBlock,
-  insertTable,
-  insertHorizontalRule,
-  insertToday,
-  insertNow,
-} from "./markdown-formatting";
+import { markdownFormatting, runEditorCommand } from "./markdown-formatting";
 import * as editorApi from "@/hooks/editor-api";
 import { useReloadVersion } from "@/hooks/use-tabs";
 import { getWorkspaceRoot } from "@/hooks/workspace-api";
@@ -77,9 +67,10 @@ import { formatMarkdownDestination, getFileName, resolveLinkTarget } from "@/lib
 import { consumePendingAnchor, setPendingAnchor } from "@/lib/pending-anchor";
 import { logTimeline, mark } from "@/lib/startup-metrics";
 import * as tauri from "@/lib/tauri";
-import { showAnchorWarning } from "./anchor-warning-store";
+import { showEditorNotice } from "./editor-notice-store";
 
-const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_IMAGE_SIZE_MB = 5;
+const MAX_IMAGE_SIZE = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 
 const VIEWPORT_OVERSHOOT = 2000;
 const VIEWPORT_PARSE_BUDGET_MS = 50;
@@ -218,7 +209,11 @@ async function handleImagePaste(
 ) {
   const buffer = await file.arrayBuffer();
   if (isDisposed()) return;
-  if (buffer.byteLength > MAX_IMAGE_SIZE) return;
+  if (buffer.byteLength > MAX_IMAGE_SIZE) {
+    const sizeMb = (buffer.byteLength / (1024 * 1024)).toFixed(1);
+    showEditorNotice(`Image not pasted: ${sizeMb} MB is over the ${MAX_IMAGE_SIZE_MB} MB limit`);
+    return;
+  }
 
   const imageData = Array.from(new Uint8Array(buffer));
   const format = file.type.split("/")[1] || "png";
@@ -279,7 +274,7 @@ function scrollSameDocAnchor(view: EditorView, filePath: string, anchor: string)
   const content = file?.content ?? view.state.doc.toString();
   const heading = findHeadingBySlug(content, anchor);
   if (!heading) {
-    showAnchorWarning(`Heading "#${anchor}" not found in this document`);
+    showEditorNotice(`Heading "#${anchor}" not found in this document`);
     return;
   }
   const scroller = findOuterScroller(view.dom);
@@ -421,21 +416,9 @@ function editorBodyContextMenuExtension(
                   void writeText(linkHref!);
                 }
               : undefined,
-            onRunCommand: (id: string) => {
+            onRunCommand: (id) => {
               view.focus();
-              const extraCommands: Record<string, StateCommand> = {
-                clearInlineFormatting,
-                toggleFencedCodeBlock,
-                insertTable,
-                insertHorizontalRule,
-                insertToday,
-                insertNow,
-              };
-              const registered = formattingCommands[id as keyof typeof formattingCommands];
-              const cmd: StateCommand | undefined = registered ? registered.run : extraCommands[id];
-              if (cmd) {
-                cmd({ state: view.state, dispatch: (tr) => view.dispatch(tr) });
-              }
+              runEditorCommand(view, id);
             },
           },
           hasLink,
@@ -463,6 +446,19 @@ function createEditorExtensions(
     // (reconfigure out and back in) without tearing down the rest of the setup.
     historyCompartment.of(history()),
     prosemarkBasicSetup(),
+    // Default precedence, after basicSetup: an open completion popup gets
+    // Escape first; otherwise Escape closes the find overlay (and CodeMirror's
+    // hidden search panel with it, so match highlights and overlay agree).
+    keymap.of([
+      {
+        key: "Escape",
+        run: (view) => {
+          if (!useEditorSearchStore.getState().isOpen) return false;
+          closeEditorSearch({ view, restoreFocus: true });
+          return true;
+        },
+      },
+    ]),
     // Freeze unfurl/fold decisions while a pointer drag is in flight, so the
     // text doesn't reflow under the cursor as the live selection sweeps
     // across markdown nodes. Drives prosemark's `unfurlFreezeFacet` from a
@@ -764,7 +760,7 @@ export function useProsemarkEditor(
             });
           } else {
             scrollContainer.scrollTo({ top: 0, behavior: "auto" });
-            showAnchorWarning(`Heading "#${pendingAnchor}" not found in ${getFileName(filePath)}`);
+            showEditorNotice(`Heading "#${pendingAnchor}" not found in ${getFileName(filePath)}`);
           }
         } else {
           restoreScrollPosition(scrollContainer, file?.scrollPos ?? 0, () => disposedRef.current);

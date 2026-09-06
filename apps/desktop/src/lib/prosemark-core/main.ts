@@ -4,7 +4,7 @@ export * from "./unfurlFreeze";
 export * from "./revealBlockOnArrow";
 export * from "./syntaxHighlighting";
 export * from "./markdown";
-export * from "./clickLink";
+export * from "./urlClass";
 export * from "./tabWidthExtension";
 export * from "./codeFenceExtension";
 export * from "./list";
@@ -12,10 +12,5 @@ export * from "./imageSrc";
 export * from "./links";
 
 export * from "./basicSetup";
-
-export {
-  prosemarkMarkdownFormattingKeymap,
-  prosemarkMarkdownFormattingKeymapExtension,
-} from "./markdownFormattingKeymap";
 
 export { eventHandlersWithClass } from "./utils";

@@ -8,6 +8,12 @@ import {
   revealLabelForPlatform,
   type Platform,
 } from "@/components/sidebar/context-menu-utils";
+import {
+  chordToAccelerator,
+  editorCommands,
+  type EditorCommand,
+  type EditorCommandId,
+} from "./markdown-formatting";
 
 // -- Editor body menu --
 
@@ -26,7 +32,74 @@ export interface EditorBodyMenuHandlers {
   onSelectAll: () => void;
   onOpenLink?: () => void;
   onCopyLink?: () => void;
-  onRunCommand?: (id: string) => void;
+  onRunCommand?: (id: EditorCommandId) => void;
+}
+
+// Menu ids stay stable for tests and telemetry; text and accelerator come from
+// the command registry. `"---"` is a separator; the optional third element
+// overrides the registry label where the submenu context wants different
+// wording ("Insert link…" under Format, "Link…" under Insert).
+type CommandMenuLayout = ReadonlyArray<"---" | readonly [string, EditorCommandId, string?]>;
+
+const FORMAT_SUBMENU: CommandMenuLayout = [
+  ["fmt.bold", "format.bold"],
+  ["fmt.italic", "format.italic"],
+  ["fmt.strikethrough", "format.strikethrough"],
+  ["fmt.code", "format.code"],
+  "---",
+  ["fmt.link", "format.link", "Insert link\u2026"],
+  "---",
+  ["fmt.clear", "format.clearFormatting"],
+];
+
+const PARAGRAPH_SUBMENU: CommandMenuLayout = [
+  ["para.h1", "format.heading1"],
+  ["para.h2", "format.heading2"],
+  ["para.h3", "format.heading3"],
+  ["para.h4", "format.heading4"],
+  ["para.h5", "format.heading5"],
+  ["para.h6", "format.heading6"],
+  ["para.paragraph", "format.paragraph"],
+  "---",
+  ["para.bullet", "format.bulletList"],
+  ["para.numbered", "format.numberedList"],
+  ["para.task", "format.taskList"],
+  "---",
+  ["para.blockquote", "format.blockquote"],
+  ["para.codeblock", "format.codeBlock"],
+];
+
+const INSERT_SUBMENU: CommandMenuLayout = [
+  ["ins.link", "format.link"],
+  ["ins.table", "insert.table"],
+  ["ins.hr", "insert.horizontalRule"],
+  "---",
+  ["ins.date", "insert.today"],
+  ["ins.time", "insert.now"],
+];
+
+const EDITOR_COMMAND_SUBMENUS: ReadonlyArray<readonly [string, CommandMenuLayout]> = [
+  ["Format", FORMAT_SUBMENU],
+  ["Paragraph", PARAGRAPH_SUBMENU],
+  ["Insert", INSERT_SUBMENU],
+];
+
+function buildCommandItems(
+  layout: CommandMenuLayout,
+  run: (id: EditorCommandId) => void,
+): MenuItemSpec[] {
+  return layout.map((entry) => {
+    if (entry === "---") return { kind: "separator" };
+    const [id, commandId, label] = entry;
+    const command: EditorCommand = editorCommands[commandId];
+    return {
+      kind: "item",
+      id,
+      text: label ?? command.label,
+      action: () => run(commandId),
+      ...(command.chord ? { accelerator: chordToAccelerator(command.chord) } : {}),
+    };
+  });
 }
 
 export function buildEditorBodyMenuItemsSpec(
@@ -42,169 +115,9 @@ export function buildEditorBodyMenuItemsSpec(
   if (handlers.onRunCommand) {
     const run = handlers.onRunCommand;
     items.push({ kind: "separator" });
-    items.push({
-      kind: "submenu",
-      text: "Format",
-      items: [
-        {
-          kind: "item",
-          id: "fmt.bold",
-          text: "Bold",
-          accelerator: "CmdOrCtrl+B",
-          action: () => run("format.bold"),
-        },
-        {
-          kind: "item",
-          id: "fmt.italic",
-          text: "Italic",
-          accelerator: "CmdOrCtrl+I",
-          action: () => run("format.italic"),
-        },
-        {
-          kind: "item",
-          id: "fmt.strikethrough",
-          text: "Strikethrough",
-          accelerator: "CmdOrCtrl+Shift+X",
-          action: () => run("format.strikethrough"),
-        },
-        {
-          kind: "item",
-          id: "fmt.code",
-          text: "Inline code",
-          accelerator: "CmdOrCtrl+E",
-          action: () => run("format.code"),
-        },
-        { kind: "separator" },
-        {
-          kind: "item",
-          id: "fmt.link",
-          text: "Insert link\u2026",
-          accelerator: "CmdOrCtrl+K",
-          action: () => run("format.link"),
-        },
-        { kind: "separator" },
-        {
-          kind: "item",
-          id: "fmt.clear",
-          text: "Clear formatting",
-          action: () => run("clearInlineFormatting"),
-        },
-      ],
-    });
-    items.push({
-      kind: "submenu",
-      text: "Paragraph",
-      items: [
-        {
-          kind: "item",
-          id: "para.h1",
-          text: "Heading 1",
-          accelerator: "CmdOrCtrl+Alt+1",
-          action: () => run("format.heading1"),
-        },
-        {
-          kind: "item",
-          id: "para.h2",
-          text: "Heading 2",
-          accelerator: "CmdOrCtrl+Alt+2",
-          action: () => run("format.heading2"),
-        },
-        {
-          kind: "item",
-          id: "para.h3",
-          text: "Heading 3",
-          accelerator: "CmdOrCtrl+Alt+3",
-          action: () => run("format.heading3"),
-        },
-        {
-          kind: "item",
-          id: "para.h4",
-          text: "Heading 4",
-          accelerator: "CmdOrCtrl+Alt+4",
-          action: () => run("format.heading4"),
-        },
-        {
-          kind: "item",
-          id: "para.h5",
-          text: "Heading 5",
-          accelerator: "CmdOrCtrl+Alt+5",
-          action: () => run("format.heading5"),
-        },
-        {
-          kind: "item",
-          id: "para.h6",
-          text: "Heading 6",
-          accelerator: "CmdOrCtrl+Alt+6",
-          action: () => run("format.heading6"),
-        },
-        {
-          kind: "item",
-          id: "para.paragraph",
-          text: "Paragraph",
-          accelerator: "CmdOrCtrl+Alt+0",
-          action: () => run("format.paragraph"),
-        },
-        { kind: "separator" },
-        {
-          kind: "item",
-          id: "para.bullet",
-          text: "Bullet list",
-          accelerator: "CmdOrCtrl+Shift+8",
-          action: () => run("format.bulletList"),
-        },
-        {
-          kind: "item",
-          id: "para.numbered",
-          text: "Numbered list",
-          accelerator: "CmdOrCtrl+Shift+7",
-          action: () => run("format.numberedList"),
-        },
-        {
-          kind: "item",
-          id: "para.task",
-          text: "Task list",
-          accelerator: "CmdOrCtrl+Shift+Enter",
-          action: () => run("format.taskList"),
-        },
-        { kind: "separator" },
-        {
-          kind: "item",
-          id: "para.blockquote",
-          text: "Blockquote",
-          accelerator: "CmdOrCtrl+Shift+.",
-          action: () => run("format.blockquote"),
-        },
-        {
-          kind: "item",
-          id: "para.codeblock",
-          text: "Code block",
-          action: () => run("toggleFencedCodeBlock"),
-        },
-      ],
-    });
-    items.push({
-      kind: "submenu",
-      text: "Insert",
-      items: [
-        {
-          kind: "item",
-          id: "ins.link",
-          text: "Link\u2026",
-          accelerator: "CmdOrCtrl+K",
-          action: () => run("format.link"),
-        },
-        { kind: "item", id: "ins.table", text: "Table", action: () => run("insertTable") },
-        {
-          kind: "item",
-          id: "ins.hr",
-          text: "Horizontal rule",
-          action: () => run("insertHorizontalRule"),
-        },
-        { kind: "separator" },
-        { kind: "item", id: "ins.date", text: "Current date", action: () => run("insertToday") },
-        { kind: "item", id: "ins.time", text: "Current time", action: () => run("insertNow") },
-      ],
-    });
+    for (const [text, layout] of EDITOR_COMMAND_SUBMENUS) {
+      items.push({ kind: "submenu", text, items: buildCommandItems(layout, run) });
+    }
   }
 
   items.push({ kind: "separator" });
