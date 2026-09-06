@@ -7,8 +7,8 @@ import {
 } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { GFM } from "@lezer/markdown";
-import { ensureSyntaxTree } from "@codemirror/language";
 import { computeCheckboxToggle, listExtension, __test } from "../src/lib/prosemark-core/list";
+import { withFullParse } from "./helpers/parsed-state";
 
 const {
   clampCollapsedListPrefixRange,
@@ -30,10 +30,8 @@ function makeState(doc: string, anchor = 0, head?: number): EditorState {
     extensions: [markdown({ extensions: [GFM] }), listExtension],
     selection: EditorSelection.single(anchor, head ?? anchor),
   });
-  // Force a full parse so `syntaxTree(state)` is populated for the
-  // line-range iteration in `isOnListLine` and `buildListDecorations`.
-  ensureSyntaxTree(state, doc.length, 1000);
-  return state;
+  // Full parse committed so `isOnListLine` and `listDecorationsField` see it.
+  return withFullParse(state);
 }
 
 function run(cmd: StateCommand, state: EditorState): { state: EditorState; ran: boolean } {

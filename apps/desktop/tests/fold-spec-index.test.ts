@@ -2,25 +2,26 @@ import { describe, expect, test } from "vite-plus/test";
 import { EditorState } from "@codemirror/state";
 import { Decoration } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
-import { ensureSyntaxTree } from "@codemirror/language";
 import { GFM } from "@lezer/markdown";
 import { foldExtension, foldableSyntaxFacet } from "../src/lib/prosemark-core/fold/core";
+import { withFullParse } from "./helpers/parsed-state";
 
 const mark = Decoration.mark({ class: "hit" });
 
 function hits(doc: string, nodePath: string | string[] | ((p: string) => boolean)) {
-  const state = EditorState.create({
-    doc,
-    extensions: [
-      markdown({ extensions: [GFM] }),
-      foldableSyntaxFacet.of({
-        nodePath,
-        keepDecorationOnUnfold: true,
-        buildDecorations: (_state, node) => mark.range(node.from, node.to),
-      }),
-    ],
-  });
-  ensureSyntaxTree(state, doc.length, 1000);
+  const state = withFullParse(
+    EditorState.create({
+      doc,
+      extensions: [
+        markdown({ extensions: [GFM] }),
+        foldableSyntaxFacet.of({
+          nodePath,
+          keepDecorationOnUnfold: true,
+          buildDecorations: (_state, node) => mark.range(node.from, node.to),
+        }),
+      ],
+    }),
+  );
   const out: string[] = [];
   state.field(foldExtension).between(0, doc.length, (from, to) => {
     out.push(doc.slice(from, to));

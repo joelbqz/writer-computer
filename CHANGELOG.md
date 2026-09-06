@@ -15,6 +15,7 @@
 - Pasting an image over the 5 MB limit now shows a notice instead of silently doing nothing.
 - Trim the editor's inherited code-editor defaults: the hidden fold gutter, bracket matching, indent-on-input, the lint keymap, the panel-based search keymap (Cmd+D select-next-occurrence is kept), and prosemark's shadowed link-click handler and formatting keymap are gone. Auto-closing brackets and quotes stays as before.
 - Editor commands (formatting, paragraph, insert) now live in one registry that drives the keymap, the context menu labels and accelerators, and dispatch, so adding a command is a single-file change.
+- Split the editor hook into focused modules (extension assembly, search, link navigation, clipboard, body menu, viewport parse); no behavior change.
 - Consolidate link-destination lookup (`prosemark-core/links.ts`), safe-zone scrolling (`editor-scroll.ts`), and the click-to-unfold helper (`selectAllDecorationsOnSelectExtension` now takes an `ignoreTarget` predicate, used by HTML blocks). Update `docs/editor.md` to match the current mermaid / table / image decoration shapes.
 
 ## 2026-08-10

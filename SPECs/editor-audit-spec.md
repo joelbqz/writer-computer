@@ -302,6 +302,22 @@ the hook to mount/swap/dispose.
 - `list/index.ts:78` hardcodes `text-indent: -3.4ch` against
   `LIST_UNIT_CH = 3` with no comment explaining the 0.4.
 
+## Status
+
+All five groups landed as one commit each (see `git log` for
+`editor-audit-spec`). Deliberately left as-is:
+
+- C3 (shared caret no-go-zone facet): deferred until a third clamp source
+  exists.
+- `closeBrackets()` stays in the basic setup; whether a prose editor should
+  auto-close `"`, `(`, `[` is a product decision, not a bug.
+- The `-3.4ch` ordered-list `text-indent` is left unexplained rather than
+  guessed at.
+- Test fixtures now commit the full parse via `tests/helpers/parsed-state.ts`
+  (`withFullParse`); the pre-existing intermittent failures in the mermaid and
+  fold tests came from `EditorState.create`'s wall-clock parse budget expiring
+  under a loaded runner.
+
 ## Proposed order
 
 1. **Zero-risk cleanups** (one PR): A4 delete `foldTreeSync` ×2; B6

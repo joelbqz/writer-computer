@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
-import { ensureSyntaxTree } from "@codemirror/language";
 import { GFM } from "@lezer/markdown";
 import {
   defaultHideExtensions,
@@ -9,17 +8,18 @@ import {
   prosemarkMarkdownSyntaxExtensions,
 } from "../src/lib/prosemark-core/main";
 import { linkUrlAt, rawUrlAt } from "../src/lib/prosemark-core/links";
+import { withFullParse } from "./helpers/parsed-state";
 
 function makeState(doc: string) {
-  const state = EditorState.create({
-    doc,
-    extensions: [
-      markdown({ extensions: [GFM, prosemarkMarkdownSyntaxExtensions] }),
-      defaultHideExtensions,
-    ],
-  });
-  ensureSyntaxTree(state, doc.length, 1000);
-  return state;
+  return withFullParse(
+    EditorState.create({
+      doc,
+      extensions: [
+        markdown({ extensions: [GFM, prosemarkMarkdownSyntaxExtensions] }),
+        defaultHideExtensions,
+      ],
+    }),
+  );
 }
 
 function hiddenRanges(state: EditorState) {
