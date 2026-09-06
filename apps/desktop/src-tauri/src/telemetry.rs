@@ -2,19 +2,24 @@
 //!
 //! The entire network surface of Writer's analytics lives in this file. Nothing
 //! here runs until the user explicitly enables telemetry from the first-run
-//! consent dialog or Preferences — `capture` bails on an atomic load before it
+//! consent dialog or Preferences — `track` bails on an atomic load before it
 //! allocates anything.
 //!
 //! See `SPECs/opt-in-telemetry-spec.md` for the design and `docs/telemetry.md`
 //! for the user-facing disclosure. If the event list or the property set
 //! changes, both of those change in the same commit.
 //!
-//! Three things gate a request, and all three must pass:
+//! Four things gate a request, and all four must pass:
 //!
 //!   1. `WRITER_POSTHOG_KEY` was set at *build* time. An unconfigured build —
 //!      which is what anyone cloning this repo gets — cannot phone home at all.
 //!   2. `WRITER_TELEMETRY_DISABLED` is not set in the environment.
 //!   3. `telemetry.enabled` is true in settings.
+//!   4. This install has answered the first-run prompt. The setting lives in
+//!      `config` and the prompt record in `telemetry.json`; they can disagree
+//!      (a copied config, a deleted identity file), and when they do, the
+//!      missing consent record wins: nothing is sent until the prompt is
+//!      answered again.
 
 use crate::error::AppError;
 use parking_lot::Mutex;
@@ -75,30 +80,44 @@ fn identity_path(app_data_dir: &Path) -> PathBuf {
 /// Read the identity file, generating and persisting a fresh one when it is
 /// missing or unreadable. A corrupt file is replaced rather than treated as an
 /// error: losing continuity of one install's ID is not worth failing startup.
+/// The replacement is logged, because a file that fails to parse on every
+/// launch would mint a new "user" each time.
 fn load_or_create_identity(app_data_dir: &Path) -> Identity {
     let path = identity_path(app_data_dir);
-    if let Ok(contents) = std::fs::read_to_string(&path) {
-        if let Ok(identity) = serde_json::from_str::<Identity>(&contents) {
-            return identity;
-        }
+    match std::fs::read_to_string(&path) {
+        Ok(contents) => match serde_json::from_str::<Identity>(&contents) {
+            Ok(identity) => return identity,
+            Err(error) => eprintln!("telemetry: identity file unreadable, replacing it: {error}"),
+        },
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => eprintln!("telemetry: identity file unreadable, replacing it: {error}"),
     }
     let identity = Identity::new();
     write_identity(app_data_dir, &identity);
     identity
 }
 
+/// Write via a temp file and rename so a crash mid-write cannot leave a
+/// half-written file that the next launch would replace with a new ID.
 fn write_identity(app_data_dir: &Path, identity: &Identity) {
     if let Err(error) = std::fs::create_dir_all(app_data_dir) {
         eprintln!("telemetry: failed to create app data dir: {error}");
         return;
     }
-    match serde_json::to_string_pretty(identity) {
-        Ok(json) => {
-            if let Err(error) = std::fs::write(identity_path(app_data_dir), json) {
-                eprintln!("telemetry: failed to write identity: {error}");
-            }
+    let json = match serde_json::to_string_pretty(identity) {
+        Ok(json) => json,
+        Err(error) => {
+            eprintln!("telemetry: failed to serialize identity: {error}");
+            return;
         }
-        Err(error) => eprintln!("telemetry: failed to serialize identity: {error}"),
+    };
+    let path = identity_path(app_data_dir);
+    let temp_path = path.with_extension("json.tmp");
+    let written =
+        std::fs::write(&temp_path, json).and_then(|()| std::fs::rename(&temp_path, &path));
+    if let Err(error) = written {
+        eprintln!("telemetry: failed to write identity: {error}");
+        let _ = std::fs::remove_file(&temp_path);
     }
 }
 
@@ -112,6 +131,8 @@ pub struct Telemetry {
     app_data_dir: PathBuf,
     distinct_id: String,
     prompted: AtomicBool,
+    /// The effective switch: `telemetry.enabled` *and* `prompted`. See
+    /// `effective_enabled`.
     enabled: AtomicBool,
     /// Whether this process has already reported `app_opened`. Consent can
     /// arrive after startup, so the event has two possible emit points and
@@ -133,7 +154,17 @@ fn instance() -> Option<&'static Telemetry> {
 /// re-check on the hot path. The env kill switch is therefore read at startup
 /// — setting it takes effect on the next launch, not mid-session.
 fn transport_available() -> bool {
-    POSTHOG_KEY.is_some_and(|key| !key.is_empty()) && std::env::var_os(DISABLE_ENV_VAR).is_none()
+    let kill_switch_set = std::env::var_os(DISABLE_ENV_VAR).is_some_and(|value| !value.is_empty());
+    POSTHOG_KEY.is_some_and(|key| !key.is_empty()) && !kill_switch_set
+}
+
+/// The setting alone is not consent. `telemetry.enabled = true` in a `config`
+/// copied from another machine, or left behind after `telemetry.json` was
+/// deleted, must not send anything until this install's prompt has been
+/// answered — the dialog says "it is off unless you turn it on here", and
+/// this is what makes that true.
+fn effective_enabled(setting: bool, prompted: bool) -> bool {
+    setting && prompted
 }
 
 /// Wire up the process-wide client. Safe to call once; later calls are ignored.
@@ -165,7 +196,7 @@ pub fn init(app: &tauri::AppHandle, enabled: bool, email: Option<String>) {
         app_data_dir,
         distinct_id: identity.distinct_id,
         prompted: AtomicBool::new(identity.prompted),
-        enabled: AtomicBool::new(enabled),
+        enabled: AtomicBool::new(effective_enabled(enabled, identity.prompted)),
         session_opened_reported: AtomicBool::new(false),
         email: Mutex::new(normalize_email(email)),
         app_version: env!("CARGO_PKG_VERSION"),
@@ -193,9 +224,7 @@ pub fn track(name: &'static str) {
     if !telemetry.enabled.load(Ordering::Relaxed) {
         return;
     }
-    // A send failure means the dispatcher is gone; dropping the event is the
-    // intended behavior — telemetry never retries and never buffers to disk.
-    let _ = telemetry.sender.send(QueuedEvent { name });
+    telemetry.enqueue(name);
 }
 
 /// Report that the app launched, at most once per process.
@@ -219,16 +248,25 @@ pub fn report_app_opened() {
     {
         return;
     }
-    track("app_opened");
+    // Queue directly rather than via `track`: the flag above is now set, so
+    // a second enabled check that could drop the event would burn the one
+    // `app_opened` this launch gets.
+    telemetry.enqueue("app_opened");
 }
 
-/// Apply a settings change to the running client so toggling the preference
-/// takes effect without a restart. Called from the settings write path.
+/// Apply the current settings to the running client so toggling the preference
+/// takes effect without a restart. Called from the global settings write path
+/// while it still holds the settings lock, for *every* global write: a write
+/// to an unrelated key reloads `config` from disk first, so this is also where
+/// a hand-edited `telemetry.enabled` catches up with the client.
 pub fn apply_settings(enabled: bool, email: Option<String>) {
     // Reaching here means `init` ran, which already proved the transport is
     // available — no need to re-check it.
     let Some(telemetry) = instance() else { return };
-    telemetry.enabled.store(enabled, Ordering::Relaxed);
+    let prompted = telemetry.prompted.load(Ordering::Relaxed);
+    telemetry
+        .enabled
+        .store(effective_enabled(enabled, prompted), Ordering::Relaxed);
     *telemetry.email.lock() = normalize_email(email);
     // Covers consent granted mid-session; a no-op if this launch already
     // reported, so re-enabling from Preferences does not double count.
@@ -242,6 +280,10 @@ pub fn should_prompt() -> bool {
 
 /// Record that the user has answered the consent dialog, whichever way. Both
 /// buttons and a dismissal land here, so the prompt is shown at most once.
+///
+/// The dialog calls this *before* writing `telemetry.enabled`, because the
+/// settings write is what recomputes the effective switch and it needs the
+/// consent record in place to count.
 pub fn mark_prompted() {
     let Some(telemetry) = instance() else { return };
     if telemetry.prompted.swap(true, Ordering::Relaxed) {
@@ -273,10 +315,22 @@ fn event_properties(
     properties.insert("app_version".into(), json!(app_version));
     properties.insert("os".into(), json!(std::env::consts::OS));
     properties.insert("arch".into(), json!(std::env::consts::ARCH));
-    if let Some(email) = email {
+    // PostHog Cloud derives location from the request IP unless told not to.
+    // `docs/telemetry.md` promises no geolocation, so say so on every event
+    // rather than trusting a project-level toggle.
+    properties.insert("$geoip_disable".into(), json!(true));
+    match email {
         // `$set` is PostHog's person-property channel: it attaches the address
         // to the person behind `distinct_id` rather than to this one event.
-        properties.insert("$set".into(), json!({ "email": email }));
+        Some(email) => {
+            properties.insert("$set".into(), json!({ "email": email }));
+        }
+        // Omitting `$set` would mean "no change", leaving an address sent
+        // earlier attached to the person. Clearing the field has to clear it
+        // there too, so every anonymous event explicitly unsets it.
+        None => {
+            properties.insert("$unset".into(), json!(["email"]));
+        }
     }
     properties
 }
@@ -292,6 +346,13 @@ fn build_batch_payload(api_key: &str, events: &[&str], properties: &Map<String, 
 }
 
 impl Telemetry {
+    /// Hand an event to the dispatcher. Callers check `enabled` first. A send
+    /// failure means the dispatcher is gone; dropping the event is the
+    /// intended behavior — telemetry never retries and never buffers to disk.
+    fn enqueue(&self, name: &'static str) {
+        let _ = self.sender.send(QueuedEvent { name });
+    }
+
     fn properties(&self) -> Map<String, Value> {
         event_properties(
             &self.distinct_id,
@@ -332,12 +393,22 @@ async fn run_dispatcher(mut receiver: UnboundedReceiver<QueuedEvent>) {
     while receiver.recv_many(&mut queued, 64).await > 0 {
         let Some(telemetry) = instance() else { return };
 
+        // Events are only queued while enabled, but a slow request can leave
+        // a batch waiting across a toggle-off. "Off" means nothing sent after
+        // that point, so re-check before every request.
+        if !telemetry.enabled.load(Ordering::Relaxed) {
+            queued.clear();
+            continue;
+        }
+
         let events: Vec<&str> = queued.iter().map(|event| event.name).collect();
         let payload = build_batch_payload(api_key, &events, &telemetry.properties());
         queued.clear();
 
-        if let Err(error) = client.post(&endpoint).json(&payload).send().await {
-            // Fire-and-forget: a failed send is dropped, never retried.
+        // Fire-and-forget: a failed send is dropped, never retried. A 4xx/5xx
+        // is a failure too — a bad key comes back as 401, not as an error.
+        let response = client.post(&endpoint).json(&payload).send().await;
+        if let Err(error) = response.and_then(|response| response.error_for_status()) {
             eprintln!("telemetry: capture failed: {error}");
         }
     }
@@ -443,14 +514,44 @@ mod tests {
 
         // The whole privacy guarantee in one assertion: if a key ever shows up
         // here that could hold a path or document text, this fails.
-        assert_eq!(keys, ["$set", "app_version", "arch", "distinct_id", "os"]);
+        assert_eq!(
+            keys,
+            [
+                "$geoip_disable",
+                "$set",
+                "app_version",
+                "arch",
+                "distinct_id",
+                "os"
+            ]
+        );
         assert_eq!(properties["$set"]["email"], "writer@example.com");
+        assert_eq!(properties["$geoip_disable"], true);
     }
 
     #[test]
-    fn omitted_email_sends_no_person_properties() {
+    fn omitted_email_unsets_the_person_property() {
         let properties = event_properties("install-1", "0.5.0", None);
         assert!(!properties.contains_key("$set"));
+        assert_eq!(properties["$unset"], json!(["email"]));
+    }
+
+    #[test]
+    fn the_setting_alone_is_not_consent() {
+        assert!(!effective_enabled(true, false));
+        assert!(!effective_enabled(false, true));
+        assert!(effective_enabled(true, true));
+    }
+
+    #[test]
+    fn identity_write_leaves_no_temp_file() {
+        let dir = tempfile::tempdir().unwrap();
+        load_or_create_identity(dir.path());
+        let names: Vec<String> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, [IDENTITY_FILE]);
     }
 
     #[test]

@@ -47,7 +47,7 @@ Run from the repo root, passing the notes file:
 
 The script will, in order:
 
-1. Validate `.env`, signing credentials, and the notes file (must exist and be non-empty). Telemetry's `WRITER_POSTHOG_KEY` is read from `.env` too, but it is optional and only warned about — see [telemetry.md](./telemetry.md). A release built without it works normally and simply never reports anything.
+1. Validate `.env`, signing credentials, and the notes file (must exist and be non-empty). Telemetry's `WRITER_POSTHOG_KEY` is read from `.env` too; the script refuses to build without it unless `WRITER_RELEASE_WITHOUT_TELEMETRY=1` is set, because a keyless release works normally and simply never reports anything, which is easy to miss — see [telemetry.md](./telemetry.md).
 2. Run pre-flight git checks (on master, clean tree, fast-forward of origin, tag doesn't already exist).
 3. Push `master` to origin so the commit the release will point at is published before the build starts.
 4. Build the desktop crate in release mode (`vp exec tauri build --bundles app,dmg`).

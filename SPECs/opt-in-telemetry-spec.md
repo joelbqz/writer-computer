@@ -61,8 +61,9 @@ who clones and builds Writer gets a binary that cannot phone home, and
 contributors' dev builds never pollute production analytics. `WRITER_POSTHOG_HOST`
 overrides the host (default `https://us.i.posthog.com`) for self-hosted forks.
 
-`WRITER_TELEMETRY_DISABLED=1` in the environment disables telemetry at runtime
-regardless of settings, for packagers and for users of distro builds.
+`WRITER_TELEMETRY_DISABLED` set to any non-empty value in the environment
+disables telemetry at runtime regardless of settings, for packagers and for
+users of distro builds.
 
 ## Behavior
 
@@ -71,9 +72,24 @@ regardless of settings, for packagers and for users of distro builds.
 After startup resolves in the `main` window, if `prompted` is `false` the app
 shows a modal explaining exactly what is and is not collected, with a link to
 `docs/telemetry.md`, an optional email field, and two buttons: **Not now** and
-**Share usage data**. Either button sets `prompted = true`; only the second sets
-`telemetry.enabled = true`. Dismissing with Escape or the backdrop is equivalent
-to **Not now** — nothing is enabled, and the prompt does not return.
+**Share usage data**. Either button sets `prompted = true` first, then writes
+`telemetry.enabled` explicitly — `true` for the second, `false` for the first.
+Dismissing with Escape or the backdrop is equivalent to **Not now** — nothing
+is enabled, and the prompt does not return. If a write fails the dialog stays
+open with the error and the buttons re-enabled; nothing is inferred from a
+partial answer.
+
+The effective switch is `telemetry.enabled && prompted`. The two live in
+different files (`config` and `telemetry.json`) and can disagree — a copied
+config, a deleted identity file — and when they do, the missing consent record
+wins: nothing is sent until this install's prompt is answered. That is why the
+dialog marks `prompted` before writing the setting, and why **Not now** writes
+`false` rather than leaving the setting alone.
+
+The dialog is modal in both senses: the backdrop blocks the pointer, and a
+document-level key handler keeps Tab inside the card, resolves Escape as
+**Not now**, and stops modifier shortcuts from reaching the app underneath.
+Enter in the email field does nothing; only the button opts in.
 
 Secondary and compact windows never prompt.
 
@@ -99,6 +115,10 @@ counted, and someone who opts in and never returns would be invisible in the
 stream entirely. A per-process flag, set only when the event is actually
 queued, keeps it to one per launch.
 
+`workspace_opened` keeps that first-session gap on purpose: restore runs before
+the dialog mounts, and back-filling it at consent time would report an event
+that did not happen then. It self-corrects on the next launch.
+
 ### Properties
 
 Every event carries only:
@@ -106,7 +126,10 @@ Every event carries only:
 - `distinct_id`
 - `app_version` (from `CARGO_PKG_VERSION`)
 - `os` (`macos` / `windows` / `linux`) and `arch`
-- `$set: { email }` when `telemetry.email` is non-empty
+- `$geoip_disable: true`, so PostHog Cloud does not derive a location from the
+  request IP (its default is to do so)
+- `$set: { email }` when `telemetry.email` is non-empty, otherwise
+  `$unset: ["email"]` so clearing the field also clears the person record
 
 There is no per-event property allowlist to maintain because there are no
 per-event properties. Adding one is a deliberate edit to this table and to
@@ -117,9 +140,11 @@ per-event properties. Adding one is a deliberate edit to this table and to
 A single unbounded `tokio::mpsc` channel feeds one background task that POSTs
 `{ api_key, batch: [...] }` to `<host>/batch/`. The task drains everything
 currently queued into one request, so a burst of creations costs one round trip.
-Failures are logged to stderr and dropped.
+The enabled flag is re-checked before each request, so a batch that was waiting
+behind a slow request when the user turned telemetry off is discarded. Failures,
+including non-2xx responses, are logged to stderr and dropped.
 
-`capture()` returns immediately, before the enabled check even allocates, so
+`track()` returns immediately, before the enabled check even allocates, so
 disabled installs pay nothing beyond an atomic load.
 
 ## Files
@@ -130,8 +155,11 @@ disabled installs pay nothing beyond an atomic load.
 - `src-tauri/src/lib.rs` — register module, init in `setup`, `app_opened`.
 - `src-tauri/src/commands/fs.rs` — two `track` calls.
 - `src-tauri/src/commands/workspace.rs` — one `track` call.
-- `src-tauri/src/commands/settings.rs` — push `telemetry.*` writes into the
-  running client so a toggle takes effect without a restart.
+- `src-tauri/src/commands/settings.rs` — every global write pushes the
+  resulting telemetry state into the running client while the settings lock is
+  still held, so a toggle takes effect without a restart, two windows cannot
+  re-apply a stale value, and a hand-edited `config` picked up by the reload
+  inside a write catches up.
 - `src-tauri/Cargo.toml` — `reqwest` and `rustls` as direct deps. Both are
   already in the lock via `tauri-plugin-updater`; the feature set is copied from
   it so the dependency graph does not grow.

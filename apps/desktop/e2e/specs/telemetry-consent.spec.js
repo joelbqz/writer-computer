@@ -13,8 +13,10 @@ import { ok, strictEqual } from "node:assert/strict";
 // The discard-port host keeps the fake key from reaching a real project: the
 // dispatcher's request fails fast and the event is dropped.
 //
-// Wipe `~/Library/Application Support/com.writer-computer.e2e/telemetry.json`
-// between runs — `prompted` is one-shot by design.
+// Between runs, wipe both `telemetry.json` (`prompted` is one-shot by design)
+// and the `config` file in `~/Library/Application Support/com.writer-computer.e2e/`
+// — an earlier accepted run leaves `telemetry.enabled = true` there, which the
+// "off while the prompt is open" assertion below reads back.
 describe("telemetry consent dialog", function () {
   it("shows on first run and stays opt-out until accepted", async function () {
     await $("#root > *").waitForExist({ timeout: 15_000 });

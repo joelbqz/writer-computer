@@ -2,8 +2,7 @@
 
 Writer can send a small amount of usage data to help decide what to build next.
 **It is off until you turn it on.** No network request is made before you accept
-the first-run prompt, and declining it is permanent unless you change your mind
-in Preferences.
+the first-run prompt, and either answer can be changed later in Preferences.
 
 This document is the complete disclosure. If it disagrees with the code, the
 code is the bug — the event table below is mirrored in
@@ -18,6 +17,12 @@ that talks to an analytics service.
 
 Turning it off takes effect immediately; nothing is queued for later.
 
+The setting on its own is not consent. Writer also keeps a record that *this
+install* answered the first-run prompt, and it sends nothing until that record
+exists — so a `config` file copied from another machine with the setting turned
+on does not send anything until you have seen the prompt here and accepted it.
+Answering **Not now** writes the setting off explicitly.
+
 ## What is collected
 
 Four events. That is the whole list.
@@ -31,13 +36,15 @@ Four events. That is the whole list.
 
 Every event carries the same fixed set of properties, and nothing else:
 
-| Property      | Example           | Notes                                 |
-| ------------- | ----------------- | ------------------------------------- |
-| `distinct_id` | `9f2c...`         | Random UUID generated on this install |
-| `app_version` | `0.5.0`           |                                       |
-| `os`          | `macos`           |                                       |
-| `arch`        | `aarch64`         |                                       |
-| `email`       | `you@example.com` | Only if you typed one; see below      |
+| Property         | Example           | Notes                                                                 |
+| ---------------- | ----------------- | --------------------------------------------------------------------- |
+| `distinct_id`    | `9f2c...`         | Random UUID generated on this install                                 |
+| `app_version`    | `0.5.0`           |                                                                       |
+| `os`             | `macos`           |                                                                       |
+| `arch`           | `aarch64`         |                                                                       |
+| `$geoip_disable` | `true`            | Tells PostHog not to derive a location from the request IP            |
+| `$set.email`     | `you@example.com` | Only if you typed one; attached to your install's record, see below   |
+| `$unset`         | `["email"]`       | Sent instead of `$set.email` when the field is blank, so clearing it clears it there too |
 
 There is no mechanism for passing per-event properties, so a file name or a
 snippet of your writing cannot reach the analytics service by accident.
@@ -58,7 +65,8 @@ type it into the first-run dialog or Preferences → Privacy → **Email**.
 
 If set, it is attached to your install's person record so the maintainer can
 reach out about the features you use. Clear the field in Preferences to go back
-to being anonymous; the change applies to the next event.
+to being anonymous: the next event tells the analytics service to remove the
+address from that record, rather than merely stopping to send it.
 
 ## Your identifier
 
@@ -69,7 +77,8 @@ recording that you have answered the first-run prompt.
 It is deliberately kept out of your `config` file: that file is human-editable
 and is the kind of thing people copy between machines, and an identifier living
 there would silently merge two installs into one "user". Delete `telemetry.json`
-to get a new identifier and to see the first-run prompt again.
+to get a new identifier and to see the first-run prompt again; until you answer
+it, nothing is sent, whatever the setting says.
 
 ## Where it goes
 
@@ -81,8 +90,8 @@ PostHog Cloud (US region, `https://us.i.posthog.com`), via a single
 Three independent switches, any one of which is sufficient:
 
 1. **Don't enable it.** This is the default.
-2. **`WRITER_TELEMETRY_DISABLED=1`** in the environment disables telemetry at
-   runtime regardless of your settings — the client is never constructed, so no
+2. **`WRITER_TELEMETRY_DISABLED=1`** (any non-empty value) in the environment
+   disables telemetry at runtime regardless of your settings — the client is never constructed, so no
    identifier is generated and nothing is written to disk. It is read at
    startup, so it applies from the next launch onward. Intended for distro
    packagers and for anyone running a build they did not make themselves.

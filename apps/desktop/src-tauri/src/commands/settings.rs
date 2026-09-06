@@ -32,6 +32,13 @@ fn with_settings_mut<T>(
     }
 }
 
+/// Run a global-scope mutation under the process-wide settings lock, then push
+/// the resulting telemetry state into the running client before the lock is
+/// released. Doing it here, for every global write, means two windows cannot
+/// interleave "persist A, persist B, apply A" and re-enable telemetry from a
+/// stale snapshot, and a hand-edited `telemetry.enabled` picked up by the
+/// reload inside `set_global`/`reset_global` reaches the client on the next
+/// write to any key instead of at the next launch.
 fn with_global_settings_mut<T>(
     app_state: &AppState,
     state: &WorkspaceState,
@@ -42,7 +49,10 @@ fn with_global_settings_mut<T>(
     let settings = settings_guard
         .as_mut()
         .ok_or_else(|| AppError::Io("Settings not initialized".into()))?;
-    f(settings)
+    let result = f(settings)?;
+    let (enabled, email) = crate::telemetry::settings_snapshot(settings);
+    crate::telemetry::apply_settings(enabled, email);
+    Ok(result)
 }
 
 fn init_window_settings_at(
@@ -172,7 +182,6 @@ pub fn set_setting(
     } else {
         with_global_settings_mut(app.state::<AppState>().inner(), &state, persist)?
     };
-    sync_telemetry(&app, webview.label(), &key)?;
     Ok(config_value_to_json(&persisted))
 }
 
@@ -195,20 +204,7 @@ pub fn reset_setting(
         with_settings_mut(&app, webview.label(), reset)?
     } else {
         with_global_settings_mut(app.state::<AppState>().inner(), &state, reset)
-    }?;
-    sync_telemetry(&app, webview.label(), &key)
-}
-
-/// Push a `telemetry.*` write into the running telemetry client so toggling the
-/// preference takes effect immediately instead of at the next launch. Other
-/// keys short-circuit before touching the settings lock.
-fn sync_telemetry(app: &tauri::AppHandle, label: &str, key: &str) -> Result<(), AppError> {
-    if !key.starts_with("telemetry.") {
-        return Ok(());
     }
-    let (enabled, email) = with_settings(app, label, crate::telemetry::settings_snapshot)?;
-    crate::telemetry::apply_settings(enabled, email);
-    Ok(())
 }
 
 #[cfg(test)]

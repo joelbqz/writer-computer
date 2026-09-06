@@ -264,8 +264,17 @@ body.tree-dragging [data-tree-path] {
    chrome — right for popovers floating over content, wrong for a dialog that
    demands a decision, where the page behind it shows through the copy. Opt in
    with `surface-card surface-card-opaque`. */
+.surface-card-opaque {
+  /* Nothing shows through an opaque card, so the blur would be wasted work. */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 .surface-card-opaque::before {
-  background: var(--bg-base);
+  /* The layer sits above the element's own `--surface-card` tint, so paint
+     the tint again on top of the opaque base or the card is flat page colour
+     in dark mode. */
+  background: linear-gradient(var(--surface-card), var(--surface-card)), var(--bg-base);
 }
 
 .compact-picker-shell {
