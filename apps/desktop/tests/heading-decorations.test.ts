@@ -2,8 +2,8 @@ import { describe, expect, test } from "vite-plus/test";
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { GFM } from "@lezer/markdown";
-import { ensureSyntaxTree } from "@codemirror/language";
 import { headingDecorations, __test } from "../src/components/editor-area/heading-decorations";
+import { withFullParse } from "./helpers/parsed-state";
 
 const { collectHeadingNoGoZones, clampRangesToZones, couldBeInZone, getMarkdownHeadingLevel } =
   __test;
@@ -14,9 +14,7 @@ function makeState(doc: string, selection?: EditorSelection): EditorState {
     extensions: [markdown({ extensions: [GFM] }), headingDecorations],
     selection,
   });
-  // Force a full parse so `syntaxTree(state)` is populated.
-  ensureSyntaxTree(state, doc.length, 1000);
-  return state;
+  return withFullParse(state);
 }
 
 describe("collectHeadingNoGoZones", () => {

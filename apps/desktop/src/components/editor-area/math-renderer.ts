@@ -1,7 +1,7 @@
 import katex from "katex";
+import { LruCache } from "@/lib/lru";
 
-const HTML_CACHE_LIMIT = 200;
-const htmlCache = new Map<string, string>();
+const htmlCache = new LruCache<string>(200);
 
 export interface MathRenderResult {
   html: string;
@@ -11,26 +11,6 @@ export interface MathRenderResult {
 export interface MathRenderError {
   html?: undefined;
   error: string;
-}
-
-function cacheGet(key: string): string | undefined {
-  const cached = htmlCache.get(key);
-  if (cached === undefined) return undefined;
-  // Refresh recency: re-insert at the end so least-recently-used stays at the
-  // front for eviction.
-  htmlCache.delete(key);
-  htmlCache.set(key, cached);
-  return cached;
-}
-
-function cacheSet(key: string, value: string): void {
-  if (htmlCache.has(key)) htmlCache.delete(key);
-  htmlCache.set(key, value);
-  while (htmlCache.size > HTML_CACHE_LIMIT) {
-    const oldest = htmlCache.keys().next().value;
-    if (oldest === undefined) break;
-    htmlCache.delete(oldest);
-  }
 }
 
 // Synchronous on purpose: KaTeX renders to a markup string with no DOM or
@@ -47,7 +27,7 @@ export function renderMath(
   displayMode: boolean,
 ): MathRenderResult | MathRenderError {
   const key = (displayMode ? "D:" : "I:") + formula;
-  const cached = cacheGet(key);
+  const cached = htmlCache.get(key);
   if (cached !== undefined) return { html: cached };
 
   try {
@@ -56,7 +36,7 @@ export function renderMath(
       throwOnError: false,
       output: "html",
     });
-    cacheSet(key, html);
+    htmlCache.set(key, html);
     return { html };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

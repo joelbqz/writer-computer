@@ -2,6 +2,7 @@ import { Decoration, type EditorView, WidgetType } from "@codemirror/view";
 import { normalizeMarkdownDestination } from "@/lib/paths";
 import { foldableSyntaxFacet, selectAllDecorationsOnSelectExtension } from "./core";
 import { iterChildren } from "../utils";
+import { resolveImageSrc } from "../imageSrc";
 
 // Last measured widget height per markdown destination. Images decode async,
 // so without a remembered height every scroll past an unloaded image inserts
@@ -64,7 +65,7 @@ class ImageWidget extends WidgetType {
     }
     const image = document.createElement("img");
     attachStableImageHeight(image, elem, this.url, view);
-    image.src = this.url;
+    image.src = resolveImageSrc(view.state, this.url);
     elem.appendChild(image);
     return elem;
   }

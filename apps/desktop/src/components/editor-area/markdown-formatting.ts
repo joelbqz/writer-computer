@@ -1,5 +1,5 @@
 import { EditorSelection, type Extension, type StateCommand, Prec } from "@codemirror/state";
-import { type KeyBinding, keymap } from "@codemirror/view";
+import { type EditorView, type KeyBinding, keymap } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
 
 // ---------------------------------------------------------------------------
@@ -355,31 +355,78 @@ export const insertNow: StateCommand = ({ state, dispatch }) => {
 };
 
 // ---------------------------------------------------------------------------
-// Registry and keymap
+// Registry, keymap, and menu metadata
 // ---------------------------------------------------------------------------
 
-export const formattingCommands = {
-  "format.bold": { run: toggleBold, chord: "Mod-b" },
-  "format.italic": { run: toggleItalic, chord: "Mod-i" },
-  "format.link": { run: insertLink, chord: "Mod-k" },
-  "format.code": { run: toggleInlineCode, chord: "Mod-e" },
-  "format.strikethrough": { run: toggleStrikethrough, chord: "Mod-Shift-x" },
-  "format.bulletList": { run: toggleBulletList, chord: "Mod-Shift-8" },
-  "format.numberedList": { run: toggleNumberedList, chord: "Mod-Shift-7" },
-  "format.blockquote": { run: toggleBlockquote, chord: "Mod-Shift-." },
-  "format.taskList": { run: toggleTaskList, chord: "Mod-Shift-Enter" },
-  "format.heading1": { run: setHeading(1), chord: "Mod-Alt-1" },
-  "format.heading2": { run: setHeading(2), chord: "Mod-Alt-2" },
-  "format.heading3": { run: setHeading(3), chord: "Mod-Alt-3" },
-  "format.heading4": { run: setHeading(4), chord: "Mod-Alt-4" },
-  "format.heading5": { run: setHeading(5), chord: "Mod-Alt-5" },
-  "format.heading6": { run: setHeading(6), chord: "Mod-Alt-6" },
-  "format.paragraph": { run: setParagraph, chord: "Mod-Alt-0" },
-} as const;
+export interface EditorCommand {
+  run: StateCommand;
+  /** Human label, used by menus. */
+  label: string;
+  /** CodeMirror key name (`Mod-Shift-x`). Menus derive their accelerator
+   *  display from this via `chordToAccelerator`; keep it the only place a
+   *  shortcut is written down. */
+  chord?: string;
+}
 
-const formattingKeymap: KeyBinding[] = Object.values(formattingCommands).map((c) => ({
-  key: c.chord,
-  run: c.run,
-}));
+/** Every editor command the keymap, context menu, and command palette can
+ *  invoke. Adding a command here is the whole job: the keymap binds `chord`,
+ *  menus render `label` + accelerator, and `runEditorCommand` dispatches it. */
+export const editorCommands = {
+  "format.bold": { run: toggleBold, label: "Bold", chord: "Mod-b" },
+  "format.italic": { run: toggleItalic, label: "Italic", chord: "Mod-i" },
+  "format.link": { run: insertLink, label: "Link…", chord: "Mod-k" },
+  "format.code": { run: toggleInlineCode, label: "Inline code", chord: "Mod-e" },
+  "format.strikethrough": {
+    run: toggleStrikethrough,
+    label: "Strikethrough",
+    chord: "Mod-Shift-x",
+  },
+  "format.clearFormatting": { run: clearInlineFormatting, label: "Clear formatting" },
+  "format.bulletList": { run: toggleBulletList, label: "Bullet list", chord: "Mod-Shift-8" },
+  "format.numberedList": { run: toggleNumberedList, label: "Numbered list", chord: "Mod-Shift-7" },
+  "format.blockquote": { run: toggleBlockquote, label: "Blockquote", chord: "Mod-Shift-." },
+  "format.taskList": { run: toggleTaskList, label: "Task list", chord: "Mod-Shift-Enter" },
+  "format.codeBlock": { run: toggleFencedCodeBlock, label: "Code block" },
+  "format.heading1": { run: setHeading(1), label: "Heading 1", chord: "Mod-Alt-1" },
+  "format.heading2": { run: setHeading(2), label: "Heading 2", chord: "Mod-Alt-2" },
+  "format.heading3": { run: setHeading(3), label: "Heading 3", chord: "Mod-Alt-3" },
+  "format.heading4": { run: setHeading(4), label: "Heading 4", chord: "Mod-Alt-4" },
+  "format.heading5": { run: setHeading(5), label: "Heading 5", chord: "Mod-Alt-5" },
+  "format.heading6": { run: setHeading(6), label: "Heading 6", chord: "Mod-Alt-6" },
+  "format.paragraph": { run: setParagraph, label: "Paragraph", chord: "Mod-Alt-0" },
+  "insert.table": { run: insertTable, label: "Table" },
+  "insert.horizontalRule": { run: insertHorizontalRule, label: "Horizontal rule" },
+  "insert.today": { run: insertToday, label: "Current date" },
+  "insert.now": { run: insertNow, label: "Current time" },
+} as const satisfies Record<string, EditorCommand>;
+
+export type EditorCommandId = keyof typeof editorCommands;
+
+export function runEditorCommand(view: EditorView, id: EditorCommandId): boolean {
+  const command: EditorCommand = editorCommands[id];
+  return command.run({ state: view.state, dispatch: (tr) => view.dispatch(tr) });
+}
+
+const MODIFIER_LABELS: Record<string, string> = {
+  Mod: "CmdOrCtrl",
+  Cmd: "Cmd",
+  Ctrl: "Ctrl",
+  Alt: "Alt",
+  Shift: "Shift",
+};
+
+/** `Mod-Shift-x` → `CmdOrCtrl+Shift+X`, the accelerator syntax Tauri menus
+ *  display. Single-letter keys are upper-cased; named keys and symbols pass
+ *  through. */
+export function chordToAccelerator(chord: string): string {
+  const parts = chord.split("-");
+  const key = parts.pop() ?? "";
+  const modifiers = parts.map((part) => MODIFIER_LABELS[part] ?? part);
+  return [...modifiers, key.length === 1 ? key.toUpperCase() : key].join("+");
+}
+
+const formattingKeymap: KeyBinding[] = Object.values(editorCommands).flatMap((c) =>
+  "chord" in c ? [{ key: c.chord, run: c.run }] : [],
+);
 
 export const markdownFormatting: Extension = Prec.high(keymap.of(formattingKeymap));

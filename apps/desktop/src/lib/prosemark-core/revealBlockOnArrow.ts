@@ -1,7 +1,39 @@
 import { EditorView, keymap } from "@codemirror/view";
 import { foldExtension } from "./fold";
-import { EditorSelection } from "@codemirror/state";
+import { EditorSelection, type Text } from "@codemirror/state";
 import { decorationHasReplaceWidget } from "./utils";
+
+const isBlankLine = (text: string) => /^[\t ]*$/.test(text);
+
+// Start of the whitespace run (trailing blanks on the previous non-blank line
+// plus any blank lines) that ends at `pos`, which must be a line start.
+function whitespaceRunStart(doc: Text, pos: number): number {
+  let line = doc.lineAt(pos);
+  while (line.number > 1) {
+    const prev = doc.line(line.number - 1);
+    if (!isBlankLine(prev.text)) {
+      const trailing = /[\t ]*$/.exec(prev.text)?.[0].length ?? 0;
+      return prev.to - trailing;
+    }
+    line = prev;
+  }
+  return line.from;
+}
+
+// End of the whitespace run (blank lines plus leading blanks on the next
+// non-blank line) that starts at `pos`, which must be a line end.
+function whitespaceRunEnd(doc: Text, pos: number): number {
+  let line = doc.lineAt(pos);
+  while (line.number < doc.lines) {
+    const next = doc.line(line.number + 1);
+    if (!isBlankLine(next.text)) {
+      const leading = /^[\t ]*/.exec(next.text)?.[0].length ?? 0;
+      return next.from + leading;
+    }
+    line = next;
+  }
+  return line.to;
+}
 
 /**
  * When the caret sits immediately outside a block-replace *widget*, jump
@@ -12,58 +44,52 @@ import { decorationHasReplaceWidget } from "./utils";
 const maybeRevealAtWidgetBoundary = (view: EditorView, direction: "up" | "down"): boolean => {
   const decorations = view.state.field(foldExtension);
   const cursorAt = view.state.selection.main.head;
+  let target: number | null = null;
 
-  // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-  for (let iter = decorations.iter(); iter.value; iter.next()) {
-    if (!decorationHasReplaceWidget(iter.value)) continue;
-    if (direction === "down" && cursorAt == iter.from - 1) {
-      view.dispatch({
-        selection: EditorSelection.single(iter.from),
-      });
-      return true;
-    }
-    if (direction === "up" && cursorAt == iter.to + 1) {
-      view.dispatch({
-        selection: EditorSelection.single(iter.to),
-      });
-      return true;
-    }
-  }
+  decorations.between(cursorAt - 1, cursorAt + 1, (from, to, deco) => {
+    if (!decorationHasReplaceWidget(deco)) return;
+    if (direction === "down" && cursorAt == from - 1) target = from;
+    if (direction === "up" && cursorAt == to + 1) target = to;
+    if (target !== null) return false;
+  });
 
-  return false;
+  if (target === null) return false;
+  view.dispatch({ selection: EditorSelection.single(target) });
+  return true;
 };
 
+// Nearest replace-widget boundary separated from the caret's line by only
+// whitespace, in `direction`. Scans just that whitespace window instead of
+// every fold decoration in the document.
 const revealWidgetOnAdjacentLine = (view: EditorView, direction: "up" | "down"): number | null => {
   const decorations = view.state.field(foldExtension);
-  const cursorAt = view.state.selection.main.head;
-  const line = view.state.doc.lineAt(cursorAt);
-  const docText = view.state.doc;
+  const doc = view.state.doc;
+  const line = doc.lineAt(view.state.selection.main.head);
   let candidate: number | null = null;
 
-  // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-  for (let iter = decorations.iter(); iter.value; iter.next()) {
-    if (!decorationHasReplaceWidget(iter.value)) continue;
-    const spec = iter.value.spec as {
-      proseMarkSkipAdjacentArrowReveal?: boolean;
-    };
-    if (spec.proseMarkSkipAdjacentArrowReveal) continue;
-
-    if (
-      direction === "up" &&
-      iter.to < line.from &&
-      /^[\t \n\r]+$/.test(docText.sliceString(iter.to, line.from))
-    ) {
-      candidate = candidate == null || iter.to > candidate ? iter.to : candidate;
-      continue;
+  const consider = (
+    from: number,
+    to: number,
+    deco: Parameters<typeof decorationHasReplaceWidget>[0],
+  ) => {
+    if (!decorationHasReplaceWidget(deco)) return;
+    const spec = deco.spec as { proseMarkSkipAdjacentArrowReveal?: boolean };
+    if (spec.proseMarkSkipAdjacentArrowReveal) return;
+    if (direction === "up" && to < line.from) {
+      candidate = candidate == null || to > candidate ? to : candidate;
+    } else if (direction === "down" && from > line.to) {
+      candidate = candidate == null || from < candidate ? from : candidate;
     }
+  };
 
-    if (
-      direction === "down" &&
-      iter.from > line.to &&
-      /^[\t \n\r]+$/.test(docText.sliceString(line.to, iter.from))
-    ) {
-      candidate = candidate == null || iter.from < candidate ? iter.from : candidate;
-    }
+  if (direction === "up") {
+    const windowStart = whitespaceRunStart(doc, line.from);
+    if (windowStart === line.from) return null;
+    decorations.between(windowStart, line.from, consider);
+  } else {
+    const windowEnd = whitespaceRunEnd(doc, line.to);
+    if (windowEnd === line.to) return null;
+    decorations.between(line.to, windowEnd, consider);
   }
 
   return candidate;

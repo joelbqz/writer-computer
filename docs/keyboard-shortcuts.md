@@ -60,7 +60,6 @@ Standard editing shortcuts provided by CodeMirror's basic setup.
 | Cmd+Shift+Z          | Redo                           |
 | Cmd+A                | Select all                     |
 | Cmd+D                | Select next occurrence         |
-| Cmd+/                | Toggle line comment            |
 | Alt+ArrowUp          | Move line up                   |
 | Alt+ArrowDown        | Move line down                 |
 | Alt+Shift+ArrowUp    | Copy line up                   |
@@ -76,5 +75,6 @@ Standard editing shortcuts provided by CodeMirror's basic setup.
 | Cmd+H                | Find and replace               |
 | Cmd+G                | Find next                      |
 | Cmd+Shift+G          | Find previous                  |
+| Escape               | Close find                     |
 | Alt+Shift+ArrowLeft  | Extend selection by word left  |
 | Alt+Shift+ArrowRight | Extend selection by word right |

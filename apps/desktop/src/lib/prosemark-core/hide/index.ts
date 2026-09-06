@@ -64,7 +64,9 @@ const defaultHidableSpecs: HidableNodeSpec[] = [
   },
   {
     nodeName: "Link",
-    subNodeNameToHide: ["LinkMark", "URL"],
+    // `LinkTitle` is a sibling of `URL` in Lezer's tree, so `[text](url "title")`
+    // must hide it too or the folded link reads `text"title"`.
+    subNodeNameToHide: ["LinkMark", "URL", "LinkTitle"],
     onHide: (_state, node) => {
       return renderedLinkDecoration.range(node.from, node.to);
     },

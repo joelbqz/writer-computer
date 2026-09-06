@@ -1,6 +1,5 @@
 import { type EditorState, type Range } from "@codemirror/state";
-import { Decoration, EditorView, ViewPlugin, ViewUpdate, WidgetType } from "@codemirror/view";
-import { syntaxTree } from "@codemirror/language";
+import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
 import {
   GFM,
@@ -571,23 +570,6 @@ const tableTheme = EditorView.baseTheme({
   },
 });
 
-const foldTreeSync = ViewPlugin.fromClass(
-  class {
-    update(update: ViewUpdate) {
-      if (!update.docChanged && syntaxTree(update.state) !== syntaxTree(update.startState)) {
-        setTimeout(() => {
-          update.view.dispatch({ selection: update.view.state.selection });
-        });
-      }
-    }
-  },
-);
-
 export function tableDecorations() {
-  return [
-    tableFoldExtension,
-    tableTheme,
-    foldTreeSync,
-    selectAllDecorationsOnSelectExtension("cm-table-widget"),
-  ];
+  return [tableFoldExtension, tableTheme, selectAllDecorationsOnSelectExtension("cm-table-widget")];
 }

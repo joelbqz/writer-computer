@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-09-05
+
+- Fix titled links leaking their title into the rendered text: `[text](url "title")` folded to `text"title"` because the link hider skipped Lezer's `LinkTitle` node.
+- Fix heading padding, code-block backgrounds, and blockquote bars going missing after jumping into a not-yet-parsed part of a long document (Cmd+G, section rail, anchor links) until the next scroll. The tree-derived view plugins now rebuild when the parse advances, like the state fields already did.
+- Remove the stale `foldTreeSync` workaround from the table and mermaid decorations; the fold field has rebuilt on parse advance since the list rewrite, so it only tripled the decoration rebuild cost per parse commit.
+- Reset undo history on tab switch by reconfiguring only the history compartment instead of the whole prosemark setup, which was tearing down and rebuilding every decoration field twice per switch.
+- Remove the editor context menu's "Paste as plain text" item; it was identical to "Paste" (the editor is plain text).
+- Take four full-document passes off the typing path in long documents. Word/character/paragraph counts and the section-rail headings now refresh on a short trailing timer instead of on every keystroke, the counts themselves are about four times cheaper (no more one-string-per-character allocation), and the paragraph count no longer merges a paragraph with a following list or heading.
+- Make caret moves and edits cheaper in long documents: fold specs are indexed by node name so the fold field no longer builds a lineage path for every node in the tree; the heading caret guard parses and scans only the lines under the selection instead of force-parsing the whole document on every Enter or line-start edit; HTML blocks are sanitised once per distinct block (bounded cache) rather than on every selection change; blockquotes only measure the visible ranges; arrow-key widget reveal scans the adjacent whitespace window instead of every fold decoration.
+- Resolve `<img src>` in the widgets themselves through an image-source facet instead of a mutation observer that walked every DOM update; images are inserted already resolved.
+- Fix list editing firing on lines that only look like bullets. Inside a fenced code block or an indented code block, a `- item` line no longer pins the caret to the body column, and Backspace / Enter / arrow keys there behave as plain text; all list commands now share one prefix grammar that is gated on the syntax tree. A tab after the marker (`-\titem`) is now handled consistently by rendering and by the commands.
+- Escape now closes the find overlay when the editor has focus. Previously it closed CodeMirror's hidden search panel (match highlights vanished) while the overlay stayed open.
+- Pasting an image over the 5 MB limit now shows a notice instead of silently doing nothing.
+- Trim the editor's inherited code-editor defaults: the hidden fold gutter, bracket matching, indent-on-input, the lint keymap, the panel-based search keymap (Cmd+D select-next-occurrence is kept), and prosemark's shadowed link-click handler and formatting keymap are gone. Auto-closing brackets and quotes stays as before.
+- Editor commands (formatting, paragraph, insert) now live in one registry that drives the keymap, the context menu labels and accelerators, and dispatch, so adding a command is a single-file change.
+- Split the editor hook into focused modules (extension assembly, search, link navigation, clipboard, body menu, viewport parse); no behavior change.
+- Consolidate link-destination lookup (`prosemark-core/links.ts`), safe-zone scrolling (`editor-scroll.ts`), and the click-to-unfold helper (`selectAllDecorationsOnSelectExtension` now takes an `ignoreTarget` predicate, used by HTML blocks). Update `docs/editor.md` to match the current mermaid / table / image decoration shapes.
+
 ## 2026-08-26
 
 - Add a **Content Width** slider under Preferences → Editor (480–1600px, default 734px) so the width of the text column is adjustable instead of a fixed Full/Narrow choice. The column never exceeds the pane, so the top of the range behaves as full width on a laptop. The frontmatter panel now shares the same width as the text column. An existing Editor Width preference migrates automatically (`narrow` → 720px, `full` → 1600px); the default changes from full width to a 734px reading column — drag the slider up if you preferred the wide layout.

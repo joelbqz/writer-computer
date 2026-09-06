@@ -23,7 +23,6 @@ function makeBodyHandlers(): EditorBodyMenuHandlers & { calls: string[] } {
     onCut: () => calls.push("cut"),
     onCopy: () => calls.push("copy"),
     onPaste: () => calls.push("paste"),
-    onPastePlain: () => calls.push("paste-plain"),
     onSelectAll: () => calls.push("select-all"),
     onOpenLink: () => calls.push("open-link"),
     onCopyLink: () => calls.push("copy-link"),
@@ -58,7 +57,7 @@ describe("buildEditorBodyMenuItemsSpec", () => {
     const summary = spec.map((e) =>
       e.kind === "separator" ? "---" : e.kind === "submenu" ? `[${e.text}]` : e.id,
     );
-    expect(summary).toEqual(["cut", "copy", "paste", "paste-plain", "---", "select-all"]);
+    expect(summary).toEqual(["cut", "copy", "paste", "---", "select-all"]);
   });
 
   test("appends link actions when hasLink is true", () => {
@@ -70,7 +69,6 @@ describe("buildEditorBodyMenuItemsSpec", () => {
       "cut",
       "copy",
       "paste",
-      "paste-plain",
       "---",
       "select-all",
       "---",
@@ -89,7 +87,6 @@ describe("buildEditorBodyMenuItemsSpec", () => {
       "cut",
       "copy",
       "paste",
-      "paste-plain",
       "select-all",
       "open-link",
       "copy-link",
@@ -113,7 +110,6 @@ describe("buildEditorBodyMenuItemsSpec", () => {
       "cut",
       "copy",
       "paste",
-      "paste-plain",
       "[Format]",
       "[Paragraph]",
       "[Insert]",

@@ -6,6 +6,7 @@
 
 ## Done
 
+- Editor audit fixes: [`SPECs/editor-audit-spec.md`](SPECs/editor-audit-spec.md) — five commits: stale-decoration and titled-link bugs plus helper dedupe; keystroke-path performance (deferred stats/headings, indexed fold specs, line-scoped heading guard, cached HTML sanitising, facet-based image src); tree-gated single list-prefix grammar; trimmed basic setup, Escape-closes-find, paste notice, one command registry; hook split into focused modules.
 - Editor content width slider: [`SPECs/editor-content-width-spec.md`](SPECs/editor-content-width-spec.md) — replace the two-state `appearance.editor-width` enum with a 480–1600px `editor.content-width` range under Preferences → Editor, bound directly to `--writer-editor-max-width` so the frontmatter panel and text column share one width; old `narrow`/`full` values migrate to 720/1600.
 - Table column sizing (Phase A, CSS-only): [`SPECs/table-column-sizing-spec.md`](SPECs/table-column-sizing-spec.md) — folded table cells inherited `overflow-wrap: anywhere` from `EditorView.lineWrapping`, which feeds min-content sizing and let the auto table layout starve columns until words broke mid-word. Reset to `overflow-wrap: break-word` + `word-break: normal`, replaced the blanket `min-width: 6em` with a `max-width: 48ch` per-cell demand cap, top-aligned cells, and left-aligned headers while keeping explicit `:---:` / `---:` alignment. Phase B (wide tables breaking out of the editor measure) and Phase C (JS column-width computation) remain open.
 - PR #111 review fixes: [`SPECs/Agent/worksheet-pr111-review-fixes.md`](SPECs/Agent/worksheet-pr111-review-fixes.md) — guard creation and external launches against workspace switches, closes, and replaced roots; preserve cross-window global settings writes; and route the sidebar background menu through the full surface and rootless shell.
@@ -61,8 +62,6 @@
 - Mermaid drag-selection edit-mode flip: [`SPECs/mermaid-drag-selection-edit-mode-flip-spec.md`](SPECs/mermaid-drag-selection-edit-mode-flip-spec.md) — freeze `editMode` for the duration of a pointer drag-selection so the widget doesn't flip into source view mid-drag.
 
 ## Up Next
-
--
 
 ## Backlog
 

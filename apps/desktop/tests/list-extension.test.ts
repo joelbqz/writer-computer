@@ -7,8 +7,8 @@ import {
 } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { GFM } from "@lezer/markdown";
-import { ensureSyntaxTree } from "@codemirror/language";
 import { computeCheckboxToggle, listExtension, __test } from "../src/lib/prosemark-core/list";
+import { withFullParse } from "./helpers/parsed-state";
 
 const {
   clampCollapsedListPrefixRange,
@@ -21,6 +21,7 @@ const {
   listBackspace,
   listIndent,
   listOutdent,
+  listLineAt,
 } = __test;
 
 function makeState(doc: string, anchor = 0, head?: number): EditorState {
@@ -29,10 +30,8 @@ function makeState(doc: string, anchor = 0, head?: number): EditorState {
     extensions: [markdown({ extensions: [GFM] }), listExtension],
     selection: EditorSelection.single(anchor, head ?? anchor),
   });
-  // Force a full parse so `syntaxTree(state)` is populated for the
-  // line-range iteration in `isOnListLine` and `buildListDecorations`.
-  ensureSyntaxTree(state, doc.length, 1000);
-  return state;
+  // Full parse committed so `isOnListLine` and `listDecorationsField` see it.
+  return withFullParse(state);
 }
 
 function run(cmd: StateCommand, state: EditorState): { state: EditorState; ran: boolean } {
@@ -96,6 +95,36 @@ describe("isOnListLine", () => {
   });
 });
 
+describe("listLineAt (tree-gated prefix parse)", () => {
+  test("ignores a bullet-looking line inside a fenced code block", () => {
+    const doc = "```\n- item\n```\n";
+    const s = makeState(doc);
+    expect(listLineAt(s, doc.indexOf("item"))).toBeNull();
+  });
+
+  test("caret guard leaves carets alone inside a fenced code block", () => {
+    const doc = "```\n- item\n```\n";
+    const s = makeState(doc);
+    const between = doc.indexOf("- item") + 1;
+    const tr = s.update({ selection: EditorSelection.cursor(between) });
+    expect(tr.state.selection.main.head).toBe(between);
+  });
+
+  test("Backspace inside a fenced code block is not a list operation", () => {
+    const doc = "```\n- item\n```\n";
+    const s = makeState(doc, doc.indexOf("item"));
+    expect(run(listBackspace, s).ran).toBe(false);
+  });
+
+  test("accepts a tab after the marker, matching the decoration builder", () => {
+    const s = makeState("-\titem");
+    expect(listLineAt(s, 3)).toMatchObject({ markerFrom: 0, bodyFrom: 2, isTask: false });
+    const { state, ran } = run(listEnter, makeState("-\titem", 6));
+    expect(ran).toBe(true);
+    expect(state.doc.toString()).toBe("-\titem\n-\t");
+  });
+});
+
 describe("parseBulletTaskLine", () => {
   test("returns the three list-prefix boundaries for nested bullets", () => {
     const s = makeState("    - item", 0);
@@ -128,31 +157,43 @@ describe("parseBulletTaskLine", () => {
 });
 
 describe("list prefix caret zones", () => {
+  // A nested item under a real parent: a 4-space-indented bullet with no
+  // parent is an indented code block per CommonMark, and the guard defers to
+  // the syntax tree for that.
+  const NESTED = "- parent\n    - item";
+  const L2 = 9; // start of the nested line
+
   test("clamps collapsed carets inside indentation to marker start", () => {
-    const s = makeState("    - item", 0);
-    const range = clampCollapsedListPrefixRange(s, EditorSelection.cursor(2));
-    expect(range.from).toBe(4);
-    expect(range.to).toBe(4);
+    const s = makeState(NESTED, 0);
+    const range = clampCollapsedListPrefixRange(s, EditorSelection.cursor(L2 + 2));
+    expect(range.from).toBe(L2 + 4);
+    expect(range.to).toBe(L2 + 4);
   });
 
   test("clamps collapsed carets inside marker to body start", () => {
-    const s = makeState("    - item", 0);
-    const range = clampCollapsedListPrefixRange(s, EditorSelection.cursor(5));
-    expect(range.from).toBe(6);
-    expect(range.to).toBe(6);
+    const s = makeState(NESTED, 0);
+    const range = clampCollapsedListPrefixRange(s, EditorSelection.cursor(L2 + 5));
+    expect(range.from).toBe(L2 + 6);
+    expect(range.to).toBe(L2 + 6);
   });
 
   test("leaves non-empty selections alone", () => {
+    const s = makeState(NESTED, 0);
+    const range = EditorSelection.range(L2 + 2, L2 + 5);
+    expect(clampCollapsedListPrefixRange(s, range)).toBe(range);
+  });
+
+  test("leaves carets alone on an indented code block that looks like a bullet", () => {
     const s = makeState("    - item", 0);
-    const range = EditorSelection.range(2, 5);
+    const range = EditorSelection.cursor(2);
     expect(clampCollapsedListPrefixRange(s, range)).toBe(range);
   });
 
   test("moves left and right across only the allowed prefix boundaries", () => {
-    expect(listPrefixBoundaryMove(makeState("    - item", 6), "left")).toBe(4);
-    expect(listPrefixBoundaryMove(makeState("    - item", 4), "left")).toBe(0);
-    expect(listPrefixBoundaryMove(makeState("    - item", 0), "right")).toBe(4);
-    expect(listPrefixBoundaryMove(makeState("    - item", 4), "right")).toBe(6);
+    expect(listPrefixBoundaryMove(makeState(NESTED, L2 + 6), "left")).toBe(L2 + 4);
+    expect(listPrefixBoundaryMove(makeState(NESTED, L2 + 4), "left")).toBe(L2);
+    expect(listPrefixBoundaryMove(makeState(NESTED, L2), "right")).toBe(L2 + 4);
+    expect(listPrefixBoundaryMove(makeState(NESTED, L2 + 4), "right")).toBe(L2 + 6);
   });
 
   test("does not get stuck on top-level items where line start equals marker start", () => {

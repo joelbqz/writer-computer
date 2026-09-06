@@ -1,17 +1,17 @@
 import { describe, expect, test } from "vite-plus/test";
-import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
+import { syntaxTree } from "@codemirror/language";
 import { markdown } from "@codemirror/lang-markdown";
 import { EditorState } from "@codemirror/state";
 import { GFM } from "@lezer/markdown";
 import { prosemarkMarkdownSyntaxExtensions } from "../src/lib/prosemark-core/markdown";
+import { withFullParse } from "./helpers/parsed-state";
 
 function makeState(doc: string): EditorState {
   const state = EditorState.create({
     doc,
     extensions: [markdown({ extensions: [GFM, prosemarkMarkdownSyntaxExtensions] })],
   });
-  ensureSyntaxTree(state, doc.length, 1000);
-  return state;
+  return withFullParse(state);
 }
 
 function nodeTexts(doc: string, nodeName: string): string[] {
