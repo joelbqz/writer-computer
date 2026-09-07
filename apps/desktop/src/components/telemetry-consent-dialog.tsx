@@ -261,6 +261,14 @@ export function TelemetryConsentDialog() {
               value={email}
               placeholder="you@example.com"
               autoComplete="email"
+              onKeyDown={(event) => {
+                // Enter is safe here now that nothing is focused when the
+                // dialog opens: reaching the field is deliberate, so finishing
+                // in it should be too.
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                void resolvePrompt(true);
+              }}
               onChange={(event) => {
                 setEmail(event.target.value);
                 // Also clears the rejected state when reduced motion left it

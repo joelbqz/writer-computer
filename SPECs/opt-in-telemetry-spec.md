@@ -102,7 +102,7 @@ dialog marks `prompted` before writing the setting, and why **Not now** writes
 The dialog is modal in both senses: the backdrop blocks the pointer, and a
 document-level key handler keeps Tab inside the card, resolves Escape as
 **Not now**, and stops modifier shortcuts from reaching the app underneath.
-Enter in the email field does nothing; only the button opts in.
+Enter in the email field submits, the same as **Subscribe** — nothing is focused when the dialog opens, so reaching the field is already deliberate.
 
 Secondary and compact windows never prompt.
 
