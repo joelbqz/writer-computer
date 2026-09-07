@@ -21,10 +21,12 @@
 //!      missing consent record wins: nothing is sent until the prompt is
 //!      answered again.
 //!
-//! One event is deliberately exempt from (3): `email_updated`. An address is a
-//! subscription the user hands over on its own terms, so it travels — and can
-//! be withdrawn — whether or not usage events are switched on. It still needs
-//! (1), (2) and (4).
+//! Two events are deliberately exempt from (3). `email_updated` carries an
+//! address, which is a subscription the user hands over on its own terms, so it
+//! travels — and can be withdrawn — whether or not usage events are switched
+//! on. `prompt_declined` records the answer to the first-run prompt when that
+//! answer is no; the dialog and `docs/telemetry.md` both say it is sent, which
+//! is the condition that makes it legitimate. Both still need (1), (2) and (4).
 
 use crate::error::AppError;
 use parking_lot::Mutex;
@@ -58,6 +60,10 @@ const EMAIL_SETTING_KEY: &str = "telemetry.email";
 /// address — or taking it back — is its own consent, separate from the usage
 /// switch, so this event is the only one that ignores `enabled`.
 const EMAIL_UPDATED_EVENT: &str = "email_updated";
+
+/// The answer itself, when it is no. Also exempt from the usage switch — see
+/// `report_declined` for why that is disclosed rather than quiet.
+const DECLINED_EVENT: &str = "prompt_declined";
 
 const IDENTITY_FILE: &str = "telemetry.json";
 
@@ -151,6 +157,8 @@ pub struct Telemetry {
     /// arrive after startup, so the event has two possible emit points and
     /// this keeps it to one per launch.
     session_opened_reported: AtomicBool,
+    /// One decline report per install; see `report_declined`.
+    declined_reported: AtomicBool,
     email: Mutex<Option<String>>,
     app_version: &'static str,
     sender: UnboundedSender<QueuedEvent>,
@@ -211,6 +219,7 @@ pub fn init(app: &tauri::AppHandle, enabled: bool, email: Option<String>) {
         prompted: AtomicBool::new(identity.prompted),
         enabled: AtomicBool::new(effective_enabled(enabled, identity.prompted)),
         session_opened_reported: AtomicBool::new(false),
+        declined_reported: AtomicBool::new(false),
         email: Mutex::new(normalize_email(email)),
         app_version: env!("CARGO_PKG_VERSION"),
         sender,
@@ -294,7 +303,7 @@ pub fn apply_settings(enabled: bool, email: Option<String>) {
     // the address even though nothing else is being sent. Gated on `prompted`
     // so a config copied from another machine still sends nothing.
     if prompted && email_changed {
-        telemetry.enqueue_email_update();
+        telemetry.enqueue_exempt(EMAIL_UPDATED_EVENT);
     }
 
     // Covers consent granted mid-session; a no-op if this launch already
@@ -325,6 +334,29 @@ pub fn mark_prompted() {
             prompted: true,
         },
     );
+}
+
+/// Report that this install answered the first-run prompt with **no**.
+///
+/// Exempt from the usage switch by definition — the switch is off, that is
+/// what is being reported — so this is the one place the module sends anything
+/// on behalf of someone who declined. It is legitimate only because it is
+/// disclosed: the dialog lists it among what is sent, and `docs/telemetry.md`
+/// describes it. Sent once per install: the prompt is one-shot, and a retry
+/// after a failed settings write must not report a second decline.
+pub fn report_declined() {
+    let Some(telemetry) = instance() else { return };
+    if !telemetry.prompted.load(Ordering::Relaxed) {
+        return;
+    }
+    if telemetry
+        .declined_reported
+        .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+        .is_err()
+    {
+        return;
+    }
+    telemetry.enqueue_exempt(DECLINED_EVENT);
 }
 
 /// The complete property set sent with every event. Deliberately fixed: there
@@ -385,11 +417,11 @@ impl Telemetry {
         });
     }
 
-    /// Push the subscription change itself. Not routed through `enqueue`
-    /// because this one is deliberately not gated on the usage switch.
-    fn enqueue_email_update(&self) {
+    /// Push an event that the usage switch does not govern. Not routed through
+    /// `enqueue`, which checks that switch on the caller's behalf.
+    fn enqueue_exempt(&self, name: &'static str) {
         let _ = self.sender.send(QueuedEvent {
-            name: EMAIL_UPDATED_EVENT,
+            name,
             ignores_switch: true,
         });
     }
@@ -493,6 +525,12 @@ pub fn telemetry_should_prompt(webview: tauri::Webview) -> bool {
 #[tauri::command]
 pub fn telemetry_mark_prompted() -> Result<(), AppError> {
     mark_prompted();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn telemetry_report_declined() -> Result<(), AppError> {
+    report_declined();
     Ok(())
 }
 

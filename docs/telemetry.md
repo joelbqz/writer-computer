@@ -1,8 +1,10 @@
 # Telemetry
 
 Writer can send a small amount of usage data to help decide what to build next.
-**It is off until you turn it on.** No network request is made before you accept
-the first-run prompt, and either answer can be changed later in Preferences.
+**It is off until you turn it on.** No usage data is collected before you accept
+the first-run prompt — the one exception is a single `prompt_declined` event if
+you answer **Not now**, described below and listed in the prompt itself. Either
+answer can be changed later in Preferences.
 
 This document is the complete disclosure. If it disagrees with the code, the
 code is the bug — the event table below is mirrored in
@@ -27,7 +29,7 @@ Answering **Not now** writes the setting off explicitly.
 
 ## What is collected
 
-Five events. That is the whole list.
+Six events. That is the whole list.
 
 | Event              | When                                                                        |
 | ------------------ | --------------------------------------------------------------------------- |
@@ -36,11 +38,20 @@ Five events. That is the whole list.
 | `file_created`     | A file is created                                                           |
 | `folder_created`   | A folder is created                                                         |
 | `email_updated`    | You set, change, or clear the email field — see below                       |
+| `prompt_declined`  | You answer the first-run prompt with **Not now** — see below                |
 
 The first four are the usage data, and the **Share Usage Data** switch governs
-them entirely. `email_updated` is the exception: it is how an address you typed
-reaches the maintainer, so it is sent even with usage data off, and only when
-the field actually changes.
+them entirely. The last two are exceptions, and both are deliberate.
+`email_updated` is how an address you typed reaches the maintainer, so it is
+sent even with usage data off, and only when the field actually changes.
+
+`prompt_declined` is the one thing Writer sends on behalf of someone who said
+no. It is a single event carrying the properties in the table above and nothing
+else — no email, since declining never records one — and it is sent once per
+install. Its purpose is to make the opt-in rate knowable: without it, a decline
+and a never-launched download look identical. Nothing follows it. If you decline
+and never change your mind, that event is the only request this install will
+ever make, and the dialog lists it among what is sent before you answer.
 
 Every event carries the same fixed set of properties, and nothing else:
 

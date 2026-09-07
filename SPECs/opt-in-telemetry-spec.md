@@ -144,8 +144,19 @@ Every event carries only:
 - `$set: { email }` when `telemetry.email` is non-empty, otherwise
   `$unset: ["email"]` so clearing the field also clears the person record
 
-`email_updated` carries the same set — a person property needs a person, hence
-`distinct_id` — and is the only event that ships with the usage switch off.
+`email_updated` and `prompt_declined` carry the same set — a person property
+needs a person, hence `distinct_id` — and are the only events that ship with the
+usage switch off.
+
+`prompt_declined` is sent once per install when the first-run prompt is answered
+with **Not now**, Escape, or a failed-then-retried decline (a `declined_reported`
+CAS keeps it to one). It exists because a decline and a download that never
+launched are otherwise indistinguishable, which makes the opt-in rate
+unknowable. It is defensible only because it is disclosed: the dialog's own list
+of what is sent leads with "Which answer you give here, either way", and
+`docs/telemetry.md` describes the event before a user has to decide. Sending it
+quietly would contradict the sentence the prompt opens with, so if that
+disclosure is ever removed, this event goes with it.
 
 There is no per-event property allowlist to maintain because there are no
 per-event properties. Adding one is a deliberate edit to this table and to
