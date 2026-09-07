@@ -81,9 +81,9 @@ After startup resolves in the `main` window, if `prompted` is `false` the app
 shows a modal with two independent asks — an optional email field for release
 news, and a checkbox for usage data (checked by default, with a disclosure
 listing what is and is not sent) — and two buttons: **Not now** and
-**Count me in**. Either button sets `prompted = true` first, then writes
-`telemetry.enabled` explicitly: the checkbox's state for **Count me in**,
-`false` for **Not now**. **Count me in** writes a non-empty email first, so the
+**Subscribe**. Either button sets `prompted = true` first, then writes
+`telemetry.enabled` explicitly: the checkbox's state for **Subscribe**,
+`false` for **Not now**. **Subscribe** writes a non-empty email first, so the
 address is in place before the switch it may not be paired with.
 Dismissing with Escape or the backdrop is equivalent to **Not now** — nothing
 is enabled, and the prompt does not return. If a write fails the dialog stays

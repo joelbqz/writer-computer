@@ -12,7 +12,7 @@ that talks to an analytics service.
 ## Turning it on and off
 
 - **First run** — a dialog makes two separate asks: an optional email for
-  release news, and a checkbox for usage data. **Count me in** applies whatever
+  release news, and a checkbox for usage data. **Subscribe** applies whatever
   you chose; **Not now**, Escape, or dismissing it takes neither.
 - **Any time after** — Preferences → Privacy → **Share Usage Data** and
   **Email**, each independent of the other.

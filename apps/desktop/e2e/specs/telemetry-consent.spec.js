@@ -18,7 +18,7 @@ import { ok, strictEqual } from "node:assert/strict";
 // — an earlier accepted run leaves `telemetry.enabled = true` there, which the
 // "off while the prompt is open" assertion below reads back.
 describe("telemetry consent dialog", function () {
-  it("shows on first run and stays opt-out until accepted", async function () {
+  it("subscribes by email without switching usage data on", async function () {
     await $("#root > *").waitForExist({ timeout: 15_000 });
 
     const dialog = await $('[aria-labelledby="telemetry-consent-title"]');
@@ -28,11 +28,21 @@ describe("telemetry consent dialog", function () {
       return;
     }
 
-    // Copy is present and the destructive-sounding default is off.
-    const text = await dialog.getText();
-    ok(text.includes("What is sent"), "dialog lists what is sent");
-    ok(text.includes("What is never sent"), "dialog lists what is never sent");
-    ok(text.includes("Not now"), "declining is offered");
+    ok((await dialog.getText()).includes("Not now"), "declining is offered");
+
+    // The disclosure starts closed and opens to both halves of the list.
+    const disclosure = await dialog.$('[aria-controls="telemetry-consent-details"]');
+    strictEqual(
+      await disclosure.getAttribute("aria-expanded"),
+      "false",
+      "disclosure starts closed",
+    );
+    await disclosure.click();
+    const details = await dialog.$("#telemetry-consent-details");
+    await details.waitForExist({ timeout: 2_000 });
+    const detailsText = await details.getText();
+    ok(detailsText.includes("Sent"), "the disclosure lists what is sent");
+    ok(detailsText.includes("Never sent"), "the disclosure lists what is never sent");
 
     const enabledBefore = await browser.executeAsync((done) => {
       void (async () => {
@@ -42,10 +52,17 @@ describe("telemetry consent dialog", function () {
     });
     strictEqual(enabledBefore, false, "telemetry is off while the prompt is open");
 
-    // Type an email, then accept.
+    // Subscribe to release news while declining usage data — the two asks are
+    // independent, and this is the combination that only works because an
+    // email change is exempt from the usage switch.
     const emailInput = await dialog.$('input[type="email"]');
     await emailInput.addValue("e2e@example.com");
-    const acceptButton = await dialog.$("button=Count me in");
+    const usageCheckbox = await dialog.$('input[type="checkbox"]');
+    strictEqual(await usageCheckbox.isSelected(), true, "usage data is checked by default");
+    await usageCheckbox.click();
+    strictEqual(await usageCheckbox.isSelected(), false, "the checkbox can be cleared");
+
+    const acceptButton = await dialog.$("button=Subscribe");
     await acceptButton.click();
 
     await dialog.waitForExist({ timeout: 5_000, reverse: true });
@@ -61,8 +78,8 @@ describe("telemetry consent dialog", function () {
       })();
     });
 
-    strictEqual(after.enabled, true, "accepting enables telemetry");
-    strictEqual(after.email, "e2e@example.com", "the typed email is persisted");
+    strictEqual(after.enabled, false, "an unchecked box leaves usage data off");
+    strictEqual(after.email, "e2e@example.com", "the typed email is persisted anyway");
     strictEqual(after.shouldPrompt, false, "the prompt does not return");
   });
 });

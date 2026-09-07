@@ -172,7 +172,7 @@ export function TelemetryConsentDialog() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6 py-6"
+      className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center px-6 py-6"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) void resolvePrompt(false);
@@ -301,7 +301,7 @@ export function TelemetryConsentDialog() {
               onClick={() => void resolvePrompt(true)}
               className="rounded-lg bg-[var(--text-primary)] px-4 py-2 text-[13px] font-medium text-[var(--surface-primary)] transition-opacity hover:opacity-90 disabled:opacity-60"
             >
-              Count me in
+              Subscribe
             </button>
           </div>
         </div>
