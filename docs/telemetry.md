@@ -12,7 +12,7 @@ that talks to an analytics service.
 ## Turning it on and off
 
 - **First run** — a dialog explains what is collected and offers **Not now** or
-  **Share usage data**. Dismissing it counts as **Not now**.
+  **Count me in**. Dismissing it counts as **Not now**.
 - **Any time after** — Preferences → Privacy → **Share Usage Data**.
 
 Turning it off takes effect immediately; nothing is queued for later.
@@ -64,7 +64,7 @@ system, your git config, or anywhere else — the only way it gets set is if you
 type it into the first-run dialog or Preferences → Privacy → **Email**.
 
 If set, it is attached to your install's person record so the maintainer can
-reach out about the features you use. Clear the field in Preferences to go back
+tell you about new releases and ask about the features you use. Clear the field in Preferences to go back
 to being anonymous: the next event tells the analytics service to remove the
 address from that record, rather than merely stopping to send it.
 

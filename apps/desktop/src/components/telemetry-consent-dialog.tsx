@@ -189,14 +189,15 @@ export function TelemetryConsentDialog() {
             id="telemetry-consent-title"
             className="text-[15px] font-semibold text-[var(--text-primary)]"
           >
-            Share anonymous usage data?
+            Stay in touch?
           </h2>
           <p
             id="telemetry-consent-description"
             className="mt-2 text-[13px] leading-relaxed text-[var(--text-muted)]"
           >
-            It tells Writer's maintainer how many people are out there and which features are worth
-            the effort. It stays off unless you turn it on here, and you can change your mind any
+            Leave your email to hear about new releases, and let Writer send anonymous usage data so
+            its maintainer knows how many people are out there and which features are worth the
+            effort. Both stay off unless you turn them on here, and you can change your mind any
             time in Preferences.
           </p>
 
@@ -252,8 +253,8 @@ export function TelemetryConsentDialog() {
               className="mt-1.5 h-9 w-full rounded-lg border border-transparent bg-[var(--surface-input)] px-3 text-[13px] text-[var(--text-secondary)] font-[inherit] outline-none focus:border-[var(--focus-border)] focus-visible:outline-none"
             />
             <span className="mt-1.5 block text-[12px] leading-relaxed text-[var(--text-muted)]">
-              Leave this blank to stay anonymous. Fill it in and the maintainer can reach you about
-              the features you actually use.
+              Leave this blank to stay anonymous. Fill it in to hear when there is a new release,
+              and so the maintainer can ask what you want next.
             </span>
           </label>
 
@@ -278,7 +279,7 @@ export function TelemetryConsentDialog() {
               onClick={() => void resolvePrompt(true)}
               className="rounded-lg bg-[var(--text-primary)] px-4 py-2 text-[13px] font-medium text-[var(--surface-primary)] transition-opacity hover:opacity-90 disabled:opacity-60"
             >
-              Share usage data
+              Count me in
             </button>
           </div>
         </div>

@@ -72,7 +72,7 @@ users of distro builds.
 After startup resolves in the `main` window, if `prompted` is `false` the app
 shows a modal explaining exactly what is and is not collected, with a link to
 `docs/telemetry.md`, an optional email field, and two buttons: **Not now** and
-**Share usage data**. Either button sets `prompted = true` first, then writes
+**Count me in**. Either button sets `prompted = true` first, then writes
 `telemetry.enabled` explicitly — `true` for the second, `false` for the first.
 Dismissing with Escape or the backdrop is equivalent to **Not now** — nothing
 is enabled, and the prompt does not return. If a write fails the dialog stays

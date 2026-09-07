@@ -349,7 +349,7 @@
     {
       "key": "telemetry.email",
       "label": "Email",
-      "description": "Optional. Attach an email to your usage data so the maintainer can reach you about the features you use. Only sent while Share Usage Data is on; clear it to go back to being anonymous.",
+      "description": "Optional. Attach an email to your usage data so the maintainer can tell you about new releases and ask about the features you use. Only sent while Share Usage Data is on; clear it to go back to being anonymous.",
       "category": "Privacy",
       "type": "string",
       "placeholder": "you@example.com",

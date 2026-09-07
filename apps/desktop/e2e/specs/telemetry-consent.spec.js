@@ -45,7 +45,7 @@ describe("telemetry consent dialog", function () {
     // Type an email, then accept.
     const emailInput = await dialog.$('input[type="email"]');
     await emailInput.addValue("e2e@example.com");
-    const acceptButton = await dialog.$("button=Share usage data");
+    const acceptButton = await dialog.$("button=Count me in");
     await acceptButton.click();
 
     await dialog.waitForExist({ timeout: 5_000, reverse: true });
