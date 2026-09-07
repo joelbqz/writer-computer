@@ -1,18 +1,11 @@
 import { keymap, dropCursor, EditorView } from "@codemirror/view";
 import { type Extension } from "@codemirror/state";
-import { indentOnInput, bracketMatching, foldGutter, foldKeymap } from "@codemirror/language";
-import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { searchKeymap } from "@codemirror/search";
-import {
-  autocompletion,
-  completionKeymap,
-  closeBrackets,
-  closeBracketsKeymap,
-} from "@codemirror/autocomplete";
-import { lintKeymap } from "@codemirror/lint";
+import { defaultKeymap, historyKeymap, indentWithTab } from "@codemirror/commands";
+import { selectNextOccurrence, selectSelectionMatches } from "@codemirror/search";
+import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { defaultHideExtensions } from "./hide";
 import { defaultFoldableSyntaxExtensions } from "./fold";
-import { clickLinkExtension, defaultClickLinkHandler } from "./clickLink";
+import { urlClassExtension } from "./urlClass";
 import { codeBlockDecorationsExtension, codeFenceTheme } from "./codeFenceExtension";
 import {
   baseSyntaxHighlights,
@@ -23,39 +16,37 @@ import {
 import { fixedTabWidthExtension } from "./tabWidthExtension";
 import { listExtension } from "./list";
 import { revealBlockOnArrowExtension } from "./revealBlockOnArrow";
-import { prosemarkMarkdownFormattingKeymap } from "./markdownFormattingKeymap";
 export { prosemarkMarkdownSyntaxExtensions } from "./markdown";
 
+// What the host is expected to add on top: `history()` (in its own
+// compartment so it can be reset per document), link click handling, search
+// (Writer runs its own overlay; the panel-based `searchKeymap` is not used),
+// autocompletion sources, and the markdown formatting keymap. Code-editor
+// defaults that make no sense for prose (fold gutter, bracket matching,
+// indent-on-input, lint) are deliberately absent.
 export const prosemarkBasicSetup = (): Extension => [
   // ProseMark Setup
   defaultHideExtensions,
   defaultFoldableSyntaxExtensions,
   revealBlockOnArrowExtension,
-  clickLinkExtension,
-  defaultClickLinkHandler,
+  urlClassExtension,
   listExtension,
   fixedTabWidthExtension,
   codeBlockDecorationsExtension,
 
   // Basic CodeMirror Setup
-  history(),
   dropCursor(),
-  indentOnInput(),
-  bracketMatching(),
   closeBrackets(),
-  autocompletion(),
   keymap.of([
-    ...prosemarkMarkdownFormattingKeymap,
     ...closeBracketsKeymap,
     ...defaultKeymap,
-    ...searchKeymap,
     ...historyKeymap,
-    ...foldKeymap,
-    ...completionKeymap,
-    ...lintKeymap,
+    // Multi-cursor selection helpers from @codemirror/search, without the
+    // rest of `searchKeymap` (whose Escape/Mod-f bindings assume its panel).
+    { key: "Mod-d", run: selectNextOccurrence, preventDefault: true },
+    { key: "Mod-Shift-l", run: selectSelectionMatches },
     indentWithTab,
   ]),
-  foldGutter(),
   EditorView.lineWrapping,
 ];
 

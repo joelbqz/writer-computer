@@ -117,6 +117,7 @@ const { markdown } = await import("@codemirror/lang-markdown");
 const { GFM } = await import("@lezer/markdown");
 const { foldExtension } = await import("../src/lib/prosemark-core/main");
 const { mermaidDecorations } = await import("../src/components/editor-area/mermaid-decorations");
+const { withFullParse } = await import("./helpers/parsed-state");
 const {
   DRAG_END_USER_EVENT,
   buildEndDragDispatch,
@@ -217,11 +218,13 @@ describe("mermaidDecorations always replaces the fence", () => {
   const fenceTo = fenceFrom + fence.length;
 
   function makeState(selection: { anchor: number; head?: number }) {
-    return EditorState.create({
-      doc,
-      extensions: [markdown({ extensions: [GFM] }), mermaidDecorations()],
-      selection: EditorSelection.single(selection.anchor, selection.head),
-    });
+    return withFullParse(
+      EditorState.create({
+        doc,
+        extensions: [markdown({ extensions: [GFM] }), mermaidDecorations()],
+        selection: EditorSelection.single(selection.anchor, selection.head),
+      }),
+    );
   }
 
   function fenceDecorationKind(state: ReturnType<typeof makeState>): "replace" | "widget" | "none" {

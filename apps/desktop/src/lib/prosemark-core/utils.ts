@@ -13,6 +13,17 @@ import {
   type WidgetType,
 } from "@codemirror/view";
 import type { TreeCursor } from "@lezer/common";
+import { syntaxTree } from "@codemirror/language";
+
+/** True when the committed syntax tree advanced between two states. Tree-derived
+ *  decorations (StateFields and ViewPlugins alike) must rebuild on this, not
+ *  only on `docChanged` / `viewportChanged`: `forceParsing`'s parse-commit
+ *  transaction changes neither, so without this guard a region scrolled into
+ *  before its parse landed keeps its stale decorations until the next edit or
+ *  scroll. See docs/editor.md. */
+export function treeChanged(update: { state: EditorState; startState: EditorState }): boolean {
+  return syntaxTree(update.state) !== syntaxTree(update.startState);
+}
 
 function isWidgetType(value: unknown): value is WidgetType {
   return (

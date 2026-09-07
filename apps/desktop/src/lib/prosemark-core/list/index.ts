@@ -96,9 +96,13 @@ interface ParsedBulletTaskLine {
   isTask: boolean;
 }
 
-// Captures unordered/task-list source prefixes only. Ordered lists keep their
-// native CodeMirror/markdown behavior.
-const BULLET_TASK_LINE_RE = /^([ \t]*)([-+*]) (\[[ xX]\] )?/;
+// The one grammar for a bullet/task source prefix: indent, marker, one space
+// or tab (CommonMark allows either; the decoration builder accepts both via
+// `isMarkerTrailingChar`, so the commands must too), optional task box.
+// Ordered lists keep their native CodeMirror/markdown behavior. Every command,
+// the caret guard, and the checkbox toggle go through `parseBulletTaskLine`;
+// don't add a second regex for "is this a list line".
+const BULLET_TASK_LINE_RE = /^([ \t]*)[-+*][ \t](\[[ xX]\][ \t])?/;
 
 function parseBulletTaskLine(line: { from: number; text: string }): ParsedBulletTaskLine | null {
   const match = BULLET_TASK_LINE_RE.exec(line.text);
@@ -111,9 +115,12 @@ function parseBulletTaskLine(line: { from: number; text: string }): ParsedBullet
     bodyFrom: line.from + match[0].length,
     indentLen,
     markerLen,
-    isTask: match[3] !== undefined,
+    isTask: match[2] !== undefined,
   };
 }
+
+// Offset of the checkbox's inner char (` ` / `x`) from the marker: `- [x]`.
+const TASK_INNER_OFFSET = 3;
 
 interface ListDecorations {
   /** Marker + spacers + body wraps + per-line hanging-indent. Drives
@@ -272,16 +279,12 @@ const findPrevListItemIndent = (
   const stop = Math.max(1, lineNumber - PREV_LIST_LOOKBACK);
   for (let i = lineNumber - 1; i >= stop; i--) {
     const prev = state.doc.line(i);
-    const text = prev.text;
-    if (text.trim() === "") return -1;
-    const m = /^([ \t]*)[-+*] /.exec(text);
-    if (m && predicate(m[1].length)) return m[1].length;
+    if (prev.text.trim() === "") return -1;
+    const parsed = parseBulletTaskLine(prev);
+    if (parsed && predicate(parsed.indentLen)) return parsed.indentLen;
   }
   return -1;
 };
-
-const currentLineIndentLen = (lineText: string): number =>
-  /^[ \t]*/.exec(lineText)?.[0].length ?? 0;
 
 // Walk the syntax tree across the entire line range looking for a list
 // marker. The previous `resolveInner(pos)` ancestor-walk approach worked
@@ -307,16 +310,22 @@ const isOnListLine = (state: EditorState, pos: number): boolean => {
 };
 
 function parseBulletTaskLineAt(state: EditorState, pos: number): ParsedBulletTaskLine | null {
-  const line = state.doc.lineAt(pos);
-  const parsed = parseBulletTaskLine(line);
+  return parseBulletTaskLine(state.doc.lineAt(pos));
+}
+
+// The bullet/task list line containing `pos`, or null. Combines the prefix
+// grammar with the syntax tree so a `- item` line inside a fenced code block
+// or HTML block (which the regex alone would accept) is not treated as a list:
+// otherwise the caret guard clamps carets and Backspace eats "- " there.
+function listLineAt(state: EditorState, pos: number): ParsedBulletTaskLine | null {
+  const parsed = parseBulletTaskLineAt(state, pos);
   if (!parsed) return null;
-  if (pos > line.to) return null;
-  return parsed;
+  return isOnListLine(state, pos) ? parsed : null;
 }
 
 function clampCollapsedListPrefixRange(state: EditorState, range: SelectionRange): SelectionRange {
   if (!range.empty) return range;
-  const parsed = parseBulletTaskLineAt(state, range.head);
+  const parsed = listLineAt(state, range.head);
   if (!parsed) return range;
 
   let pos = range.head;
@@ -361,7 +370,7 @@ const listIndentSelection: StateCommand = ({ state, dispatch }) => {
 
   for (const lineNumber of selectedLineNumbers(state)) {
     const line = state.doc.line(lineNumber);
-    const parsed = parseBulletTaskLine(line);
+    const parsed = listLineAt(state, line.from);
     if (!parsed) continue;
     sawListLine = true;
 
@@ -391,7 +400,7 @@ const listOutdentSelection: StateCommand = ({ state, dispatch }) => {
 
   for (const lineNumber of selectedLineNumbers(state)) {
     const line = state.doc.line(lineNumber);
-    const parsed = parseBulletTaskLine(line);
+    const parsed = listLineAt(state, line.from);
     if (!parsed) continue;
     sawListLine = true;
     if (parsed.indentLen === 0) continue;
@@ -410,7 +419,7 @@ const listOutdentSelection: StateCommand = ({ state, dispatch }) => {
 function listPrefixBoundaryMove(state: EditorState, direction: "left" | "right"): number | null {
   const sel = state.selection.main;
   if (!sel.empty) return null;
-  const parsed = parseBulletTaskLineAt(state, sel.head);
+  const parsed = listLineAt(state, sel.head);
   if (!parsed) return null;
   if (direction === "left") {
     if (sel.head === parsed.bodyFrom) return parsed.markerFrom;
@@ -566,7 +575,10 @@ const listIndent: StateCommand = ({ state, dispatch }) => {
   if (!isOnListLine(state, sel.head)) return false;
 
   const line = state.doc.lineAt(sel.head);
-  const currentIndent = currentLineIndentLen(line.text);
+  // Ordered-list lines: nothing to nest, but still consume Tab (see above).
+  const parsed = parseBulletTaskLine(line);
+  if (!parsed) return true;
+  const currentIndent = parsed.indentLen;
 
   const prevIndent = findPrevListItemIndent(state, line.number, (i) => i <= currentIndent);
   if (prevIndent < 0) return true;
@@ -595,7 +607,9 @@ const listOutdent: StateCommand = ({ state, dispatch }) => {
   if (!isOnListLine(state, sel.head)) return false;
 
   const line = state.doc.lineAt(sel.head);
-  const currentIndent = currentLineIndentLen(line.text);
+  const parsed = parseBulletTaskLine(line);
+  if (!parsed) return true;
+  const currentIndent = parsed.indentLen;
   if (currentIndent === 0) return true;
 
   const prevIndent = findPrevListItemIndent(state, line.number, (i) => i < currentIndent);
@@ -616,15 +630,6 @@ const listOutdent: StateCommand = ({ state, dispatch }) => {
   return true;
 };
 
-// Matches a line whose content is only a list marker (bullet or task) and
-// the required trailing space — i.e. an empty list item the user typed
-// `Enter` on. Captures optional leading whitespace for nested empties.
-const EMPTY_LIST_LINE_RE = /^[ \t]*[-+*] (\[.\] )?$/;
-
-// Captures the indent + marker + optional task-marker prefix of any list
-// line. Used to mirror the prefix onto the next line on `Enter`.
-const LIST_LINE_PREFIX_RE = /^([ \t]*)([-+*]) (\[.\] )?/;
-
 const listEnter: StateCommand = ({ state, dispatch }) => {
   if (state.readOnly) return false;
   // Multi-cursor / non-empty selection: fall through to default Enter
@@ -632,12 +637,15 @@ const listEnter: StateCommand = ({ state, dispatch }) => {
   // out of scope for now.
   if (state.selection.ranges.length !== 1 || !state.selection.main.empty) return false;
   const sel = state.selection.main;
-  if (!isOnListLine(state, sel.head)) return false;
+  // Ordered lists and blockquotes fall through to lang-markdown's own
+  // continuation.
+  const parsed = listLineAt(state, sel.head);
+  if (!parsed) return false;
 
   const line = state.doc.lineAt(sel.head);
 
   // Empty list item → wipe and break out of the list.
-  if (EMPTY_LIST_LINE_RE.test(line.text)) {
+  if (parsed.bodyFrom === line.to) {
     dispatch(
       state.update({
         changes: { from: line.from, to: line.to },
@@ -648,22 +656,19 @@ const listEnter: StateCommand = ({ state, dispatch }) => {
     return true;
   }
 
-  // Smart continuation: mirror the line's `<indent><marker> ` (with `[ ] `
-  // for tasks, always unchecked) onto the new line so a new item exists
-  // immediately after the marker + space, as soon as the user hits Enter.
-  const match = LIST_LINE_PREFIX_RE.exec(line.text);
-  if (!match) return false;
-  const indent = match[1] ?? "";
-  const marker = match[2] ?? "-";
-  const isTask = match[3] !== undefined;
+  // Smart continuation: mirror the line's `<indent><marker><sep>` (with
+  // `[ ]<sep>` for tasks, always unchecked) onto the new line so a new item
+  // exists immediately after the marker, as soon as the user hits Enter.
+  // Defer to the default Enter when the cursor sits before the prefix's end —
+  // splitting before the marker shouldn't duplicate it.
+  if (sel.head < parsed.bodyFrom) return false;
 
-  // Defer to the default Enter when the cursor sits at/before the prefix's
-  // end — splitting before the marker shouldn't duplicate it.
-  const cursorOffsetInLine = sel.head - line.from;
-  const prefixLen = match[0].length;
-  if (cursorOffsetInLine < prefixLen) return false;
-
-  const continuation = isTask ? `${indent}${marker} [ ] ` : `${indent}${marker} `;
+  const indent = line.text.slice(0, parsed.indentLen);
+  const marker = line.text[parsed.indentLen];
+  const sep = line.text[parsed.indentLen + 1];
+  const continuation = parsed.isTask
+    ? `${indent}${marker}${sep}[ ]${sep}`
+    : `${indent}${marker}${sep}`;
   dispatch(
     state.update({
       changes: { from: sel.head, insert: `\n${continuation}` },
@@ -681,7 +686,7 @@ const listBackspace: StateCommand = ({ state, dispatch }) => {
   if (!range.empty) return false;
 
   const head = range.head;
-  const parsed = parseBulletTaskLineAt(state, head);
+  const parsed = listLineAt(state, head);
   if (!parsed) return false;
 
   let effectiveHead = head;
@@ -732,11 +737,11 @@ export const computeCheckboxToggle = (
   state: EditorState,
   widgetStartPos: number,
 ): TransactionSpec | null => {
-  const slice = state.doc.sliceString(widgetStartPos, widgetStartPos + 8);
-  const m = /^[-+*] \[([ xX])\][ \t]/.exec(slice);
-  if (!m) return null;
-  const innerCharPos = widgetStartPos + 3; // position of the ` ` or `x` inside `[ ]`
-  const currentlyChecked = m[1]?.toLowerCase() === "x";
+  const parsed = parseBulletTaskLineAt(state, widgetStartPos);
+  if (!parsed || !parsed.isTask || parsed.markerFrom !== widgetStartPos) return null;
+  const innerCharPos = parsed.markerFrom + TASK_INNER_OFFSET;
+  const currentlyChecked =
+    state.doc.sliceString(innerCharPos, innerCharPos + 1).toLowerCase() === "x";
   return {
     changes: {
       from: innerCharPos,
@@ -748,11 +753,9 @@ export const computeCheckboxToggle = (
 };
 
 const computeCheckboxToggleFromLine = (state: EditorState, pos: number): TransactionSpec | null => {
-  const line = state.doc.lineAt(pos);
-  const match = /^([ \t]*)[-+*] \[[ xX]\][ \t]/.exec(line.text);
-  if (!match) return null;
-  const indentLen = match[1]?.length ?? 0;
-  return computeCheckboxToggle(state, line.from + indentLen);
+  const parsed = parseBulletTaskLineAt(state, pos);
+  if (!parsed || !parsed.isTask) return null;
+  return computeCheckboxToggle(state, parsed.markerFrom);
 };
 
 const checkboxClickHandler = EditorView.domEventHandlers(
@@ -801,13 +804,11 @@ export const __test = {
   listPrefixBoundaryMove,
   parseBulletTaskLine,
   findPrevListItemIndent,
-  currentLineIndentLen,
   listEnter,
   listBackspace,
   listIndent,
   listOutdent,
-  EMPTY_LIST_LINE_RE,
-  LIST_LINE_PREFIX_RE,
+  listLineAt,
   LIST_UNIT_CH,
   listDecorationsField,
 };

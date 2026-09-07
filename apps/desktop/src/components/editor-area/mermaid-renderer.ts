@@ -1,7 +1,7 @@
 import { renderMermaidSVG } from "beautiful-mermaid";
+import { LruCache } from "@/lib/lru";
 
-const SVG_CACHE_LIMIT = 50;
-const svgCache = new Map<string, string>();
+const svgCache = new LruCache<string>(50);
 
 export interface RenderResult {
   svg: string;
@@ -37,37 +37,17 @@ function sanitizeSvg(svg: string): string {
     .replace(/\s+on[a-z]+\s*=\s*[^\s>]+/gi, "");
 }
 
-function cacheGet(key: string): string | undefined {
-  const cached = svgCache.get(key);
-  if (cached === undefined) return undefined;
-  // Refresh recency: re-insert at the end so least-recently-used stays at the
-  // front for eviction.
-  svgCache.delete(key);
-  svgCache.set(key, cached);
-  return cached;
-}
-
-function cacheSet(key: string, value: string): void {
-  if (svgCache.has(key)) svgCache.delete(key);
-  svgCache.set(key, value);
-  while (svgCache.size > SVG_CACHE_LIMIT) {
-    const oldest = svgCache.keys().next().value;
-    if (oldest === undefined) break;
-    svgCache.delete(oldest);
-  }
-}
-
 // Synchronous on purpose: beautiful-mermaid is itself synchronous and the
 // cache makes repeat renders O(map lookup). Calling this from `toDOM` lets the
 // widget paint with its rendered SVG in the same frame the wrapper enters the
 // DOM — there's no async gap that can leave the user stuck on a placeholder.
 export function renderMermaid(source: string): RenderResult | RenderError {
-  const cached = cacheGet(source);
+  const cached = svgCache.get(source);
   if (cached !== undefined) return { svg: cached };
 
   try {
     const svg = sanitizeSvg(renderMermaidSVG(source, RENDER_OPTIONS));
-    cacheSet(source, svg);
+    svgCache.set(source, svg);
     return { svg };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

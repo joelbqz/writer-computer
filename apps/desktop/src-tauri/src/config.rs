@@ -355,6 +355,7 @@ impl Settings {
         // Migrate from old preferences.json if it exists and config doesn't
         settings.migrate_from_preferences(&global_config_dir)?;
         settings.migrate_theme_fonts()?;
+        settings.migrate_editor_width()?;
 
         Ok(settings)
     }
@@ -414,6 +415,32 @@ impl Settings {
             }
         }
         Ok(())
+    }
+
+    /// One-time migration: the editor width used to be the two-state enum
+    /// `appearance.editor-width` (`full` | `narrow`); it is now the pixel
+    /// slider `editor.content-width`. `narrow` was a 720px column and `full`
+    /// filled the pane, which maps onto the slider's top end. Unless the new
+    /// key is already set, adopt the mapped value, then drop the old key. An
+    /// unrecognized old value is simply dropped. The old key is kept on a
+    /// failed write so a later launch can retry.
+    fn migrate_editor_width(&mut self) -> std::io::Result<()> {
+        const OLD_KEY: &str = "appearance.editor-width";
+        const NEW_KEY: &str = "editor.content-width";
+        let Some(old) = self.global.get(OLD_KEY) else {
+            return Ok(());
+        };
+        let mapped = match old.as_str() {
+            Some("narrow") => Some(720.0),
+            Some("full") => Some(1600.0),
+            _ => None,
+        };
+        if let Some(width) = mapped {
+            if !self.global.contains_key(NEW_KEY) {
+                self.set_global(NEW_KEY, ConfigValue::Number(width))?;
+            }
+        }
+        self.reset_global(OLD_KEY)
     }
 
     /// One-time migration: read theme from old `preferences.json` (tauri-plugin-store format)
@@ -765,6 +792,54 @@ mod tests {
             settings.get("fonts.editor"),
             Some(&ConfigValue::String("Palatino, serif".into()))
         );
+    }
+
+    #[test]
+    fn test_editor_width_migration() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("config");
+
+        std::fs::write(&config_path, "appearance.editor-width = narrow\n").unwrap();
+        let settings = Settings::new(dir.path().to_path_buf()).unwrap();
+        assert_eq!(
+            settings.get("editor.content-width"),
+            Some(&ConfigValue::Number(720.0))
+        );
+        let raw = std::fs::read_to_string(&config_path).unwrap();
+        assert!(!raw.contains("appearance.editor-width"));
+        assert!(settings.get("appearance.editor-width").is_none());
+
+        // `full` maps onto the slider's top end.
+        std::fs::write(&config_path, "appearance.editor-width = full\n").unwrap();
+        let settings = Settings::new(dir.path().to_path_buf()).unwrap();
+        assert_eq!(
+            settings.get("editor.content-width"),
+            Some(&ConfigValue::Number(1600.0))
+        );
+
+        // An already-set new key wins; the old key is still removed.
+        std::fs::write(
+            &config_path,
+            "editor.content-width = 900\nappearance.editor-width = narrow\n",
+        )
+        .unwrap();
+        let settings = Settings::new(dir.path().to_path_buf()).unwrap();
+        assert_eq!(
+            settings.get("editor.content-width"),
+            Some(&ConfigValue::Number(900.0))
+        );
+        let raw = std::fs::read_to_string(&config_path).unwrap();
+        assert!(!raw.contains("appearance.editor-width"));
+
+        // An unrecognized old value is dropped and the default applies.
+        std::fs::write(&config_path, "appearance.editor-width = wide\n").unwrap();
+        let settings = Settings::new(dir.path().to_path_buf()).unwrap();
+        assert_eq!(
+            settings.get("editor.content-width"),
+            settings.defaults.get("editor.content-width")
+        );
+        let raw = std::fs::read_to_string(&config_path).unwrap();
+        assert!(!raw.contains("appearance.editor-width"));
     }
 
     #[test]

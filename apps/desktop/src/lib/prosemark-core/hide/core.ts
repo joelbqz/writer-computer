@@ -35,7 +35,6 @@ export const hideBlockDecoration = Decoration.replace({
 const buildDecorations = (state: EditorState) => {
   const decorations: Range<Decoration>[] = [];
   const specs = state.facet(hidableNodeFacet);
-  specs.map(checkSpec);
 
   syntaxTree(state).iterate({
     enter: (node) => {
@@ -184,6 +183,8 @@ const checkSpec = (spec: HidableNodeSpec) => {
 
 export const hidableNodeFacet = Facet.define<HidableNodeSpec, HidableNodeSpec[]>({
   combine(value: readonly HidableNodeSpec[]) {
+    // Validate once per configuration, not once per decoration rebuild.
+    value.forEach(checkSpec);
     return [...value];
   },
   enables: hideExtension,
