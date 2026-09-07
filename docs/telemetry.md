@@ -17,8 +17,8 @@ that talks to an analytics service.
 
 Turning it off takes effect immediately; nothing is queued for later.
 
-The setting on its own is not consent. Writer also keeps a record that *this
-install* answered the first-run prompt, and it sends nothing until that record
+The setting on its own is not consent. Writer also keeps a record that _this
+install_ answered the first-run prompt, and it sends nothing until that record
 exists — so a `config` file copied from another machine with the setting turned
 on does not send anything until you have seen the prompt here and accepted it.
 Answering **Not now** writes the setting off explicitly.
@@ -36,14 +36,14 @@ Four events. That is the whole list.
 
 Every event carries the same fixed set of properties, and nothing else:
 
-| Property         | Example           | Notes                                                                 |
-| ---------------- | ----------------- | --------------------------------------------------------------------- |
-| `distinct_id`    | `9f2c...`         | Random UUID generated on this install                                 |
-| `app_version`    | `0.5.0`           |                                                                       |
-| `os`             | `macos`           |                                                                       |
-| `arch`           | `aarch64`         |                                                                       |
-| `$geoip_disable` | `true`            | Tells PostHog not to derive a location from the request IP            |
-| `$set.email`     | `you@example.com` | Only if you typed one; attached to your install's record, see below   |
+| Property         | Example           | Notes                                                                                    |
+| ---------------- | ----------------- | ---------------------------------------------------------------------------------------- |
+| `distinct_id`    | `9f2c...`         | Random UUID generated on this install                                                    |
+| `app_version`    | `0.5.0`           |                                                                                          |
+| `os`             | `macos`           |                                                                                          |
+| `arch`           | `aarch64`         |                                                                                          |
+| `$geoip_disable` | `true`            | Tells PostHog not to derive a location from the request IP                               |
+| `$set.email`     | `you@example.com` | Only if you typed one; attached to your install's record, see below                      |
 | `$unset`         | `["email"]`       | Sent instead of `$set.email` when the field is blank, so clearing it clears it there too |
 
 There is no mechanism for passing per-event properties, so a file name or a

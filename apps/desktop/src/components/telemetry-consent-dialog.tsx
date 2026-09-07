@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { SurfaceCard } from "@/components/surface-card";
 import { useSetSetting } from "@/hooks/use-settings";
 import * as tauri from "@/lib/tauri";
-
-const DOCS_URL = "https://github.com/joelbqz/writer-computer/blob/master/docs/telemetry.md";
 
 /** What the dialog claims we collect. Kept as data next to the copy so it stays
  *  in step with the event table in `docs/telemetry.md` and the property set in
@@ -244,33 +241,23 @@ export function TelemetryConsentDialog() {
             </p>
           )}
 
-          <div className="mt-6 flex items-center justify-between gap-3">
+          <div className="mt-6 flex items-center justify-end gap-2">
             <button
               type="button"
-              onClick={() => void openUrl(DOCS_URL)}
-              className="text-[12px] text-[var(--text-muted)] underline underline-offset-2 transition-colors hover:text-[var(--text-secondary)]"
+              disabled={isSubmitting}
+              onClick={() => void resolvePrompt(false)}
+              className="rounded-lg border border-[var(--line-subtle)] px-4 py-2 text-[13px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-subtle)] disabled:opacity-60"
             >
-              Read what this collects
+              Not now
             </button>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={() => void resolvePrompt(false)}
-                className="rounded-lg border border-[var(--line-subtle)] px-4 py-2 text-[13px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-subtle)] disabled:opacity-60"
-              >
-                Not now
-              </button>
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={() => void resolvePrompt(true)}
-                className="rounded-lg bg-[var(--text-primary)] px-4 py-2 text-[13px] font-medium text-[var(--surface-primary)] transition-opacity hover:opacity-90 disabled:opacity-60"
-              >
-                Share usage data
-              </button>
-            </div>
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={() => void resolvePrompt(true)}
+              className="rounded-lg bg-[var(--text-primary)] px-4 py-2 text-[13px] font-medium text-[var(--surface-primary)] transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              Share usage data
+            </button>
           </div>
         </div>
       </SurfaceCard>
