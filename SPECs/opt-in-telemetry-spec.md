@@ -49,8 +49,16 @@ no business appearing in the Preferences panel.
 `telemetry.email` is an ordinary schema entry, so it shows in Preferences and
 goes through the existing settings write path. Users can see it, change it, and
 clear it in the same place as everything else. It is sent as a PostHog `$set`
-person property, so clearing it in Preferences updates the person on the next
-event.
+person property.
+
+It is also **independent of the usage switch**. An address is a subscription the
+user hands over on its own terms — "tell me about releases, send no usage data"
+is a position the dialog offers — so a change to `telemetry.email` emits one
+`email_updated` event that is exempt from `telemetry.enabled`. Withdrawal has to
+work the same way: clearing the field with usage data off still sends the
+`$unset` that removes the address, rather than leaving it attached forever. The
+exemption is one boolean on the queued event, checked in `retain_sendable`, and
+it is still gated on `prompted` and on the build-time key.
 
 ### Build-time key, absent by default
 
@@ -70,10 +78,13 @@ users of distro builds.
 ### First run
 
 After startup resolves in the `main` window, if `prompted` is `false` the app
-shows a modal explaining exactly what is and is not collected, with a link to
-`docs/telemetry.md`, an optional email field, and two buttons: **Not now** and
+shows a modal with two independent asks — an optional email field for release
+news, and a checkbox for usage data (checked by default, with a disclosure
+listing what is and is not sent) — and two buttons: **Not now** and
 **Count me in**. Either button sets `prompted = true` first, then writes
-`telemetry.enabled` explicitly — `true` for the second, `false` for the first.
+`telemetry.enabled` explicitly: the checkbox's state for **Count me in**,
+`false` for **Not now**. **Count me in** writes a non-empty email first, so the
+address is in place before the switch it may not be paired with.
 Dismissing with Escape or the backdrop is equivalent to **Not now** — nothing
 is enabled, and the prompt does not return. If a write fails the dialog stays
 open with the error and the buttons re-enabled; nothing is inferred from a
@@ -130,6 +141,9 @@ Every event carries only:
   request IP (its default is to do so)
 - `$set: { email }` when `telemetry.email` is non-empty, otherwise
   `$unset: ["email"]` so clearing the field also clears the person record
+
+`email_updated` carries the same set — a person property needs a person, hence
+`distinct_id` — and is the only event that ships with the usage switch off.
 
 There is no per-event property allowlist to maintain because there are no
 per-event properties. Adding one is a deliberate edit to this table and to

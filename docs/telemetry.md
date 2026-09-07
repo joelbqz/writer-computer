@@ -11,9 +11,11 @@ that talks to an analytics service.
 
 ## Turning it on and off
 
-- **First run** — a dialog explains what is collected and offers **Not now** or
-  **Count me in**. Dismissing it counts as **Not now**.
-- **Any time after** — Preferences → Privacy → **Share Usage Data**.
+- **First run** — a dialog makes two separate asks: an optional email for
+  release news, and a checkbox for usage data. **Count me in** applies whatever
+  you chose; **Not now**, Escape, or dismissing it takes neither.
+- **Any time after** — Preferences → Privacy → **Share Usage Data** and
+  **Email**, each independent of the other.
 
 Turning it off takes effect immediately; nothing is queued for later.
 
@@ -25,7 +27,7 @@ Answering **Not now** writes the setting off explicitly.
 
 ## What is collected
 
-Four events. That is the whole list.
+Five events. That is the whole list.
 
 | Event              | When                                                                        |
 | ------------------ | --------------------------------------------------------------------------- |
@@ -33,6 +35,12 @@ Four events. That is the whole list.
 | `workspace_opened` | A workspace becomes active, including restoring your last session at launch |
 | `file_created`     | A file is created                                                           |
 | `folder_created`   | A folder is created                                                         |
+| `email_updated`    | You set, change, or clear the email field — see below                       |
+
+The first four are the usage data, and the **Share Usage Data** switch governs
+them entirely. `email_updated` is the exception: it is how an address you typed
+reaches the maintainer, so it is sent even with usage data off, and only when
+the field actually changes.
 
 Every event carries the same fixed set of properties, and nothing else:
 
@@ -64,9 +72,14 @@ system, your git config, or anywhere else — the only way it gets set is if you
 type it into the first-run dialog or Preferences → Privacy → **Email**.
 
 If set, it is attached to your install's person record so the maintainer can
-tell you about new releases and ask about the features you use. Clear the field in Preferences to go back
-to being anonymous: the next event tells the analytics service to remove the
-address from that record, rather than merely stopping to send it.
+tell you about new releases and ask about the features you use.
+
+Setting, changing, or clearing it sends exactly one `email_updated` event
+carrying the properties in the table above — including with **Share Usage Data**
+off, which is what makes "email me about releases, but send no usage data" a
+real option. Clearing the field is the way back to anonymous: that event tells
+the analytics service to remove the address from your record rather than merely
+stopping to send it. Nothing else is sent while usage data is off.
 
 ## Your identifier
 

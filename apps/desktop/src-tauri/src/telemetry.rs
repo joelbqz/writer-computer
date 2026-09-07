@@ -20,6 +20,11 @@
 //!      (a copied config, a deleted identity file), and when they do, the
 //!      missing consent record wins: nothing is sent until the prompt is
 //!      answered again.
+//!
+//! One event is deliberately exempt from (3): `email_updated`. An address is a
+//! subscription the user hands over on its own terms, so it travels — and can
+//! be withdrawn — whether or not usage events are switched on. It still needs
+//! (1), (2) and (4).
 
 use crate::error::AppError;
 use parking_lot::Mutex;
@@ -48,6 +53,11 @@ const DISABLE_ENV_VAR: &str = "WRITER_TELEMETRY_DISABLED";
 
 const ENABLED_SETTING_KEY: &str = "telemetry.enabled";
 const EMAIL_SETTING_KEY: &str = "telemetry.email";
+
+/// The one event that travels on an email change alone. Handing over an
+/// address — or taking it back — is its own consent, separate from the usage
+/// switch, so this event is the only one that ignores `enabled`.
+const EMAIL_UPDATED_EVENT: &str = "email_updated";
 
 const IDENTITY_FILE: &str = "telemetry.json";
 
@@ -121,10 +131,13 @@ fn write_identity(app_data_dir: &Path, identity: &Identity) {
     }
 }
 
-/// One queued event. Only the name varies — see `Telemetry::properties` for the
-/// fixed property set every event carries.
+/// One queued event. Only the name and the exemption vary — see
+/// `Telemetry::properties` for the fixed property set every event carries.
 struct QueuedEvent {
     name: &'static str,
+    /// Send this even with the usage switch off. True only for
+    /// `EMAIL_UPDATED_EVENT`; see `retain_sendable`.
+    ignores_switch: bool,
 }
 
 pub struct Telemetry {
@@ -267,7 +280,23 @@ pub fn apply_settings(enabled: bool, email: Option<String>) {
     telemetry
         .enabled
         .store(effective_enabled(enabled, prompted), Ordering::Relaxed);
-    *telemetry.email.lock() = normalize_email(email);
+
+    let next_email = normalize_email(email);
+    let email_changed = {
+        let mut current = telemetry.email.lock();
+        let changed = *current != next_email;
+        *current = next_email;
+        changed
+    };
+    // Subscribing and unsubscribing both have to reach the person record, and
+    // neither depends on the usage switch: someone can ask for release news
+    // while sending no usage data at all, and clearing the field has to remove
+    // the address even though nothing else is being sent. Gated on `prompted`
+    // so a config copied from another machine still sends nothing.
+    if prompted && email_changed {
+        telemetry.enqueue_email_update();
+    }
+
     // Covers consent granted mid-session; a no-op if this launch already
     // reported, so re-enabling from Preferences does not double count.
     report_app_opened();
@@ -350,7 +379,19 @@ impl Telemetry {
     /// failure means the dispatcher is gone; dropping the event is the
     /// intended behavior — telemetry never retries and never buffers to disk.
     fn enqueue(&self, name: &'static str) {
-        let _ = self.sender.send(QueuedEvent { name });
+        let _ = self.sender.send(QueuedEvent {
+            name,
+            ignores_switch: false,
+        });
+    }
+
+    /// Push the subscription change itself. Not routed through `enqueue`
+    /// because this one is deliberately not gated on the usage switch.
+    fn enqueue_email_update(&self) {
+        let _ = self.sender.send(QueuedEvent {
+            name: EMAIL_UPDATED_EVENT,
+            ignores_switch: true,
+        });
     }
 
     fn properties(&self) -> Map<String, Value> {
@@ -360,6 +401,20 @@ impl Telemetry {
             self.email.lock().as_deref(),
         )
     }
+}
+
+/// Drop whatever the usage switch no longer covers.
+///
+/// Events are only queued while enabled, but a slow request can leave a batch
+/// waiting across a toggle-off, and "off" means nothing sent after that point.
+/// Email updates survive: they carry a subscription the user asked for
+/// separately, and an unsubscribe that the switch swallowed would leave the
+/// address attached to the person record forever.
+fn retain_sendable(queued: &mut Vec<QueuedEvent>, enabled: bool) {
+    if enabled {
+        return;
+    }
+    queued.retain(|event| event.ignores_switch);
 }
 
 /// Drain the queue and POST batches to PostHog until the app shuts down.
@@ -393,11 +448,8 @@ async fn run_dispatcher(mut receiver: UnboundedReceiver<QueuedEvent>) {
     while receiver.recv_many(&mut queued, 64).await > 0 {
         let Some(telemetry) = instance() else { return };
 
-        // Events are only queued while enabled, but a slow request can leave
-        // a batch waiting across a toggle-off. "Off" means nothing sent after
-        // that point, so re-check before every request.
-        if !telemetry.enabled.load(Ordering::Relaxed) {
-            queued.clear();
+        retain_sendable(&mut queued, telemetry.enabled.load(Ordering::Relaxed));
+        if queued.is_empty() {
             continue;
         }
 
@@ -447,6 +499,41 @@ pub fn telemetry_mark_prompted() -> Result<(), AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn queued(name: &'static str, ignores_switch: bool) -> QueuedEvent {
+        QueuedEvent {
+            name,
+            ignores_switch,
+        }
+    }
+
+    #[test]
+    fn switching_off_drops_usage_events_still_in_flight() {
+        let mut batch = vec![queued("app_opened", false), queued("file_created", false)];
+        retain_sendable(&mut batch, false);
+        assert!(batch.is_empty());
+    }
+
+    #[test]
+    fn an_email_update_survives_the_usage_switch() {
+        let mut batch = vec![
+            queued("file_created", false),
+            queued(EMAIL_UPDATED_EVENT, true),
+        ];
+        retain_sendable(&mut batch, false);
+        let names: Vec<&str> = batch.iter().map(|event| event.name).collect();
+        assert_eq!(names, vec![EMAIL_UPDATED_EVENT]);
+    }
+
+    #[test]
+    fn nothing_is_dropped_while_enabled() {
+        let mut batch = vec![
+            queued("app_opened", false),
+            queued(EMAIL_UPDATED_EVENT, true),
+        ];
+        retain_sendable(&mut batch, true);
+        assert_eq!(batch.len(), 2);
+    }
 
     #[test]
     fn identity_is_generated_and_reused() {

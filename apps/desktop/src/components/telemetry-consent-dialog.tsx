@@ -51,6 +51,9 @@ function DisclosureList({ title, items }: { title: string; items: readonly strin
  *  and only in a build configured with a PostHog key — the backend owns all
  *  three conditions, so this component just asks it.
  *
+ *  The two asks are independent: an email subscribes you to release news, the
+ *  checkbox turns on usage events, and either can be taken without the other.
+ *
  *  Both buttons and a dismissal mark the prompt answered, then write
  *  `telemetry.enabled` explicitly — `true` or `false` — through the normal
  *  settings store, so Preferences and the running client stay in sync with
@@ -59,13 +62,14 @@ function DisclosureList({ title, items }: { title: string; items: readonly strin
 export function TelemetryConsentDialog() {
   const [isOpen, setIsOpen] = useState(false);
   const [email, setEmail] = useState("");
+  const [shareUsage, setShareUsage] = useState(true);
   const [showDetails, setShowDetails] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const setSetting = useSetSetting();
   const cardRef = useRef<HTMLDivElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
-  const resolveRef = useRef<(enabled: boolean) => void>(() => {});
+  const resolveRef = useRef<(accepted: boolean) => void>(() => {});
 
   useEffect(() => {
     let cancelled = false;
@@ -129,10 +133,10 @@ export function TelemetryConsentDialog() {
 
   // `isSubmitting` guards against a double answer (Escape landing between the
   // click and the awaited writes) resolving the prompt twice.
-  async function resolvePrompt(enabled: boolean) {
+  async function resolvePrompt(accepted: boolean) {
     if (isSubmitting) return;
     const trimmed = email.trim();
-    if (enabled && trimmed && emailRef.current && !emailRef.current.checkValidity()) {
+    if (accepted && trimmed && emailRef.current && !emailRef.current.checkValidity()) {
       setError("That doesn't look like an email address. Fix it or leave it blank.");
       emailRef.current.focus();
       return;
@@ -141,12 +145,14 @@ export function TelemetryConsentDialog() {
     setError(null);
     try {
       await tauri.telemetryMarkPrompted();
-      if (enabled) {
-        // Email first: writing `enabled` last means the very first event the
-        // client sends already carries the address, instead of arriving
-        // anonymous and being back-filled on the second event.
+      if (accepted) {
+        // Email first: writing `enabled` last means the very first usage event
+        // already carries the address, instead of arriving anonymous and being
+        // back-filled on the second event. With the box unchecked this write is
+        // the only thing that sends anything at all — the backend treats an
+        // email change as its own consent.
         if (trimmed) await setSetting("telemetry.email", trimmed);
-        await setSetting("telemetry.enabled", true);
+        await setSetting("telemetry.enabled", shareUsage);
       } else {
         // Explicit rather than "no write": a config copied from elsewhere may
         // already say `true`, and "Not now" has to mean off.
@@ -160,7 +166,7 @@ export function TelemetryConsentDialog() {
       setIsSubmitting(false);
     }
   }
-  resolveRef.current = (enabled) => void resolvePrompt(enabled);
+  resolveRef.current = (accepted) => void resolvePrompt(accepted);
 
   if (!isOpen) return null;
 
@@ -195,46 +201,10 @@ export function TelemetryConsentDialog() {
             id="telemetry-consent-description"
             className="mt-2 text-[13px] leading-relaxed text-[var(--text-muted)]"
           >
-            Leave your email to hear about new releases, and let Writer send anonymous usage data so
-            its maintainer knows how many people are out there and which features are worth the
-            effort. Both stay off unless you turn them on here, and you can change your mind any
-            time in Preferences.
+            Writer is made by one person. Leave an email to hear about new releases, share a little
+            anonymous usage data, or both — whatever you are comfortable with. Nothing is on unless
+            you say so here, and you can change your mind any time in Preferences.
           </p>
-
-          <div className="mt-4">
-            <button
-              type="button"
-              aria-expanded={showDetails}
-              aria-controls="telemetry-consent-details"
-              onClick={() => setShowDetails((shown) => !shown)}
-              className="flex items-center gap-1 text-[12px] font-medium text-[var(--text-secondary)] transition-opacity hover:opacity-80"
-            >
-              <span>What is sent</span>
-              <span
-                aria-hidden="true"
-                className={`flex h-3 w-3 items-center justify-center transition-transform duration-150 ease-out ${
-                  showDetails ? "rotate-90" : ""
-                }`}
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path
-                    d="M4.5 3.5L7.5 6L4.5 8.5"
-                    stroke="currentColor"
-                    strokeWidth={1.6}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </span>
-            </button>
-
-            {showDetails && (
-              <div id="telemetry-consent-details" className="mt-2 grid gap-3">
-                <DisclosureList title="Sent" items={COLLECTED} />
-                <DisclosureList title="Never sent" items={NOT_COLLECTED} />
-              </div>
-            )}
-          </div>
 
           <label className="mt-5 block">
             <span className="text-[12px] font-medium text-[var(--text-secondary)]">
@@ -253,10 +223,62 @@ export function TelemetryConsentDialog() {
               className="mt-1.5 h-9 w-full rounded-lg border border-transparent bg-[var(--surface-input)] px-3 text-[13px] text-[var(--text-secondary)] font-[inherit] outline-none focus:border-[var(--focus-border)] focus-visible:outline-none"
             />
             <span className="mt-1.5 block text-[12px] leading-relaxed text-[var(--text-muted)]">
-              Leave this blank to stay anonymous. Fill it in to hear when there is a new release,
-              and so the maintainer can ask what you want next.
+              Only used to tell you about new releases and to ask what you want next. Leave it blank
+              to stay anonymous.
             </span>
           </label>
+
+          <div className="mt-5">
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                checked={shareUsage}
+                onChange={(event) => setShareUsage(event.target.checked)}
+                className="mt-0.5 h-3.5 w-3.5 accent-[var(--link-color)]"
+              />
+              <span className="text-[12px] font-medium text-[var(--text-secondary)]">
+                Share anonymous usage data
+                <span className="mt-1 block font-normal leading-relaxed text-[var(--text-muted)]">
+                  How many people open Writer and which features get used — never what you write.
+                </span>
+              </span>
+            </label>
+
+            <div className="ml-[calc(0.875rem+0.5rem)] mt-2">
+              <button
+                type="button"
+                aria-expanded={showDetails}
+                aria-controls="telemetry-consent-details"
+                onClick={() => setShowDetails((shown) => !shown)}
+                className="flex items-center gap-1 text-[12px] font-medium text-[var(--text-secondary)] transition-opacity hover:opacity-80"
+              >
+                <span>What is sent</span>
+                <span
+                  aria-hidden="true"
+                  className={`flex h-3 w-3 items-center justify-center transition-transform duration-150 ease-out ${
+                    showDetails ? "rotate-90" : ""
+                  }`}
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path
+                      d="M4.5 3.5L7.5 6L4.5 8.5"
+                      stroke="currentColor"
+                      strokeWidth={1.6}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+
+              {showDetails && (
+                <div id="telemetry-consent-details" className="mt-2 grid gap-3">
+                  <DisclosureList title="Sent" items={COLLECTED} />
+                  <DisclosureList title="Never sent" items={NOT_COLLECTED} />
+                </div>
+              )}
+            </div>
+          </div>
 
           {error && (
             <p role="alert" className="mt-4 text-[12px] leading-relaxed text-[var(--text-error)]">
