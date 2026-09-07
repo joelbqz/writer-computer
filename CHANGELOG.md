@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-07
+
+- Add opt-in usage telemetry, off by default. On first run Writer asks once for an email so its maintainer can tell you about new releases, with a usage-data switch beside it and the full list of what is and is not collected a hover away. Subscribing needs the email; the switch is yours to leave off. The two are independent in Preferences afterwards, where usage data with no email attached carries nothing but a random per-install ID. The prompt is shown once; both answers can be changed any time under Preferences → Privacy. Four usage events are sent — app opened, workspace opened, file created, folder created — each carrying only a random per-install ID, the app version, your OS, and your CPU architecture. A fifth, sent only when you set or clear the email, is what carries the address; clearing the field removes it from the maintainer's records rather than merely going quiet. Your documents, file names, folder names, and paths are never sent, and there is no way to attach per-event properties, so they cannot leak by accident. Beyond the setting, telemetry can be disabled with `WRITER_TELEMETRY_DISABLED=1`, and builds made from a clone of this repo have no analytics key compiled in and cannot send anything at all. See [docs/telemetry.md](./docs/telemetry.md) for the full disclosure.
+
 ## 2026-09-05
 
 - Fix titled links leaking their title into the rendered text: `[text](url "title")` folded to `text"title"` because the link hider skipped Lezer's `LinkTitle` node.

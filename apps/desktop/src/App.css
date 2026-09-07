@@ -149,7 +149,10 @@
 [data-settings-panel] select:focus-visible,
 [data-settings-panel] button:focus-visible,
 [data-search-overlay] input:focus-visible,
-[data-search-overlay] button:focus-visible {
+[data-search-overlay] button:focus-visible,
+/* A modal card takes focus programmatically so it can handle Escape; the ring
+   is for keyboard-navigating controls, not for the container itself. */
+.surface-card-opaque:focus-visible {
   outline: none;
 }
 
@@ -255,6 +258,76 @@ body.tree-dragging [data-tree-path] {
   background: color-mix(in srgb, var(--bg-base) 55%, transparent);
   z-index: -1;
   pointer-events: none;
+}
+
+/* Modal variant of the card. `.surface-card` is deliberately translucent
+   chrome — right for popovers floating over content, wrong for a dialog that
+   demands a decision, where the page behind it shows through the copy. Opt in
+   with `surface-card surface-card-opaque`. */
+.surface-card-opaque {
+  /* Nothing shows through an opaque card, so the blur would be wasted work. */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Hairline outline for a floating layer. `--line-subtle` is the foreground
+   mixed at 24%, which vanishes once it is spread over half a pixel, so this
+   leans on a stronger mix to land one visible device pixel on a retina
+   display. */
+.popover-outline {
+  border: 0.5px solid color-mix(in srgb, var(--fg-base) calc(var(--contrast) * 45%), transparent);
+}
+
+/* Rejecting an input without printing a sentence at it. Kept short and small:
+   this is a nudge back to the field, not an alarm. */
+@keyframes input-shake {
+  20% {
+    transform: translateX(-4px);
+  }
+  40% {
+    transform: translateX(4px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+
+.input-shake {
+  animation: input-shake 260ms ease-in-out;
+  border-color: var(--text-error);
+}
+
+/* Motion is the whole signal here, so when it is unwelcome the border has to
+   carry it alone — and has to persist, since there is no animation end to
+   clear it. */
+@media (prefers-reduced-motion: reduce) {
+  .input-shake {
+    animation: none;
+  }
+}
+
+/* Backdrop behind a modal that must be read on its own: opaque enough to mute
+   the document underneath while the blur keeps it recognisably still there.
+   White in light themes, neutral grey in dark ones — a dark scrim over a dark
+   theme reads as a dimmed app rather than a layer above it. */
+.modal-backdrop {
+  background: rgb(255 255 255 / 0.8);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+[data-theme="dark"] .modal-backdrop {
+  background: rgb(40 40 40 / 0.8);
+}
+
+.surface-card-opaque::before {
+  /* The layer sits above the element's own `--surface-card` tint, so paint
+     the tint again on top of the opaque base or the card is flat page colour
+     in dark mode. */
+  background: linear-gradient(var(--surface-card), var(--surface-card)), var(--bg-base);
 }
 
 .compact-picker-shell {

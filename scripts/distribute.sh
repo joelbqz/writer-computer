@@ -46,6 +46,7 @@ if [ ! -f "$ENV_FILE" ]; then
   echo "  APPLE_TEAM_ID=\"XXXXXXXXXX\""
   echo "  TAURI_SIGNING_PRIVATE_KEY=\"/absolute/path/to/writer-updater-key\""
   echo "  TAURI_SIGNING_PRIVATE_KEY_PASSWORD=\"\"  # empty if keypair has no password"
+  echo "  WRITER_POSTHOG_KEY=\"phc_...\"  # or set WRITER_RELEASE_WITHOUT_TELEMETRY=1 to ship without it"
   exit 1
 fi
 
@@ -63,6 +64,16 @@ done
 # `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` is optional but tauri-cli checks the env
 # var is present — export an empty default so the build doesn't fail on macOS.
 export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}"
+
+# Opt-in telemetry is compiled in only when a project key is present. A keyless
+# release is a working release with telemetry permanently inert, and the only
+# symptom is silence in PostHog long after it has shipped — so this fails
+# unless the omission is explicit. See docs/telemetry.md.
+if [ -z "${WRITER_POSTHOG_KEY:-}" ] && [ "${WRITER_RELEASE_WITHOUT_TELEMETRY:-}" != "1" ]; then
+  echo "Error: WRITER_POSTHOG_KEY is not set — this build would ship with telemetry permanently inert."
+  echo "Add it to $ENV_FILE, or set WRITER_RELEASE_WITHOUT_TELEMETRY=1 to release without it on purpose."
+  exit 1
+fi
 
 # Read version from tauri.conf.json
 TAURI_CONF="$ROOT_DIR/apps/desktop/src-tauri/tauri.conf.json"

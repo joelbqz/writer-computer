@@ -8,6 +8,7 @@ mod ignore;
 mod macos;
 pub mod open_target;
 mod state;
+mod telemetry;
 #[cfg(desktop)]
 mod updater;
 mod watcher;
@@ -34,7 +35,7 @@ const CLI_MENU_UNINSTALL_LABEL: &str = "Uninstall 'writer' Command Line Tool…"
 #[cfg(target_os = "macos")]
 struct CliMenuItem(MenuItem<tauri::Wry>);
 
-const MAIN_WINDOW_LABEL: &str = "main";
+pub(crate) const MAIN_WINDOW_LABEL: &str = "main";
 
 /// Push an open payload into the target window's pending-open queue and emit
 /// the notification so the frontend in that window drains it. Events are
@@ -495,6 +496,20 @@ pub fn run() {
             let main_state = app.state::<AppState>().get_or_create(MAIN_WINDOW_LABEL);
             init_window_settings(app.handle(), &main_state)?;
 
+            // Telemetry reads its enabled/email values out of the settings
+            // layer above, so it must come after `init_window_settings` and
+            // before anything that can emit an event.
+            {
+                let (enabled, email) = main_state
+                    .settings
+                    .read()
+                    .as_ref()
+                    .map(telemetry::settings_snapshot)
+                    .unwrap_or((false, None));
+                telemetry::init(app.handle(), enabled, email);
+                telemetry::report_app_opened();
+            }
+
             // On macOS, `open -a Writer /path` delivers the path via
             // RunEvent::Opened, not argv. On Linux/Windows the path
             // arrives through argv (or the single-instance plugin).
@@ -576,6 +591,8 @@ pub fn run() {
             commands::settings::get_setting,
             commands::settings::set_setting,
             commands::settings::reset_setting,
+            telemetry::telemetry_should_prompt,
+            telemetry::telemetry_mark_prompted,
             commands::startup::get_startup_state,
             #[cfg(target_os = "macos")]
             commands::shell_install::cli_status,

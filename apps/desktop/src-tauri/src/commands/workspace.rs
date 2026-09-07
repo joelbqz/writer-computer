@@ -448,6 +448,10 @@ fn prepare_workspace_state(
     // stored so opening the same workspace via different aliases dedupes.
     let _ = save_recent_workspace(app, &canonical_path);
 
+    // Shared by the `open_workspace` IPC and the startup restore bundle, so a
+    // session restore counts as an open. No path or name is sent.
+    crate::telemetry::track("workspace_opened");
+
     // Everything below this line runs on a background thread, guarded by
     // `new_epoch`. Staggering the work this way means `open_workspace`
     // returns in constant time regardless of workspace size.

@@ -340,6 +340,26 @@
       "category": "Search",
       "type": "number",
       "default": 50
+    },
+    {
+      "key": "telemetry.enabled",
+      "label": "Share Usage Data",
+      "description": "Send usage events (app opened, workspace opened, file and folder created) to help decide what to build next. Off until you turn it on. Never includes your documents, file names, or paths; the full list is in the Telemetry doc in Writer's repository.",
+      "category": "Privacy",
+      "type": "boolean",
+      "scope": "global",
+      "default": false
+    },
+    {
+      "key": "telemetry.email",
+      "label": "Email",
+      "description": "Optional. Give the maintainer a way to tell you about new releases and ask about the features you use. Sent on its own when you change it, whether or not Share Usage Data is on; clear it to remove the address and go back to being anonymous.",
+      "category": "Privacy",
+      "type": "string",
+      "placeholder": "you@example.com",
+      "normalize": "trim",
+      "scope": "global",
+      "default": ""
     }
   ]
 }
