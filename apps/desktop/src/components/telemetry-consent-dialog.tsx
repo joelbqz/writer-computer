@@ -29,6 +29,24 @@ function describeError(error: unknown): string {
   return "Something went wrong saving your choice.";
 }
 
+function DisclosureList({ title, items }: { title: string; items: readonly string[] }) {
+  return (
+    <section>
+      <h3 className="text-[12px] font-medium text-[var(--text-secondary)]">{title}</h3>
+      <ul className="mt-1 grid gap-1">
+        {items.map((item) => (
+          <li key={item} className="text-[12px] leading-relaxed text-[var(--text-muted)]">
+            <span aria-hidden="true" className="mr-2 text-[var(--text-icon-muted)]">
+              &middot;
+            </span>
+            {item}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 /** First-run telemetry consent. Shown at most once, only in the main window,
  *  and only in a build configured with a PostHog key — the backend owns all
  *  three conditions, so this component just asks it.
@@ -41,6 +59,7 @@ function describeError(error: unknown): string {
 export function TelemetryConsentDialog() {
   const [isOpen, setIsOpen] = useState(false);
   const [email, setEmail] = useState("");
+  const [showDetails, setShowDetails] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const setSetting = useSetSetting();
@@ -181,36 +200,39 @@ export function TelemetryConsentDialog() {
             here, and you can change your mind any time in Preferences.
           </p>
 
-          <div className="mt-5 grid gap-4">
-            <section>
-              <h3 className="text-[12px] font-medium text-[var(--text-secondary)]">What is sent</h3>
-              <ul className="mt-1.5 grid gap-1">
-                {COLLECTED.map((item) => (
-                  <li key={item} className="text-[12px] leading-relaxed text-[var(--text-muted)]">
-                    <span aria-hidden="true" className="mr-2 text-[var(--text-icon-muted)]">
-                      &middot;
-                    </span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </section>
+          <div className="mt-4">
+            <button
+              type="button"
+              aria-expanded={showDetails}
+              aria-controls="telemetry-consent-details"
+              onClick={() => setShowDetails((shown) => !shown)}
+              className="flex items-center gap-1 text-[12px] font-medium text-[var(--text-secondary)] transition-opacity hover:opacity-80"
+            >
+              <span>What is sent</span>
+              <span
+                aria-hidden="true"
+                className={`flex h-3 w-3 items-center justify-center transition-transform duration-150 ease-out ${
+                  showDetails ? "rotate-90" : ""
+                }`}
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path
+                    d="M4.5 3.5L7.5 6L4.5 8.5"
+                    stroke="currentColor"
+                    strokeWidth={1.6}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+            </button>
 
-            <section>
-              <h3 className="text-[12px] font-medium text-[var(--text-secondary)]">
-                What is never sent
-              </h3>
-              <ul className="mt-1.5 grid gap-1">
-                {NOT_COLLECTED.map((item) => (
-                  <li key={item} className="text-[12px] leading-relaxed text-[var(--text-muted)]">
-                    <span aria-hidden="true" className="mr-2 text-[var(--text-icon-muted)]">
-                      &middot;
-                    </span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </section>
+            {showDetails && (
+              <div id="telemetry-consent-details" className="mt-2 grid gap-3">
+                <DisclosureList title="Sent" items={COLLECTED} />
+                <DisclosureList title="Never sent" items={NOT_COLLECTED} />
+              </div>
+            )}
           </div>
 
           <label className="mt-5 block">
