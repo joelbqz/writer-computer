@@ -8,6 +8,7 @@ import * as tauri from "@/lib/tauri";
  *  in step with the event table in `docs/telemetry.md` and the property set in
  *  `src-tauri/src/telemetry.rs`. */
 const COLLECTED = [
+  "Which answer you give here, either way",
   "A random ID for this install",
   "When the app or a workspace opens",
   "That a file or folder was created",
@@ -182,6 +183,9 @@ export function TelemetryConsentDialog() {
         // Explicit rather than "no write": a config copied from elsewhere may
         // already say `true`, and "Not now" has to mean off.
         await setSetting("telemetry.enabled", false);
+        // The answer itself, which the list above says is sent either way. It
+        // is the last thing this install sends unless the user opts in later.
+        await tauri.telemetryReportDeclined();
       }
       setIsOpen(false);
     } catch (cause) {

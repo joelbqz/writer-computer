@@ -593,6 +593,7 @@ pub fn run() {
             commands::settings::reset_setting,
             telemetry::telemetry_should_prompt,
             telemetry::telemetry_mark_prompted,
+            telemetry::telemetry_report_declined,
             commands::startup::get_startup_state,
             #[cfg(target_os = "macos")]
             commands::shell_install::cli_status,
