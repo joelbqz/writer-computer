@@ -1,5 +1,6 @@
+import { InformationCircleIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useRef, useState } from "react";
-import { SurfaceCard } from "@/components/surface-card";
 import { useSetSetting } from "@/hooks/use-settings";
 import * as tauri from "@/lib/tauri";
 
@@ -7,17 +8,17 @@ import * as tauri from "@/lib/tauri";
  *  in step with the event table in `docs/telemetry.md` and the property set in
  *  `src-tauri/src/telemetry.rs`. */
 const COLLECTED = [
-  "A random ID for this install, so you count as one person",
-  "When the app opens, and when a workspace is opened",
-  "That a file or folder was created — not which one",
-  "App version, OS, and processor architecture",
+  "A random ID for this install",
+  "When the app or a workspace opens",
+  "That a file or folder was created",
+  "App version, OS, and architecture",
 ];
 
 const NOT_COLLECTED = [
-  "Anything you write. No document text, ever",
+  "Anything you write, ever",
   "File names, folder names, or paths",
   "Search queries or workspace contents",
-  "Your location — the request is explicitly marked not to derive one",
+  "Your location",
 ];
 
 const FOCUSABLE_SELECTOR =
@@ -35,7 +36,10 @@ function DisclosureList({ title, items }: { title: string; items: readonly strin
       <h3 className="text-[12px] font-medium text-[var(--text-secondary)]">{title}</h3>
       <ul className="mt-1 grid gap-1">
         {items.map((item) => (
-          <li key={item} className="text-[12px] leading-relaxed text-[var(--text-muted)]">
+          <li
+            key={item}
+            className="whitespace-nowrap text-[12px] leading-relaxed text-[var(--text-muted)]"
+          >
             <span aria-hidden="true" className="mr-2 text-[var(--text-icon-muted)]">
               &middot;
             </span>
@@ -47,14 +51,42 @@ function DisclosureList({ title, items }: { title: string; items: readonly strin
   );
 }
 
+/** The popover lives inside the dialog's scroll container, which would clip an
+ *  absolutely positioned layer. Fixed positioning escapes that clip — the
+ *  backdrop's `backdrop-filter` makes it the containing block, and it spans the
+ *  viewport — so the position is measured from the trigger each time it opens
+ *  rather than expressed in CSS. */
+interface PopoverPlacement {
+  left: number;
+  top: number;
+  transform?: string;
+}
+
+/** The popover hugs its longest line; this is only the clamp used to keep it
+ *  inside the window. */
+const POPOVER_MAX_WIDTH = 360;
+const POPOVER_GAP = 8;
+
+function placeAbove(trigger: DOMRect): PopoverPlacement {
+  const left = Math.max(
+    POPOVER_GAP,
+    Math.min(trigger.left, window.innerWidth - POPOVER_MAX_WIDTH - POPOVER_GAP),
+  );
+  // Flip below when the space above cannot hold the list, so the popover is
+  // never the thing that gets cut off.
+  const roomAbove = trigger.top - POPOVER_GAP;
+  if (roomAbove < 200) return { left, top: trigger.bottom + POPOVER_GAP };
+  return { left, top: trigger.top - POPOVER_GAP, transform: "translateY(-100%)" };
+}
+
 /** First-run telemetry consent. Shown at most once, only in the main window,
  *  and only in a build configured with a PostHog key — the backend owns all
  *  three conditions, so this component just asks it.
  *
- *  The two asks are independent: an email subscribes you to release news, the
- *  checkbox turns on usage events, and either can be taken without the other.
+ *  The email is what **Subscribe** is for and is required; the usage switch is
+ *  an extra that can be left off. Declining takes neither.
  *
- *  Both buttons and a dismissal mark the prompt answered, then write
+ *  Both buttons and Escape mark the prompt answered, then write
  *  `telemetry.enabled` explicitly — `true` or `false` — through the normal
  *  settings store, so Preferences and the running client stay in sync with
  *  one write path. The mark comes first because the backend treats the
@@ -63,11 +95,12 @@ export function TelemetryConsentDialog() {
   const [isOpen, setIsOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [shareUsage, setShareUsage] = useState(true);
-  const [showDetails, setShowDetails] = useState(false);
+  const [detailsAt, setDetailsAt] = useState<PopoverPlacement | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const setSetting = useSetSetting();
   const cardRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
   const resolveRef = useRef<(accepted: boolean) => void>(() => {});
 
@@ -80,13 +113,6 @@ export function TelemetryConsentDialog() {
       cancelled = true;
     };
   }, []);
-
-  // Focus the card itself rather than a button: autofocusing "Share usage
-  // data" would both paint a system focus ring on it and make a stray Enter
-  // opt the user in.
-  useEffect(() => {
-    if (isOpen) cardRef.current?.focus();
-  }, [isOpen]);
 
   // Keyboard modality. The backdrop only blocks the pointer; without this,
   // Tab walks into the editor behind the card and Cmd+P opens the palette on
@@ -136,9 +162,8 @@ export function TelemetryConsentDialog() {
   async function resolvePrompt(accepted: boolean) {
     if (isSubmitting) return;
     const trimmed = email.trim();
-    if (accepted && trimmed && emailRef.current && !emailRef.current.checkValidity()) {
-      setError("That doesn't look like an email address. Fix it or leave it blank.");
-      emailRef.current.focus();
+    if (accepted && (!trimmed || !emailRef.current?.checkValidity())) {
+      rejectEmail();
       return;
     }
     setIsSubmitting(true);
@@ -151,7 +176,7 @@ export function TelemetryConsentDialog() {
         // back-filled on the second event. With the box unchecked this write is
         // the only thing that sends anything at all — the backend treats an
         // email change as its own consent.
-        if (trimmed) await setSetting("telemetry.email", trimmed);
+        await setSetting("telemetry.email", trimmed);
         await setSetting("telemetry.enabled", shareUsage);
       } else {
         // Explicit rather than "no write": a config copied from elsewhere may
@@ -168,29 +193,51 @@ export function TelemetryConsentDialog() {
   }
   resolveRef.current = (accepted) => void resolvePrompt(accepted);
 
+  /** Missing or malformed address: shake the field instead of printing a
+   *  sentence. The failure is about the one input the user is looking at, and a
+   *  line of red text would push the buttons down mid-decision. Restarting the
+   *  animation needs the class off, a reflow, then on again, which is a DOM
+   *  operation rather than a render. */
+  function rejectEmail() {
+    const input = emailRef.current;
+    if (!input) return;
+    input.classList.remove("input-shake");
+    void input.offsetWidth;
+    input.classList.add("input-shake");
+    input.addEventListener("animationend", () => input.classList.remove("input-shake"), {
+      once: true,
+    });
+    input.focus();
+  }
+
+  function openDetails() {
+    const trigger = triggerRef.current;
+    if (trigger) setDetailsAt(placeAbove(trigger.getBoundingClientRect()));
+  }
+
   if (!isOpen) return null;
 
   return (
     <div
       className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center px-6 py-6"
       role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) void resolvePrompt(false);
-      }}
     >
-      <SurfaceCard
+      {/* No card: the backdrop is the surface. The dialog is the only thing on
+          screen while it is open, so a panel outline would only add a second
+          edge inside the window's own. The copy still scrolls within a fixed
+          height so the buttons stay reachable at the 500px minimum. */}
+      <div
         ref={cardRef}
-        tabIndex={-1}
-        className="surface-card-opaque relative flex max-h-[calc(100vh-3rem)] w-full max-w-[440px] flex-col"
+        className="relative flex max-h-[calc(100vh-3rem)] w-full max-w-[440px] flex-col outline-none"
         role="dialog"
         aria-modal="true"
         aria-labelledby="telemetry-consent-title"
         aria-describedby="telemetry-consent-description"
       >
-        {/* The card stays fixed-size and the copy scrolls inside it, so the
-            opaque `::before` layer always covers what is visible and the
-            buttons stay reachable at the 500px minimum window height. */}
-        <div className="min-h-0 overflow-y-auto p-6">
+        {/* `overflow-y: auto` also clips horizontally, which cut the email field
+            off mid-shake. The padding gives the animation room to move into and
+            the negative margin gives it back, so the copy sits where it did. */}
+        <div className="-mx-2 min-h-0 overflow-y-auto px-2">
           <h2
             id="telemetry-consent-title"
             className="text-[15px] font-semibold text-[var(--text-primary)]"
@@ -201,78 +248,99 @@ export function TelemetryConsentDialog() {
             id="telemetry-consent-description"
             className="mt-2 text-[13px] leading-relaxed text-[var(--text-muted)]"
           >
-            Writer is made by one person. Leave an email to hear about new releases, share a little
-            anonymous usage data, or both — whatever you are comfortable with. Nothing is on unless
-            you say so here, and you can change your mind any time in Preferences.
+            Writer is made by one person. Leave your email for release news, and share light usage
+            data. Both change in Preferences.
           </p>
 
           <label className="mt-5 block">
-            <span className="text-[12px] font-medium text-[var(--text-secondary)]">
-              Email <span className="font-normal text-[var(--text-muted)]">(optional)</span>
-            </span>
+            <span className="text-[12px] font-medium text-[var(--text-secondary)]">Email</span>
             <input
               ref={emailRef}
               type="email"
+              required
               value={email}
               placeholder="you@example.com"
               autoComplete="email"
               onChange={(event) => {
                 setEmail(event.target.value);
+                // Also clears the rejected state when reduced motion left it
+                // standing, since there is no animation end to clear it there.
+                event.currentTarget.classList.remove("input-shake");
                 if (error) setError(null);
               }}
               className="mt-1.5 h-9 w-full rounded-lg border border-transparent bg-[var(--surface-input)] px-3 text-[13px] text-[var(--text-secondary)] font-[inherit] outline-none focus:border-[var(--focus-border)] focus-visible:outline-none"
             />
             <span className="mt-1.5 block text-[12px] leading-relaxed text-[var(--text-muted)]">
-              Only used to tell you about new releases and to ask what you want next. Leave it blank
-              to stay anonymous.
+              Only used to tell you about new releases and to ask what you want next.
             </span>
           </label>
 
-          <div className="mt-5">
-            <label className="flex items-start gap-2">
-              <input
-                type="checkbox"
-                checked={shareUsage}
-                onChange={(event) => setShareUsage(event.target.checked)}
-                className="mt-0.5 h-3.5 w-3.5 accent-[var(--link-color)]"
-              />
-              <span className="text-[12px] font-medium text-[var(--text-secondary)]">
-                Share anonymous usage data
+          <div className="mt-5 rounded-lg border border-[var(--line-subtle)] p-3">
+            <div className="flex items-start justify-between gap-4">
+              <span
+                id="telemetry-usage-label"
+                className="text-[12px] font-medium text-[var(--text-secondary)]"
+              >
+                Share light usage data
                 <span className="mt-1 block font-normal leading-relaxed text-[var(--text-muted)]">
-                  How many people open Writer and which features get used — never what you write.
+                  Which features get used and how often, tied to the email above. Never what you
+                  write, and never a file name.
                 </span>
               </span>
-            </label>
-
-            <div className="ml-[calc(0.875rem+0.5rem)] mt-2">
+              {/* Same switch as Preferences renders for a boolean setting, so the
+                  control the user meets here is the one they will find later. */}
               <button
                 type="button"
-                aria-expanded={showDetails}
-                aria-controls="telemetry-consent-details"
-                onClick={() => setShowDetails((shown) => !shown)}
-                className="flex items-center gap-1 text-[12px] font-medium text-[var(--text-secondary)] transition-opacity hover:opacity-80"
+                role="switch"
+                aria-checked={shareUsage}
+                aria-labelledby="telemetry-usage-label"
+                onClick={() => setShareUsage((shared) => !shared)}
+                className="relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors duration-200"
+                style={{
+                  backgroundColor: shareUsage ? "var(--link-color)" : "var(--border-color)",
+                }}
               >
-                <span>What is sent</span>
                 <span
-                  aria-hidden="true"
-                  className={`flex h-3 w-3 items-center justify-center transition-transform duration-150 ease-out ${
-                    showDetails ? "rotate-90" : ""
-                  }`}
-                >
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path
-                      d="M4.5 3.5L7.5 6L4.5 8.5"
-                      stroke="currentColor"
-                      strokeWidth={1.6}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
+                  className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform duration-200 ease-out"
+                  style={{ transform: shareUsage ? "translateX(16px)" : "translateX(0)" }}
+                />
+              </button>
+            </div>
+
+            {/* Hover (or focus) rather than a click: the full list is reference
+                material, not a step in the decision, and pushing it into a layer
+                keeps the dialog to one screen. */}
+            <div
+              className="relative mt-2 inline-block"
+              onMouseEnter={openDetails}
+              onMouseLeave={() => setDetailsAt(null)}
+            >
+              <button
+                ref={triggerRef}
+                type="button"
+                aria-describedby="telemetry-consent-details"
+                onFocus={openDetails}
+                onBlur={() => setDetailsAt(null)}
+                className="flex items-center gap-1 text-[12px] text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)]"
+              >
+                <HugeiconsIcon
+                  icon={InformationCircleIcon}
+                  size={13}
+                  color="currentColor"
+                  strokeWidth={1.8}
+                />
+                <span className="underline decoration-dotted underline-offset-2">
+                  What&rsquo;s collected
                 </span>
               </button>
 
-              {showDetails && (
-                <div id="telemetry-consent-details" className="mt-2 grid gap-3">
+              {detailsAt && (
+                <div
+                  id="telemetry-consent-details"
+                  role="tooltip"
+                  style={{ ...detailsAt, width: "max-content", maxWidth: POPOVER_MAX_WIDTH }}
+                  className="popover-outline fixed z-10 grid gap-3 rounded-lg bg-[var(--surface-primary)] p-3 shadow-lg"
+                >
                   <DisclosureList title="Sent" items={COLLECTED} />
                   <DisclosureList title="Never sent" items={NOT_COLLECTED} />
                 </div>
@@ -305,7 +373,7 @@ export function TelemetryConsentDialog() {
             </button>
           </div>
         </div>
-      </SurfaceCard>
+      </div>
     </div>
   );
 }

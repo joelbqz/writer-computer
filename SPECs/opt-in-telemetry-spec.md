@@ -78,15 +78,17 @@ users of distro builds.
 ### First run
 
 After startup resolves in the `main` window, if `prompted` is `false` the app
-shows a modal with two independent asks — an optional email field for release
-news, and a checkbox for usage data (checked by default, with a disclosure
-listing what is and is not sent) — and two buttons: **Not now** and
-**Subscribe**. Either button sets `prompted = true` first, then writes
-`telemetry.enabled` explicitly: the checkbox's state for **Subscribe**,
-`false` for **Not now**. **Subscribe** writes a non-empty email first, so the
-address is in place before the switch it may not be paired with.
-Dismissing with Escape or the backdrop is equivalent to **Not now** — nothing
-is enabled, and the prompt does not return. If a write fails the dialog stays
+shows a modal asking for an email for release news, with a switch for usage
+data beside it (on by default, with a hover popover listing what is and is not
+sent) and two buttons: **Not now** and **Subscribe**. **Subscribe** requires a
+valid email — that is the ask it names — and applies the switch as it stands.
+Either button sets `prompted = true` first, then writes `telemetry.enabled`
+explicitly: the switch's state for **Subscribe**, `false` for **Not now**.
+**Subscribe** writes the email first, so the address is in place before the
+switch it may not be paired with.
+Escape is equivalent to **Not now** — nothing is enabled, and the prompt does
+not return. Clicking outside the dialog does nothing: a one-shot decision
+should not be answerable by a stray click. If a write fails the dialog stays
 open with the error and the buttons re-enabled; nothing is inferred from a
 partial answer.
 

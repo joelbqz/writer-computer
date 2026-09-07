@@ -340,7 +340,7 @@
     {
       "key": "telemetry.enabled",
       "label": "Share Usage Data",
-      "description": "Send anonymous usage events (app opened, workspace opened, file and folder created) to help decide what to build next. Off until you turn it on. Never includes your documents, file names, or paths; the full list is in the Telemetry doc in Writer's repository.",
+      "description": "Send usage events (app opened, workspace opened, file and folder created) to help decide what to build next. Off until you turn it on. Never includes your documents, file names, or paths; the full list is in the Telemetry doc in Writer's repository.",
       "category": "Privacy",
       "type": "boolean",
       "scope": "global",

@@ -270,14 +270,53 @@ body.tree-dragging [data-tree-path] {
   -webkit-backdrop-filter: none;
 }
 
+/* Hairline outline for a floating layer. `--line-subtle` is the foreground
+   mixed at 24%, which vanishes once it is spread over half a pixel, so this
+   leans on a stronger mix to land one visible device pixel on a retina
+   display. */
+.popover-outline {
+  border: 0.5px solid color-mix(in srgb, var(--fg-base) calc(var(--contrast) * 45%), transparent);
+}
+
+/* Rejecting an input without printing a sentence at it. Kept short and small:
+   this is a nudge back to the field, not an alarm. */
+@keyframes input-shake {
+  20% {
+    transform: translateX(-4px);
+  }
+  40% {
+    transform: translateX(4px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+
+.input-shake {
+  animation: input-shake 260ms ease-in-out;
+  border-color: var(--text-error);
+}
+
+/* Motion is the whole signal here, so when it is unwelcome the border has to
+   carry it alone — and has to persist, since there is no animation end to
+   clear it. */
+@media (prefers-reduced-motion: reduce) {
+  .input-shake {
+    animation: none;
+  }
+}
+
 /* Backdrop behind a modal that must be read on its own: opaque enough to mute
    the document underneath while the blur keeps it recognisably still there.
    White in light themes, neutral grey in dark ones — a dark scrim over a dark
    theme reads as a dimmed app rather than a layer above it. */
 .modal-backdrop {
   background: rgb(255 255 255 / 0.8);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 [data-theme="dark"] .modal-backdrop {

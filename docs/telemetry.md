@@ -11,9 +11,9 @@ that talks to an analytics service.
 
 ## Turning it on and off
 
-- **First run** — a dialog makes two separate asks: an optional email for
-  release news, and a checkbox for usage data. **Subscribe** applies whatever
-  you chose; **Not now**, Escape, or dismissing it takes neither.
+- **First run** — a dialog asks for an email for release news, with a switch
+  for usage data beside it. **Subscribe** needs the email and applies the
+  switch as you left it; **Not now** or Escape takes neither.
 - **Any time after** — Preferences → Privacy → **Share Usage Data** and
   **Email**, each independent of the other.
 

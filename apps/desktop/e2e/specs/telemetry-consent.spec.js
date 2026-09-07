@@ -30,19 +30,19 @@ describe("telemetry consent dialog", function () {
 
     ok((await dialog.getText()).includes("Not now"), "declining is offered");
 
-    // The disclosure starts closed and opens to both halves of the list.
-    const disclosure = await dialog.$('[aria-controls="telemetry-consent-details"]');
+    // The full list is a hover popover, so nothing shows until it is asked for.
     strictEqual(
-      await disclosure.getAttribute("aria-expanded"),
-      "false",
-      "disclosure starts closed",
+      await dialog.$("#telemetry-consent-details").isExisting(),
+      false,
+      "the list stays out of the way until hovered",
     );
-    await disclosure.click();
+    const disclosure = await dialog.$('[aria-describedby="telemetry-consent-details"]');
+    await disclosure.moveTo();
     const details = await dialog.$("#telemetry-consent-details");
     await details.waitForExist({ timeout: 2_000 });
     const detailsText = await details.getText();
-    ok(detailsText.includes("Sent"), "the disclosure lists what is sent");
-    ok(detailsText.includes("Never sent"), "the disclosure lists what is never sent");
+    ok(detailsText.includes("Sent"), "the popover lists what is sent");
+    ok(detailsText.includes("Never sent"), "the popover lists what is never sent");
 
     const enabledBefore = await browser.executeAsync((done) => {
       void (async () => {
@@ -57,10 +57,10 @@ describe("telemetry consent dialog", function () {
     // email change is exempt from the usage switch.
     const emailInput = await dialog.$('input[type="email"]');
     await emailInput.addValue("e2e@example.com");
-    const usageCheckbox = await dialog.$('input[type="checkbox"]');
-    strictEqual(await usageCheckbox.isSelected(), true, "usage data is checked by default");
-    await usageCheckbox.click();
-    strictEqual(await usageCheckbox.isSelected(), false, "the checkbox can be cleared");
+    const usageSwitch = await dialog.$('[role="switch"]');
+    strictEqual(await usageSwitch.getAttribute("aria-checked"), "true", "usage data starts on");
+    await usageSwitch.click();
+    strictEqual(await usageSwitch.getAttribute("aria-checked"), "false", "the switch turns it off");
 
     const acceptButton = await dialog.$("button=Subscribe");
     await acceptButton.click();
