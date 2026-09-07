@@ -189,15 +189,15 @@ export function TelemetryConsentDialog() {
             id="telemetry-consent-title"
             className="text-[15px] font-semibold text-[var(--text-primary)]"
           >
-            Help shape Writer?
+            Share anonymous usage data?
           </h2>
           <p
             id="telemetry-consent-description"
             className="mt-2 text-[13px] leading-relaxed text-[var(--text-muted)]"
           >
-            Writer can send a small amount of anonymous usage data so its maintainer knows how many
-            people use it and which features are worth the effort. It is off unless you turn it on
-            here, and you can change your mind any time in Preferences.
+            It tells Writer's maintainer how many people are out there and which features are worth
+            the effort. It stays off unless you turn it on here, and you can change your mind any
+            time in Preferences.
           </p>
 
           <div className="mt-4">
