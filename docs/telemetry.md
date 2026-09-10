@@ -6,6 +6,10 @@ the first-run prompt — the one exception is a single `prompt_declined` event i
 you answer **Not now**, described below and listed in the prompt itself. Either
 answer can be changed later in Preferences.
 
+This document covers the desktop app. The marketing website reports to PostHog
+separately, under its own project key — see
+[website-analytics.md](./website-analytics.md).
+
 This document is the complete disclosure. If it disagrees with the code, the
 code is the bug — the event table below is mirrored in
 `apps/desktop/src-tauri/src/telemetry.rs`, which is the only file in the app
