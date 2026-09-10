@@ -1,5 +1,6 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 
+import { useAnalytics } from "../analytics";
 import { AppleGlyph, WriterMark } from "../components/Mark";
 
 const FEATURES = [
@@ -27,6 +28,8 @@ export const Route = createFileRoute("/")({
 });
 
 function HomePage() {
+  const capture = useAnalytics();
+
   return (
     <div className="page">
       <main className="hero">
@@ -41,7 +44,7 @@ function HomePage() {
               href="https://x.com/joelbqz"
               target="_blank"
               rel="noopener noreferrer"
-              data-umami-event="Open updates"
+              onClick={() => capture("updates_opened")}
             >
               Updates
             </a>
@@ -50,7 +53,7 @@ function HomePage() {
               href={__WRITER_REPO_URL__}
               target="_blank"
               rel="noopener noreferrer"
-              data-umami-event="Open GitHub"
+              onClick={() => capture("github_opened")}
             >
               GitHub
             </a>
@@ -63,8 +66,7 @@ function HomePage() {
           <a
             className="download"
             href={__WRITER_DMG_URL__}
-            data-umami-event="Download macOS app"
-            data-umami-event-version={__WRITER_VERSION__}
+            onClick={() => capture("download_started", { app_version: __WRITER_VERSION__ })}
           >
             <AppleGlyph size={20} />
             <span>Download for MacOS</span>

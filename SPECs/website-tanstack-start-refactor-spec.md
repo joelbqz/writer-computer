@@ -20,7 +20,7 @@ The marketing website is currently a plain Vite React single-page app. It has a 
 ## Implementation Notes
 
 - Use TanStack Start static prerendering so the static Cloudflare Worker can continue serving built assets without an SSR worker entry.
-- Move document metadata, favicon, Umami script, and CSS link ownership into `src/routes/__root.tsx`.
+- Move document metadata, favicon, analytics script, and CSS link ownership into `src/routes/__root.tsx`.
 - Move the homepage component into `src/routes/index.tsx` and keep shared mark components unchanged.
 - Add the required Start client, router, and server entries so both dev and production requests route through TanStack Start.
 - Keep the Tauri version-derived release constants in `vite.config.ts` and expose them with Vite `define`.

@@ -47,6 +47,7 @@ All docs except CLAUDE.md, AGENTS.md, TODOS.md, and CHANGELOG.md live in `./docs
 - [docs/releasing.md](./docs/releasing.md) — how to cut a signed, notarized macOS release
 - [docs/telemetry.md](./docs/telemetry.md) — opt-in usage telemetry: the full event/property disclosure, the three off-switches, and the rule that adding an event touches the call site, the doc, and the consent dialog together
 - [docs/website-deploy.md](./docs/website-deploy.md) — how to deploy the marketing website to Cloudflare Workers
+- [docs/website-analytics.md](./docs/website-analytics.md) — the marketing website's PostHog events, the two build-time env vars, and the rule that a missing key makes the site inert
 
 **Cross-cutting**
 
