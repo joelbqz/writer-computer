@@ -40,49 +40,99 @@ back, but it only works if the PostHog project is configured for cookieless
 ingestion too — otherwise every event is silently dropped. Turn on the project
 setting first.
 
+## One project, shared with the app
+
+The site and the desktop app report to the **same PostHog project**. Anything
+scoped to one surface has to say so: filter on the event name (the app sends
+`app_opened`, `workspace_opened`, `file_created`, `folder_created`,
+`email_updated`, `prompt_declined`; the site sends the four above), or on a
+property only one of them sets.
+
+The two do **not** share a `distinct_id`. The desktop app mints a per-install
+UUID and stores it in `telemetry.json`; the browser mints its own anonymous id.
+A visitor and the install they went on to download are two different persons in
+PostHog, and a site-to-app funnel will not stitch. Nothing here tries to make it
+stitch — doing so would mean carrying a browser identifier into the installer
+and back out of the app, which is exactly the kind of cross-surface tracking
+[telemetry.md](./telemetry.md) promises the app does not do. Read the download
+count and the install count as two separate numbers.
+
 ## Configuration
 
-Two environment variables, both read at **build** time and inlined by Vite:
+Four environment variables, all read at **build** time. Each pair is tried in
+order, and a blank value counts as absent:
 
-| Variable            | Required | Default                    |
-| ------------------- | -------- | -------------------------- |
-| `VITE_POSTHOG_KEY`  | yes      | —                          |
-| `VITE_POSTHOG_HOST` | no       | `https://us.i.posthog.com` |
+| Purpose | Order                                           | Default                    |
+| ------- | ----------------------------------------------- | -------------------------- |
+| Key     | `VITE_POSTHOG_KEY`, then `WRITER_POSTHOG_KEY`   | none — the site is inert   |
+| Host    | `VITE_POSTHOG_HOST`, then `WRITER_POSTHOG_HOST` | `https://us.i.posthog.com` |
 
-`VITE_POSTHOG_KEY` is the PostHog **project** key (a `phc_...` value). It is
-publishable — it ships in the client bundle by design and is not a secret. Do
-not put a personal API key here.
+`WRITER_POSTHOG_KEY` is the desktop app's variable, and it already lives in the
+repo-root `.env` — that is what makes one value configure both surfaces with no
+drift. `VITE_POSTHOG_KEY` overrides it for the website alone, which is how you
+point the site at a scratch project without touching the app.
+
+The key is the PostHog **project** key (a `phc_...` value). It is publishable —
+it ships in the client bundle by design and is not a secret. Do not put a
+personal API key here.
+
+### How `WRITER_POSTHOG_KEY` reaches the client
+
+It has no `VITE_` prefix, so Vite does not expose it. `apps/website/vite.config.ts`
+bridges it — and the host — by name through `define`, and nothing else.
+
+That is deliberate and it must stay that way. The repo-root `.env` also holds
+the Apple credentials and the Tauri updater signing key, and the client bundle
+is public. Do not widen `envDir` to the repo root, do not call `loadEnv` with an
+empty prefix, and do not forward `process.env` wholesale: any of those would put
+signing secrets into a file served to every visitor. Adding one name to the
+`define` block is the only way in.
 
 ## No key means inert
 
-With `VITE_POSTHOG_KEY` unset or blank, `resolveAnalyticsConfig` returns null,
-`PostHogProvider` is never rendered, `posthog.init` is never called, and
-`useAnalytics` returns a no-op. No network request is made and nothing is
-logged. This is the same rule the desktop app applies to a build with no
-`WRITER_POSTHOG_KEY`: inert by construction rather than merely switched off.
+With neither `VITE_POSTHOG_KEY` nor `WRITER_POSTHOG_KEY` set,
+`resolveAnalyticsConfig` returns null, `PostHogProvider` is never rendered,
+`posthog.init` is never called, and `useAnalytics` returns a no-op. No network
+request is made and nothing is logged. This is the same rule the desktop app
+applies to a build with no `WRITER_POSTHOG_KEY`: inert by construction rather
+than merely switched off.
 
 That is what makes a plain `vp run website#build`, `vp run website#dev`, and
 anyone's clone of this repo silent without any further setup.
 
-## Local development
+## Building with the key
 
-Copy `apps/website/.env.example` to `apps/website/.env` and fill in a key from
-your own PostHog project:
+The website build does **not** load the repo-root `.env` by itself. Source it
+first, from the repository root:
 
 ```sh
-cp apps/website/.env.example apps/website/.env
+set -a; source .env; set +a
+vp run website#build
 ```
 
-Leave the file absent to keep local builds inert.
+Or pass the value inline for a one-off:
+
+```sh
+WRITER_POSTHOG_KEY=phc_your_project_key vp run website#build
+```
+
+`vp run website#build` is not cached, so a later build without the variable
+produces an inert bundle rather than replaying the keyed one.
+
+To point the website somewhere else without touching the app, copy
+`apps/website/.env.example` to `apps/website/.env` — Vite loads that one
+automatically — and set `VITE_POSTHOG_KEY`. Leave it absent to fall back to the
+shared key, or leave both unset to keep local builds inert.
 
 ## Deploying
 
-`.env` is gitignored and is not part of the deploy. The key has to be present in
-the environment that runs the build, before `wrangler deploy` uploads the
+Neither `.env` is part of the deploy; both are gitignored. The key has to be in
+the environment that runs the **build**, before `wrangler deploy` uploads the
 result:
 
 ```sh
-VITE_POSTHOG_KEY=phc_your_project_key vp run website#build
+set -a; source .env; set +a
+vp run website#build
 vp dlx wrangler deploy --config wrangler.jsonc
 ```
 

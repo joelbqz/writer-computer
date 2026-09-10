@@ -20,6 +20,9 @@ is no way to build the site without them.
   one vocabulary.
 - Take configuration from the environment: a public project key and an
   overridable host defaulting to `https://us.i.posthog.com`.
+- One key value with one home. The site shares the desktop app's PostHog
+  project, so `WRITER_POSTHOG_KEY` in the repo-root `.env` configures both and
+  there is nothing to keep in sync.
 - With no key, be structurally inert — no client, no network calls, no console
   noise — the same rule `telemetry.rs` applies to a keyless build.
 
@@ -36,6 +39,18 @@ is no way to build the site without them.
 - `apps/website/src/analytics.tsx` owns the whole surface — the event union,
   the provider, and the capture hook. Nothing else in the site imports
   `posthog-js`.
+- Precedence is `VITE_POSTHOG_KEY`, then `WRITER_POSTHOG_KEY`, then inert; the
+  host follows the same order before the default. A blank value counts as
+  absent, so the `""` the bridge passes for an unset variable cannot shadow a
+  key that is set.
+- `WRITER_*` has no `VITE_` prefix, so `vite.config.ts` bridges exactly those
+  two names through `define`. The repo-root `.env` also holds the Apple
+  credentials and the Tauri signing key, and the client bundle is public:
+  widening `envDir`, calling `loadEnv` with an empty prefix, or forwarding
+  `process.env` would serve signing secrets to every visitor. Adding a name to
+  `define` is the only way in, and the config says so at the call site.
+- `analytics.tsx` passes the four values by name rather than handing over
+  `import.meta.env`, which carries only the `VITE_*` pair.
 - `resolveAnalyticsConfig(env)` sits in its own dependency-free module,
   `analytics-config.ts`, so "no key means inert" is asserted in
   `apps/website/tests/analytics.test.ts` without dragging React or `posthog-js`
@@ -91,3 +106,6 @@ is no way to build the site without them.
 - Build with `VITE_POSTHOG_KEY` set and confirm the key and host inline into the
   client bundle; build without it and confirm neither the bundle nor the
   prerendered HTML initializes anything.
+- Build with the whole repo-root `.env` sourced, then grep every built file for
+  the name and the value of each signing variable. Nothing but the PostHog key
+  and host may appear.
