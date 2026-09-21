@@ -1,10 +1,17 @@
 import { Decoration, EditorView, ViewPlugin, type ViewUpdate } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
-import { RangeSetBuilder } from "@codemirror/state";
+import { type EditorState, RangeSetBuilder } from "@codemirror/state";
 import type { DecorationSet } from "@codemirror/view";
 import { WidgetType } from "@codemirror/view";
 import { type Extension } from "@codemirror/state";
 import { FRONTMATTER_LANGUAGE_LABEL, isFrontmatterNode } from "./markdown/frontmatter";
+import {
+  CODE_LINE_CLASS,
+  CODE_LINE_FIRST_CLASS,
+  CODE_LINE_LAST_CLASS,
+  codeBlockScrollExtension,
+  codeBlockScrollField,
+} from "./codeFenceScroll";
 import { treeChanged } from "./utils";
 
 const fallbackMonospaceCodeFont =
@@ -12,15 +19,24 @@ const fallbackMonospaceCodeFont =
 const codeFontFamily = `var(--pm-code-font, ${fallbackMonospaceCodeFont})`;
 const editorFontSize = "var(--writer-editor-font-size, 16px)";
 
-const codeBlockDecorations = (view: EditorView) => {
+type Range = { from: number; to: number };
+
+/** Line decorations for every fenced code / frontmatter block touching
+ *  `ranges`, with each block's horizontal scroll `offsets` (by block start)
+ *  rendered as a negative `text-indent` on all of its lines. */
+const buildCodeBlockDecorations = (
+  state: EditorState,
+  ranges: readonly Range[],
+  offsets: ReadonlyMap<number, number>,
+): DecorationSet => {
   const builder = new RangeSetBuilder<Decoration>();
 
   // If there are multiple visible ranges, it's possible to see
   // the same code block multiple times
   const visited = new Set<string>();
 
-  for (const { from, to } of view.visibleRanges) {
-    syntaxTree(view.state).iterate({
+  for (const { from, to } of ranges) {
+    syntaxTree(state).iterate({
       from,
       to,
       enter: (node) => {
@@ -37,20 +53,23 @@ const codeBlockDecorations = (view: EditorView) => {
           if (isFrontmatter) {
             lang = FRONTMATTER_LANGUAGE_LABEL;
             const contentNode = node.node.getChild("FrontmatterContent");
-            code = contentNode ? view.state.doc.sliceString(contentNode.from, contentNode.to) : "";
+            code = contentNode ? state.doc.sliceString(contentNode.from, contentNode.to) : "";
           } else {
             const codeInfoNode = node.node.getChild("CodeInfo");
             if (codeInfoNode) {
-              lang = view.state.doc.sliceString(codeInfoNode.from, codeInfoNode.to).toUpperCase();
+              lang = state.doc.sliceString(codeInfoNode.from, codeInfoNode.to).toUpperCase();
             }
-            const firstLine = view.state.doc.lineAt(node.from);
+            const firstLine = state.doc.lineAt(node.from);
             const codeStart = firstLine.to + 1;
             const codeEnd = Math.max(codeStart, node.to - 4);
-            code = view.state.doc.sliceString(codeStart, codeEnd);
+            code = state.doc.sliceString(codeStart, codeEnd);
           }
 
+          const offset = offsets.get(node.from) ?? 0;
+          const attributes = offset > 0 ? { style: `text-indent:-${offset}px` } : undefined;
+
           for (let pos = node.from; pos <= node.to; ) {
-            const line = view.state.doc.lineAt(pos);
+            const line = state.doc.lineAt(pos);
             const isFirstLine = pos === node.from;
             const isLastLine = line.to >= node.to;
 
@@ -58,9 +77,10 @@ const codeBlockDecorations = (view: EditorView) => {
               line.from,
               line.from,
               Decoration.line({
-                class: `cm-fenced-code-line ${
-                  isFirstLine ? "cm-fenced-code-line-first" : ""
-                } ${isLastLine ? "cm-fenced-code-line-last" : ""}`,
+                class: `${CODE_LINE_CLASS} ${isFirstLine ? CODE_LINE_FIRST_CLASS : ""} ${
+                  isLastLine ? CODE_LINE_LAST_CLASS : ""
+                }`,
+                ...(attributes ? { attributes } : {}),
               }),
             );
 
@@ -83,6 +103,9 @@ const codeBlockDecorations = (view: EditorView) => {
 
   return builder.finish();
 };
+
+const codeBlockDecorations = (view: EditorView) =>
+  buildCodeBlockDecorations(view.state, view.visibleRanges, view.state.field(codeBlockScrollField));
 
 class CodeBlockInfoWidget extends WidgetType {
   constructor(
@@ -130,7 +153,7 @@ class CodeBlockInfoWidget extends WidgetType {
   }
 }
 
-export const codeBlockDecorationsExtension: Extension = ViewPlugin.fromClass(
+const codeBlockDecorationsPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
 
@@ -139,7 +162,12 @@ export const codeBlockDecorationsExtension: Extension = ViewPlugin.fromClass(
     }
 
     update(update: ViewUpdate) {
-      if (update.docChanged || update.viewportChanged || treeChanged(update)) {
+      if (
+        update.docChanged ||
+        update.viewportChanged ||
+        treeChanged(update) ||
+        update.state.field(codeBlockScrollField) !== update.startState.field(codeBlockScrollField)
+      ) {
         this.decorations = codeBlockDecorations(update.view);
       }
     }
@@ -148,6 +176,11 @@ export const codeBlockDecorationsExtension: Extension = ViewPlugin.fromClass(
     decorations: (v) => v.decorations,
   },
 );
+
+export const codeBlockDecorationsExtension: Extension = [
+  codeBlockScrollExtension,
+  codeBlockDecorationsPlugin,
+];
 
 const codeFenceThemeSpec = {
   ".cm-fenced-code-line": {
@@ -159,6 +192,11 @@ const codeFenceThemeSpec = {
     fontVariantLigatures: "none",
     fontFeatureSettings: '"calt" 0',
     fontKerning: "none",
+    // Code never wraps. Overflow is clipped (not scrolled: a line must not
+    // become a scroll container, see codeFenceScroll.ts) and the block scrolls
+    // as one through the `text-indent` decoration on each of its lines.
+    whiteSpace: "pre",
+    overflowX: "clip",
   },
   // In case the active line color changes
   ".cm-activeLine.cm-fenced-code-line": {
@@ -207,4 +245,5 @@ export const codeFenceTheme = EditorView.theme(codeFenceThemeSpec);
 
 export const __testCodeFenceExtension = {
   codeFenceThemeSpec,
+  buildCodeBlockDecorations,
 };

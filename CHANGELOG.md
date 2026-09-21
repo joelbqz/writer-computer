@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-21
+
+- Code blocks no longer wrap long lines. A line wider than the editor column is cut off at the block's edge and the whole block scrolls sideways: swipe horizontally on a trackpad (or hold Shift and scroll) anywhere over the block, and every line moves together so indentation stays aligned. The block also scrolls on its own to keep the caret in view, so pressing End on a long line or typing past the edge reveals the text you are editing. Frontmatter gets the same treatment.
+
 ## 2026-09-15
 
 - Tighten the marketing site's stacked layout below 900px. The demo-video strip now sits in normal flow at the bottom of the same container as the hero (the page fills one viewport with the hero taking the remaining height) instead of being pinned to the viewport, so it scrolls away with the content. The feature list, the caption, and the headline also drop to their mobile sizes across the whole stacked range, so tablets match phones rather than inheriting the 48px desktop headline. On the narrowest phones (375px and below) the headline, the header buttons, the download button, and the feature list shrink a step further, with the header buttons matched to the download button, so the first screen stays readable. The feature list and the caption then step back up a little above 375px. The release badge next to the download button now reads "Beta" instead of "Alpha".
