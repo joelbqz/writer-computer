@@ -399,6 +399,21 @@ describe("listBackspace", () => {
     expect(run(listBackspace, s).ran).toBe(false);
   });
 
+  test("at marker start steps back one tab level, not two characters", () => {
+    const { state } = run(listBackspace, makeMarked("- a\n\t- b\n\t\t|- c"));
+    expect(markedDoc(state)).toBe("- a\n\t- b\n\t|- c");
+  });
+
+  test("at marker start under an ordered parent removes the whole three-space level", () => {
+    const { state } = run(listBackspace, makeMarked("1. a\n   |- b"));
+    expect(markedDoc(state)).toBe("1. a\n|- b");
+  });
+
+  test("at body start of a tab-indented depth-2 item keeps the parent's tab", () => {
+    const { state } = run(listBackspace, makeMarked("- a\n\t- b\n\t\t- |c"));
+    expect(markedDoc(state)).toBe("- a\n\t- b\n\t|c");
+  });
+
   test("at nested body start removes marker and one indent level", () => {
     const s = makeState("- a\n  - b\n    - c", 16);
     const { state } = run(listBackspace, s);
@@ -582,6 +597,26 @@ describe("listIndent (Tab)", () => {
     const selected = pasted.update({ selection: EditorSelection.single(4, 13) }).state;
     expect(run(listIndent, selected).state.doc.toString()).toBe("- a\n  - p\n    - q");
   });
+
+  test("moves an item's hard-wrapped lines with its marker line", () => {
+    const { state } = run(listIndent, makeMarked("- a\n- b one|\n  b two\n  b three"));
+    expect(markedDoc(state)).toBe("- a\n  - b one|\n    b two\n    b three");
+  });
+
+  test("moves a loose item's later paragraph and a task's wrapped line", () => {
+    const { state } = run(listIndent, makeMarked("- a\n- [ ] b|\n  b two\n\n  second\n  para"));
+    expect(state.doc.toString()).toBe("- a\n  - [ ] b\n    b two\n\n    second\n    para");
+  });
+
+  test("indents a lazy unindented wrapped line along with its item", () => {
+    const { state } = run(listIndent, makeMarked("- a\n- b one|\nb two"));
+    expect(state.doc.toString()).toBe("- a\n  - b one\n  b two");
+  });
+
+  test("moves wrapped lines of a selected parent and its children", () => {
+    const { state } = run(listIndent, makeMarked("- x\n|- a\n  a two\n  - b\n    b two|"));
+    expect(state.doc.toString()).toBe("- x\n  - a\n    a two\n    - b\n      b two");
+  });
 });
 
 describe("listOutdent (Shift-Tab)", () => {
@@ -647,6 +682,21 @@ describe("listOutdent (Shift-Tab)", () => {
 
   test("keeps a caret at the line start in place", () => {
     expect(markedDoc(run(listOutdent, makeMarked("- a\n|  - b")).state)).toBe("- a\n|- b");
+  });
+
+  test("moves an item's hard-wrapped lines with its marker line", () => {
+    const { state } = run(listOutdent, makeMarked("- a\n  - b one|\n    b two"));
+    expect(markedDoc(state)).toBe("- a\n- b one|\n  b two");
+  });
+
+  test("moves tab-indented wrapped lines by the parent's whitespace", () => {
+    const { state } = run(listOutdent, makeMarked("- a\n\t- b one|\n\t  b two"));
+    expect(state.doc.toString()).toBe("- a\n- b one\n  b two");
+  });
+
+  test("leaves a lazy wrapped line indented less than the marker alone", () => {
+    const { state } = run(listOutdent, makeMarked("- a\n  - b one|\n b two"));
+    expect(state.doc.toString()).toBe("- a\n- b one\n b two");
   });
 });
 
@@ -823,9 +873,31 @@ describe("listDecorationsField", () => {
     });
   });
 
-  test("leaves nested items, blank lines, and later paragraphs alone", () => {
-    const s = makeState("- a\n  - b\n\n  para");
+  test("leaves nested items and blank lines alone", () => {
+    const s = makeState("- a\n  - b\n\npara");
     expect(continuationDecos(s).lines).toEqual([]);
+  });
+
+  test("pads every line of a loose item's later paragraphs, not just wrapped ones", () => {
+    const s = makeState("- a\n\n  b one\n  b two\n- c");
+    expect(continuationDecos(s)).toEqual({
+      lines: [
+        { line: 3, style: "padding-inline-start: 3ch;" },
+        { line: 4, style: "padding-inline-start: 3ch;" },
+      ],
+      hidden: [
+        [5, 7],
+        [13, 15],
+      ],
+    });
+  });
+
+  test("pads a later paragraph of an item that holds a nested list", () => {
+    const s = makeState("- a\n  - b\n\n  para");
+    expect(continuationDecos(s)).toEqual({
+      lines: [{ line: 4, style: "padding-inline-start: 3ch;" }],
+      hidden: [[11, 13]],
+    });
   });
 
   // Line numbers whose marker line carries the item-gap class.

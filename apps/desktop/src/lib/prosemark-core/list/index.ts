@@ -19,7 +19,6 @@ import { eventHandlersWithClass } from "../utils";
 // Visual list geometry. Keep indent steps and marker column aligned to the
 // source prefix width; caret boundary tuning happens on the inner source mark.
 const LIST_UNIT_CH = 3;
-const LIST_INDENT_SPACES = 2;
 
 // Measurable source-backed rendering of bullet/task prefixes. The full source
 // prefix (leading whitespace + `- ` or `- [ ] `) remains in normal inline flow
@@ -91,11 +90,32 @@ const orderedMarkerDecoration = Decoration.mark({
 // in the trailing-char gates so tab-separated markers render.
 const isMarkerTrailingChar = (ch: string): boolean => ch === " " || ch === "\t";
 
-// Continuation lines of an item's own paragraph (a hard-wrapped body, with or
-// without the conventional leading indent) sit at the body column: pad the
-// line by the item's prefix width and collapse the source indentation, which
-// would otherwise show as literal spaces before the text. The collapsed
-// whitespace is atomic so the caret and Backspace treat it as one step.
+// Every line of an item's own paragraphs other than the marker line: the
+// hard-wrapped continuation lines of its first paragraph, and every line of
+// any later paragraph in a loose item. Nested lists, code blocks, and other
+// child blocks are not included. A paragraph never contains a blank line, so
+// neither does the result. Rendering pads these lines to the body column and
+// Tab / Shift-Tab move them with the marker line, so both read from here.
+function itemParagraphLines(state: EditorState, item: SyntaxNode): Line[] {
+  const markerLine = state.doc.lineAt(item.from).number;
+  const lines: Line[] = [];
+  for (let child = item.firstChild; child; child = child.nextSibling) {
+    if (child.name !== "Paragraph" && child.name !== "Task") continue;
+    const first = state.doc.lineAt(child.from).number;
+    const last = state.doc.lineAt(child.to).number;
+    for (let n = first; n <= last; n++) {
+      if (n !== markerLine) lines.push(state.doc.line(n));
+    }
+  }
+  return lines;
+}
+
+// Continuation lines of an item's own paragraphs (a hard-wrapped body, with
+// or without the conventional leading indent, or a later paragraph of a
+// loose item) sit at the body column: pad the line by the item's prefix
+// width and collapse the source indentation, which would otherwise show as
+// literal spaces before the text. The collapsed whitespace is atomic so the
+// caret and Backspace treat it as one step.
 const listContinuationIndentDecoration = Decoration.replace({});
 const LEADING_WS_RE = /^[ \t]+/;
 
@@ -107,19 +127,12 @@ function pushContinuationLines(
   atomicRanges: Range<Decoration>[],
 ): void {
   const lineStyle = `padding-inline-start: ${paddingCh.toString()}ch;`;
-  for (let child = item.firstChild; child; child = child.nextSibling) {
-    if (child.name !== "Paragraph" && child.name !== "Task") continue;
-    const first = state.doc.lineAt(child.from).number;
-    const last = state.doc.lineAt(child.to).number;
-    for (let n = first + 1; n <= last; n++) {
-      const line = state.doc.line(n);
-      if (line.length === 0) continue;
-      allRanges.push(Decoration.line({ attributes: { style: lineStyle } }).range(line.from));
-      const ws = LEADING_WS_RE.exec(line.text)?.[0].length ?? 0;
-      if (ws > 0) {
-        allRanges.push(listContinuationIndentDecoration.range(line.from, line.from + ws));
-        atomicRanges.push(listPrefixMarkerDecoration.range(line.from, line.from + ws));
-      }
+  for (const line of itemParagraphLines(state, item)) {
+    allRanges.push(Decoration.line({ attributes: { style: lineStyle } }).range(line.from));
+    const ws = LEADING_WS_RE.exec(line.text)?.[0].length ?? 0;
+    if (ws > 0) {
+      allRanges.push(listContinuationIndentDecoration.range(line.from, line.from + ws));
+      atomicRanges.push(listPrefixMarkerDecoration.range(line.from, line.from + ws));
     }
   }
 }
@@ -517,6 +530,14 @@ const reindentListLines =
       }
       if (newWs === entry.leadingWs) continue;
       changes.push({ from: entry.line.from, to: entry.markFrom, insert: newWs });
+      // The item's own hard-wrapped lines keep their position relative to
+      // the marker, so the item moves as a unit and its source stays
+      // conventionally indented. A lazy line indented less than the marker
+      // has no such relation and is left where it is.
+      for (const line of itemParagraphLines(state, entry.item)) {
+        if (!line.text.startsWith(entry.leadingWs)) continue;
+        changes.push({ from: line.from, to: line.from + entry.leadingWs.length, insert: newWs });
+      }
     }
 
     if (!sawListLine) return false;
@@ -774,13 +795,22 @@ const listBackspace: StateCommand = ({ state, dispatch }) => {
 
   if (effectiveHead === parsed.lineFrom) return false;
 
+  // One indent level back is the parent's leading whitespace, exactly where
+  // Shift-Tab would put the item, so two spaces, three under an ordered
+  // parent, and a tab each count as one level. An item with no parent loses
+  // its indent entirely.
+  const outdentWs = (): string => {
+    const entry = listItemLineAt(state, state.doc.lineAt(head));
+    return (entry ? reindentTarget(state, "outdent", entry) : null) ?? "";
+  };
+
   if (effectiveHead === parsed.markerFrom) {
     if (parsed.indentLen === 0) return false;
-    const from = parsed.markerFrom - Math.min(LIST_INDENT_SPACES, parsed.indentLen);
+    const ws = outdentWs();
     dispatch(
       state.update({
-        changes: { from, to: parsed.markerFrom },
-        selection: { anchor: from },
+        changes: { from: parsed.lineFrom, to: parsed.markerFrom, insert: ws },
+        selection: { anchor: parsed.lineFrom + ws.length },
         userEvent: "delete.list",
       }),
     );
@@ -788,14 +818,11 @@ const listBackspace: StateCommand = ({ state, dispatch }) => {
   }
 
   if (effectiveHead === parsed.bodyFrom) {
-    const from =
-      parsed.indentLen > 0
-        ? parsed.markerFrom - Math.min(LIST_INDENT_SPACES, parsed.indentLen)
-        : parsed.markerFrom;
+    const ws = parsed.indentLen > 0 ? outdentWs() : "";
     dispatch(
       state.update({
-        changes: { from, to: parsed.bodyFrom },
-        selection: { anchor: from },
+        changes: { from: parsed.lineFrom, to: parsed.bodyFrom, insert: ws },
+        selection: { anchor: parsed.lineFrom + ws.length },
         userEvent: "delete.list",
       }),
     );
