@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-21
+
+- Fix several ways nested bullet and task lists could get into a shape that was hard to recover from. Selecting a parent item with its children and pressing Tab now moves the whole block one level deeper; before, only the parent moved and its children became its siblings. Tab now nests a bullet under a numbered item, nests across the blank lines of a loose list, and keeps tab-indented lists tab-indented instead of inserting spaces before the tab. Shift-Tab always steps to the parent's level in one press, including on oddly indented items. Enter on an empty nested item steps it out one level (keeping its bullet or checkbox) instead of deleting it and dropping the caret onto a blank line; Enter on an empty top-level item still ends the list.
+
 ## 2026-09-15
 
 - Tighten the marketing site's stacked layout below 900px. The demo-video strip now sits in normal flow at the bottom of the same container as the hero (the page fills one viewport with the hero taking the remaining height) instead of being pinned to the viewport, so it scrolls away with the content. The feature list, the caption, and the headline also drop to their mobile sizes across the whole stacked range, so tablets match phones rather than inheriting the 48px desktop headline. On the narrowest phones (375px and below) the headline, the header buttons, the download button, and the feature list shrink a step further, with the header buttons matched to the download button, so the first screen stays readable. The feature list and the caption then step back up a little above 375px. The release badge next to the download button now reads "Beta" instead of "Alpha".

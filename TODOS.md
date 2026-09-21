@@ -2,6 +2,7 @@
 
 ## In Progress
 
+- Nested list editing audit: [`SPECs/nested-list-editing-audit-spec.md`](SPECs/nested-list-editing-audit-spec.md) — bug hunt over Tab/Shift-Tab/Enter/Backspace/toggle on nested bullet and task items, with the scenario matrix and results in the spec.
 - Reveal-in-sidebar + residual external-watcher misses: [`SPECs/reveal-in-sidebar-and-external-watcher-spec.md`](SPECs/reveal-in-sidebar-and-external-watcher-spec.md) — keep the explicit tab-context-menu "Reveal in sidebar" action working, leave ordinary file opens from expanding the Everything tree, and characterize the remaining external-file-watcher miss cases through a logging + manual-repro pass before patching further.
 
 ## Done
@@ -69,6 +70,11 @@
 - Mermaid drag-selection edit-mode flip: [`SPECs/mermaid-drag-selection-edit-mode-flip-spec.md`](SPECs/mermaid-drag-selection-edit-mode-flip-spec.md) — freeze `editMode` for the duration of a pointer drag-selection so the widget doesn't flip into source view mid-drag.
 
 ## Up Next
+
+- Backspace on an empty nested item at depth 2 or deeper leaves a whitespace-only line (`····- ` → `··`), per the literal "marker plus one indent level" rule in [`SPECs/list-prefix-interaction-zones-spec.md`](SPECs/list-prefix-interaction-zones-spec.md). Consider outdenting to the parent's indent instead, matching Enter on an empty nested item.
+- Tab on a list line beyond the committed parse frontier falls through to `indentWithTab` and inserts a literal tab (`isOnListLine` is tree-gated). Only reproduced artificially on a 300 kB document; see section 8 of [`SPECs/nested-list-editing-audit-spec.md`](SPECs/nested-list-editing-audit-spec.md). A regex fallback when `syntaxTreeAvailable` is false at the line would close it.
+- Nested ordered items (now reachable with Tab) render with the fixed 3ch ordered hanging indent, so their leading source spaces stay visible; give ordered lines the same depth-aware indent as bullets.
+- Cmd+Shift+8 on a task line strips `- ` and leaves `[ ] text`; it should probably strip the whole task prefix or leave the line alone.
 
 ## Backlog
 
