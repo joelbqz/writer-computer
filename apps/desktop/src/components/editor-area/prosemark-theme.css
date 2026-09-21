@@ -245,6 +245,15 @@
   padding-top: 1rem;
 }
 
+/* Space between consecutive list items (bullet, task, ordered), the same
+   at every depth. The list extension puts the class on an item's marker
+   line only when another item precedes it at the same level, so the
+   first item stays flush against the paragraph or heading above, and a
+   hard-wrapped item's continuation lines stay tight. */
+.cm-editor .cm-list-item-gap {
+  padding-top: var(--writer-list-item-gap, 0.4em);
+}
+
 .cm-editor .cm-heading-line {
   position: relative;
 }

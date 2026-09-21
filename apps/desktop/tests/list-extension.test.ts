@@ -828,6 +828,33 @@ describe("listDecorationsField", () => {
     expect(continuationDecos(s).lines).toEqual([]);
   });
 
+  // Line numbers whose marker line carries the item-gap class.
+  function gapLines(state: EditorState): number[] {
+    const out: number[] = [];
+    state.field(__test.listDecorationsField).all.between(0, state.doc.length, (from, to, deco) => {
+      if (from === to && (deco.spec as { class?: string }).class === __test.LIST_ITEM_GAP_CLASS) {
+        out.push(state.doc.lineAt(from).number);
+      }
+    });
+    return out;
+  }
+
+  test("gaps items that follow another item, not the first of a list", () => {
+    expect(gapLines(makeState("para\n- a\n- b\n- [ ] c"))).toEqual([3, 4]);
+  });
+
+  test("gaps at every depth, but not a nested list's first child", () => {
+    expect(gapLines(makeState("- a\n  - b\n  - c\n- d\n  1. e\n  2. f"))).toEqual([3, 4, 6]);
+  });
+
+  test("gaps an item that opens a new list right after another list", () => {
+    expect(gapLines(makeState("1. a\n- b\n* c"))).toEqual([2, 3]);
+  });
+
+  test("does not gap continuation lines or items after a blank line's paragraph", () => {
+    expect(gapLines(makeState("- a\n  wrapped\n- b\n\npara\n\n- c"))).toEqual([3]);
+  });
+
   test("marks checked tasks and carries nested marker geometry", () => {
     const s = makeState("- a\n  - [x] nested", 16);
     expect(prefixMarks(s).filter((mark) => mark.className.includes("cm-list-prefix-task"))).toEqual(

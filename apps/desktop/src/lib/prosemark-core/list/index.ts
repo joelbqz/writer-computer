@@ -70,11 +70,18 @@ const isOrderedMarkText = (s: string): boolean => ORDERED_MARKER_RE.test(s);
 // Ordered markers stay as source text (the digits matter), but the marker span
 // has a minimum width so one- and two-digit numbers share the same visual
 // column while longer markers can still grow.
-const orderedLineDecoration = Decoration.line({
-  attributes: {
-    style: `padding-inline-start: ${LIST_UNIT_CH.toString()}ch; text-indent: -3.4ch;`,
-  },
-});
+const orderedLineStyle = `padding-inline-start: ${LIST_UNIT_CH.toString()}ch; text-indent: -3.4ch;`;
+
+// Marker-line decoration. Items that follow another item at the same level
+// carry `cm-list-item-gap`, which the theme turns into a little space above
+// the line so consecutive items read as separate entries rather than as
+// hard-wrapped lines of one paragraph. The first item of a list stays flush
+// against whatever precedes it; the gap is the same at every depth.
+const LIST_ITEM_GAP_CLASS = "cm-list-item-gap";
+const listMarkerLineDecoration = (style: string, gap: boolean) =>
+  Decoration.line(
+    gap ? { class: LIST_ITEM_GAP_CLASS, attributes: { style } } : { attributes: { style } },
+  );
 const orderedMarkerDecoration = Decoration.mark({
   class: "cm-list-ordered-marker",
   attributes: { style: `min-width: ${LIST_UNIT_CH.toString()}ch;` },
@@ -190,9 +197,11 @@ function buildListDecorations(state: EditorState): ListDecorations {
         if (prefixEnd < line.to) {
           allRanges.push(listBodyDecoration.range(prefixEnd, line.to));
         }
-        allRanges.push(orderedLineDecoration.range(line.from));
-        if (node.node.parent) {
-          pushContinuationLines(state, node.node.parent, LIST_UNIT_CH, allRanges, atomicRanges);
+        const item = node.node.parent;
+        const gap = item !== null && prevListItem(item) !== null;
+        allRanges.push(listMarkerLineDecoration(orderedLineStyle, gap).range(line.from));
+        if (item) {
+          pushContinuationLines(state, item, LIST_UNIT_CH, allRanges, atomicRanges);
         }
         return;
       }
@@ -272,9 +281,11 @@ function buildListDecorations(state: EditorState): ListDecorations {
       // continuation lines keep the padding so body text stays aligned.
       const prefixCh = (depth + 1) * LIST_UNIT_CH;
       const lineStyle = `padding-inline-start: ${prefixCh.toString()}ch; text-indent: -${prefixCh.toString()}ch;`;
-      allRanges.push(Decoration.line({ attributes: { style: lineStyle } }).range(line.from));
-      if (node.node.parent) {
-        pushContinuationLines(state, node.node.parent, prefixCh, allRanges, atomicRanges);
+      const item = node.node.parent;
+      const gap = item !== null && prevListItem(item) !== null;
+      allRanges.push(listMarkerLineDecoration(lineStyle, gap).range(line.from));
+      if (item) {
+        pushContinuationLines(state, item, prefixCh, allRanges, atomicRanges);
       }
     },
   });
@@ -870,6 +881,7 @@ export const __test = {
   parseBulletTaskLine,
   listItemLineAt,
   listContinuationIndentDecoration,
+  LIST_ITEM_GAP_CLASS,
   listEnter,
   listBackspace,
   listIndent,
