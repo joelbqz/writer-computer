@@ -3,6 +3,7 @@
 ## 2026-09-21
 
 - Fix several ways nested bullet and task lists could get into a shape that was hard to recover from. Selecting a parent item with its children and pressing Tab now moves the whole block one level deeper; before, only the parent moved and its children became its siblings. Tab now nests a bullet under a numbered item, nests across the blank lines of a loose list, and keeps tab-indented lists tab-indented instead of inserting spaces before the tab. Shift-Tab always steps to the parent's level in one press, including on oddly indented items. Enter on an empty nested item steps it out one level (keeping its bullet or checkbox) instead of deleting it and dropping the caret onto a blank line; Enter on an empty top-level item still ends the list.
+- Fix the bullet-list and task-list shortcuts on nested lines. Cmd+Shift+8 on a nested item used to prepend a second marker (`-   - b`), which renders as an empty bullet with a nested child; it now toggles the marker in place and keeps the indent. The task toggle likewise turns a bullet into a task in place instead of producing `- [ ] - b`.
 
 ## 2026-09-15
 
