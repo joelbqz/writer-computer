@@ -774,6 +774,60 @@ describe("listDecorationsField", () => {
     ]);
   });
 
+  // Line decorations (padding) and replaced ranges on continuation lines
+  // of an item's own paragraph.
+  function continuationDecos(state: EditorState) {
+    const decos = state.field(__test.listDecorationsField);
+    const lines: Array<{ line: number; style: string }> = [];
+    const hidden: Array<[number, number]> = [];
+    decos.all.between(0, state.doc.length, (from, to, deco) => {
+      const spec = deco.spec as { attributes?: { style?: string }; class?: string };
+      const isMarkerLine = /text-indent/.test(spec.attributes?.style ?? "");
+      if (deco.spec.widget === undefined && from === to && !spec.class && !isMarkerLine) {
+        lines.push({ line: state.doc.lineAt(from).number, style: spec.attributes?.style ?? "" });
+      } else if (from < to && deco === __test.listContinuationIndentDecoration) {
+        hidden.push([from, to]);
+      }
+    });
+    return { lines, hidden };
+  }
+
+  test("pads a hard-wrapped item's continuation lines to the body column", () => {
+    const s = makeState("- one two\n  three four\nfive");
+    expect(continuationDecos(s)).toEqual({
+      lines: [
+        { line: 2, style: "padding-inline-start: 3ch;" },
+        { line: 3, style: "padding-inline-start: 3ch;" },
+      ],
+      hidden: [[10, 12]],
+    });
+    // The collapsed indent is one atomic step.
+    let atomic = 0;
+    s.field(__test.listDecorationsField).atomic.between(10, 12, () => {
+      atomic++;
+    });
+    expect(atomic).toBe(1);
+  });
+
+  test("pads nested, task, and ordered continuation lines by their own depth", () => {
+    const s = makeState("- a\n  - [ ] b\n    c\n1. d\n   e");
+    expect(continuationDecos(s)).toEqual({
+      lines: [
+        { line: 3, style: "padding-inline-start: 6ch;" },
+        { line: 5, style: "padding-inline-start: 3ch;" },
+      ],
+      hidden: [
+        [14, 18],
+        [25, 28],
+      ],
+    });
+  });
+
+  test("leaves nested items, blank lines, and later paragraphs alone", () => {
+    const s = makeState("- a\n  - b\n\n  para");
+    expect(continuationDecos(s).lines).toEqual([]);
+  });
+
   test("marks checked tasks and carries nested marker geometry", () => {
     const s = makeState("- a\n  - [x] nested", 16);
     expect(prefixMarks(s).filter((mark) => mark.className.includes("cm-list-prefix-task"))).toEqual(

@@ -84,6 +84,39 @@ const orderedMarkerDecoration = Decoration.mark({
 // in the trailing-char gates so tab-separated markers render.
 const isMarkerTrailingChar = (ch: string): boolean => ch === " " || ch === "\t";
 
+// Continuation lines of an item's own paragraph (a hard-wrapped body, with or
+// without the conventional leading indent) sit at the body column: pad the
+// line by the item's prefix width and collapse the source indentation, which
+// would otherwise show as literal spaces before the text. The collapsed
+// whitespace is atomic so the caret and Backspace treat it as one step.
+const listContinuationIndentDecoration = Decoration.replace({});
+const LEADING_WS_RE = /^[ \t]+/;
+
+function pushContinuationLines(
+  state: EditorState,
+  item: SyntaxNode,
+  paddingCh: number,
+  allRanges: Range<Decoration>[],
+  atomicRanges: Range<Decoration>[],
+): void {
+  const lineStyle = `padding-inline-start: ${paddingCh.toString()}ch;`;
+  for (let child = item.firstChild; child; child = child.nextSibling) {
+    if (child.name !== "Paragraph" && child.name !== "Task") continue;
+    const first = state.doc.lineAt(child.from).number;
+    const last = state.doc.lineAt(child.to).number;
+    for (let n = first + 1; n <= last; n++) {
+      const line = state.doc.line(n);
+      if (line.length === 0) continue;
+      allRanges.push(Decoration.line({ attributes: { style: lineStyle } }).range(line.from));
+      const ws = LEADING_WS_RE.exec(line.text)?.[0].length ?? 0;
+      if (ws > 0) {
+        allRanges.push(listContinuationIndentDecoration.range(line.from, line.from + ws));
+        atomicRanges.push(listPrefixMarkerDecoration.range(line.from, line.from + ws));
+      }
+    }
+  }
+}
+
 interface ParsedBulletTaskLine {
   lineFrom: number;
   markerFrom: number;
@@ -158,6 +191,9 @@ function buildListDecorations(state: EditorState): ListDecorations {
           allRanges.push(listBodyDecoration.range(prefixEnd, line.to));
         }
         allRanges.push(orderedLineDecoration.range(line.from));
+        if (node.node.parent) {
+          pushContinuationLines(state, node.node.parent, LIST_UNIT_CH, allRanges, atomicRanges);
+        }
         return;
       }
 
@@ -237,6 +273,9 @@ function buildListDecorations(state: EditorState): ListDecorations {
       const prefixCh = (depth + 1) * LIST_UNIT_CH;
       const lineStyle = `padding-inline-start: ${prefixCh.toString()}ch; text-indent: -${prefixCh.toString()}ch;`;
       allRanges.push(Decoration.line({ attributes: { style: lineStyle } }).range(line.from));
+      if (node.node.parent) {
+        pushContinuationLines(state, node.node.parent, prefixCh, allRanges, atomicRanges);
+      }
     },
   });
 
@@ -830,6 +869,7 @@ export const __test = {
   listPrefixBoundaryMove,
   parseBulletTaskLine,
   listItemLineAt,
+  listContinuationIndentDecoration,
   listEnter,
   listBackspace,
   listIndent,

@@ -99,15 +99,32 @@ item to its parent's indent in one press.
 | Line-based toggle fallback at depth 2     | PASS                      |
 | Toggle on a task nested under `1.`        | PASS                      |
 
-### 6. Inline body content
+### 6. Inline body content and hard-wrapped items
 
 Bold, link, inline code, bold-only, and bold task bodies all render at the
 right depth; Tab and Enter on them behave like plain bodies. PASS. The old
 `feature/fix-bold-list-wrap` branch touched `softIndentExtension.ts`, which no
 longer exists: list geometry moved to line-level padding in the list rewrite
-(#60), so that fix is moot rather than regressed. Wrapping itself is CSS
-(`padding-inline-start` + negative `text-indent` per line) and is listed
-under "Not exercised".
+(#60), so that fix is moot rather than regressed. Soft wrapping of a long
+single source line is CSS (`padding-inline-start` + negative `text-indent`
+on the marker line) and unchanged.
+
+| Scenario                                                      | Before                                                       | Expected                                              | Result      |
+| ------------------------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------- | ----------- |
+| Hard-wrapped item: `- one two⏎··three four` (reported)        | continuation line at the left margin, its two spaces visible | continuation padded to the body column, indent hidden | FAIL, fixed |
+| Lazy continuation with no indent (`- one⏎two`)                | at the left margin                                           | padded to the body column                             | FAIL, fixed |
+| Continuation of a nested item, a nested task, an ordered item | at the left margin                                           | padded by that item's own depth                       | FAIL, fixed |
+| A nested item's own line, a blank line, a later paragraph     | untouched                                                    | untouched                                             | PASS        |
+
+Reported by the user with a screenshot after the first round: only the
+marker line of an item was decorated, so an item whose paragraph continues
+on further source lines (how most formatters and editors write long items)
+lost its hanging indent there. `buildListDecorations` now pads every
+continuation line of the item's own `Paragraph`/`Task` node by the item's
+prefix width and collapses the leading whitespace with an atomic replace
+decoration (`listContinuationIndentDecoration`). Verified in the built app
+with `e2e/specs/nested-list.spec.js`, which checks the body text starts at
+the same x on the marker line and its continuations.
 
 ### 7. Multi-line selections across depths
 
@@ -182,14 +199,18 @@ issue" for someone hitting the shortcut on an already-nested line.
 - `apps/desktop/src/components/editor-area/markdown-formatting.ts`: the
   bullet and task toggles keep leading indent, toggle nested lines in place,
   and turn a bullet into a task in place.
-- Tests: `tests/list-extension.test.ts` (65 → 96 cases),
-  `tests/editor-formatting.test.ts` (+8).
+- `buildListDecorations` pads hard-wrapped items' continuation lines and
+  collapses their source indent (see section 6).
+- Tests: `tests/list-extension.test.ts` (65 → 99 cases),
+  `tests/editor-formatting.test.ts` (+8); `e2e/specs/nested-list.spec.js`
+  for the rendered result.
 
 ## Not exercised
 
-- Visual wrapping and hanging indent of long nested items (CSS; needs the
-  built app). The line-level `padding-inline-start`/`text-indent` pair was
-  read and is depth-aware; nothing in this task changed it.
+- Soft wrapping of a long single-line nested item (CSS; needs the built
+  app). The line-level `padding-inline-start`/`text-indent` pair is
+  depth-aware and unchanged; the hard-wrap case in section 6 is covered by
+  the e2e spec.
 - The click-to-caret mapping on the prefix (`listPrefixClickPosition`) and
   the checkbox click handler (DOM).
 - The stale-tree window described in section 8 inside the running app.
