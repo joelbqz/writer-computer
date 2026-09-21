@@ -241,6 +241,30 @@ subtree. Left as is; the selection path already moves the subtree for users
 who want that. The blockquote and same-line-marker rows predate these PRs
 and are cosmetic in rare documents.
 
+## Third pass: leaving a list
+
+Reported with a recording after the second pass: Enter on an empty bullet in
+the middle of a list, then typing, and the text joined the item above. The
+markdown was `- a⏎What`, a lazy continuation of `a` per CommonMark, which the
+continuation padding from section 6 now renders truthfully. The dev build in
+the recording predated the Enter fix, but the report held after a restart, so
+the two remaining routes to the same markdown were closed and every route was
+verified in the built app (`e2e/specs/list-enter-exit.spec.js`, driven with
+synthetic keydown events and `execCommand("insertText")`, the same input path
+a keyboard uses).
+
+| Route                                                              | Before                                                       | After                                                                            |
+| ------------------------------------------------------------------ | ------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| Enter on `- ⏐` under `- a`                                         | `- a⏎⏐` → typing joins `a`                                   | `- a⏎⏎⏐`, typing is a paragraph                                                  |
+| Enter, then Backspace on `- ⏐`                                     | `- a⏎⏐` → joins                                              | `- a⏎⏎⏐`                                                                         |
+| Backspace at the text start of `- ⏐foo` under `- a`                | `- a⏎foo` → joins                                            | `- a⏎⏎foo`                                                                       |
+| Either, with a blank line above already                            | one blank line                                               | still one                                                                        |
+| Backspace on a nested `··- ⏐b` under `- a`                         | `- a⏎b` (one level out)                                      | unchanged, per interaction spec                                                  |
+| Enter/Backspace on a list line past the parse frontier (long note) | fell through to lang-markdown: marker removed, no blank line | `listLineAt` trusts the prefix grammar when `syntaxTreeAvailable` is false there |
+
+`listExitSeparator` is the one place that decides whether leaving a list
+needs a blank line; Enter and Backspace both call it.
+
 ## Not exercised
 
 - Soft wrapping of a long single-line nested item (CSS; needs the built
@@ -257,6 +281,6 @@ and are cosmetic in rare documents.
 - Backspace on an empty depth-2+ item leaves a whitespace-only line (now
   the parent's whitespace rather than a fixed two spaces, but still
   whitespace).
-- Tab on a list line past the committed parse falls through to a literal tab.
+- ~~Tab on a list line past the committed parse falls through to a literal tab.~~ Closed in the third pass.
 - Nested ordered items render with a fixed 3ch indent.
 - Cmd+Shift+8 on a task line strips `- ` and leaves `[ ] text`.

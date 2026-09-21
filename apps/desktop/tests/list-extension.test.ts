@@ -6,6 +6,7 @@ import {
   type Transaction,
 } from "@codemirror/state";
 import { history, undo } from "@codemirror/commands";
+import { syntaxTreeAvailable } from "@codemirror/language";
 import { markdown } from "@codemirror/lang-markdown";
 import { GFM } from "@lezer/markdown";
 import { computeCheckboxToggle, listExtension, __test } from "../src/lib/prosemark-core/list";
@@ -131,6 +132,26 @@ describe("listLineAt (tree-gated prefix parse)", () => {
     const doc = "```\n- item\n```\n";
     const s = makeState(doc, doc.indexOf("item"));
     expect(run(listBackspace, s).ran).toBe(false);
+  });
+
+  test("trusts the prefix grammar past the committed parse", () => {
+    // A note too long for the initial parse budget: the tree stops short of
+    // the last line, so the tree gate cannot answer and the regex decides.
+    const filler = Array.from(
+      { length: 20_000 },
+      (_, i) => `paragraph ${i.toString()} of filler text`,
+    );
+    const doc = `${filler.join("\n\n")}\n\n- item`;
+    const s = EditorState.create({
+      doc,
+      extensions: [markdown({ extensions: [GFM] }), listExtension],
+    });
+    const end = s.doc.length;
+    expect(syntaxTreeAvailable(s, end)).toBe(false);
+    expect(listLineAt(s, end)).not.toBeNull();
+    expect(
+      run(listEnter, s.update({ selection: { anchor: end } }).state).state.doc.toString(),
+    ).toBe(`${doc}\n- `);
   });
 
   test("accepts a tab after the marker, matching the decoration builder", () => {
@@ -397,6 +418,24 @@ describe("listBackspace", () => {
   test("at top-level bullet body start removes just `- `", () => {
     const s = makeState("- foo", 2);
     expect(run(listBackspace, s).state.doc.toString()).toBe("foo");
+  });
+
+  test("removing a top-level marker under another item leaves a blank line", () => {
+    // Without it the text is a lazy continuation of `a` (`- a⏎foo`).
+    expect(markedDoc(run(listBackspace, makeMarked("- a\n- |foo")).state)).toBe("- a\n\n|foo");
+    expect(markedDoc(run(listBackspace, makeMarked("- a\n- |")).state)).toBe("- a\n\n|");
+    expect(markedDoc(run(listBackspace, makeMarked("- a\n- [ ] |")).state)).toBe("- a\n\n|");
+  });
+
+  test("does not add a second blank line when one is already there", () => {
+    expect(markedDoc(run(listBackspace, makeMarked("- a\n\n- |foo")).state)).toBe("- a\n\n|foo");
+  });
+
+  test("a nested item's text stays under its parent, no blank line", () => {
+    expect(markedDoc(run(listBackspace, makeMarked("- a\n  - |b")).state)).toBe("- a\n|b");
+    expect(markedDoc(run(listBackspace, makeMarked("- a\n  - b\n    - |c")).state)).toBe(
+      "- a\n  - b\n  |c",
+    );
   });
 
   test("at nested task body start removes marker and one indent level", () => {
