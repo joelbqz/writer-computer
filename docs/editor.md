@@ -167,11 +167,18 @@ Pure-helper tests (`computeToggleSelection`-style) catch math bugs but not focus
 
 When a widget has a click → dispatch → mode-change cycle, mount a real `EditorView` with two instances and simulate clicks. Assert against `view.state.selection.main` and `view.state.field(foldExtension)`, not against helper outputs.
 
+## Per-block horizontal scroll goes through a decoration, not a scroll container
+
+Code lines don't wrap (`white-space: pre`). A block is a run of sibling `.cm-line`s with nothing wrapping them, so there is no element to give `overflow-x: auto`. Don't make the lines themselves scroll containers either: `drawSelection` paints the caret and selection in layers beside the content, so a natively scrolled line leaves them stale until the next update, and CodeMirror's scroll-into-view (`scrollRectIntoView` walks every ancestor whose `scrollWidth` exceeds its `clientWidth`) would scroll one line out of step with its block.
+
+Instead the offset is state: `codeBlockScrollField` in `prosemark-core/codeFenceScroll.ts` holds pixels per block start, `codeFenceExtension` renders it as `text-indent: -<offset>px` on each line decoration, and the lines clip with `overflow-x: clip` (`hidden` would make them scroll containers again). Wheel input and caret reveal both dispatch `setCodeBlockScroll`; the resulting decoration rebuild is what redraws the layers. Caret reveal measures in a `requestMeasure` read and dispatches from a `setTimeout` in the write, since measure writes still run inside the update cycle. The scrollbar is also drawn rather than native: a `layer` places one thumb per overflowing block and dispatches the same effect when the thumb is dragged. The drag follows mouse moves on the window, not on the thumb, because a redraw can replace thumb elements.
+
 ## File map
 
 - `mermaid-decorations.ts` — canonical replace-only block widget with in-widget editing. Reference for live position lookup (`findEnclosingFencedCode`) and writing the fence back from a nested editor.
 - `fold/image.ts` — canonical conditional replace ↔ widget, plus the measured-height cache for async-loading content.
 - `table-decorations.ts` — canonical conditional replace ↔ source-line styling; uses `selectAllDecorationsOnSelectExtension` for click-to-select.
+- `prosemark-core/codeFenceScroll.ts` — `codeBlockScrollField` / `setCodeBlockScroll` / `codeBlockAt`, the one place a code block's horizontal offset is stored and driven (wheel, caret reveal, resize clamp, drawn scrollbar thumb).
 - `prosemark-core/links.ts` — `linkUrlAt` / `rawUrlAt`, the one place that resolves a link destination from a document position.
 - `prosemark-core/imageSrc.ts` — `imageSrcResolverFacet` / `resolveImageSrc`; widgets resolve `<img src>` in `toDOM` (Writer provides the facet from `image-src-resolver.ts`), so no DOM observer rewrites images after insertion.
 - `editor-scroll.ts` — `findOuterScroller` / `scrollPosToSafeTop`, the one place that scrolls the ancestor container to a document position.
