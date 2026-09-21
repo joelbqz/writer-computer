@@ -116,7 +116,15 @@
       var(--writer-editor-side-padding)
   );
   --writer-editor-font-family: var(--editor-font);
-  --writer-editor-font-size: 16px;
+  /* The editor font size the note renders at: the Font Size setting
+     (`editor.font-size` → base) scaled by the zoom setting (`editor.zoom`,
+     percent). Cmd+= / Cmd+- / Cmd+0 only ever change the zoom, so the
+     user's chosen size survives a reset. Consumers read the derived var. */
+  --writer-editor-base-font-size: 16px;
+  --writer-editor-zoom: 100;
+  --writer-editor-font-size: calc(
+    var(--writer-editor-base-font-size) * var(--writer-editor-zoom) / 100
+  );
   --writer-editor-line-height: 1.8;
   --writer-editor-letter-spacing: 0em;
 

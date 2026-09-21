@@ -181,10 +181,14 @@ function lineCommand(
 }
 
 const HEADING_RE = /^(#{1,6})\s/;
-const BULLET_RE = /^- /;
+// Bullet and task prefixes keep their leading indent (group 1) so toggling
+// on a nested item edits the marker in place instead of prepending a second
+// one (`-   - b`, which renders as an empty bullet with a nested child).
+const BULLET_RE = /^([ \t]*)- /;
 const NUMBERED_RE = /^\d+\.\s/;
 const BLOCKQUOTE_RE = /^> /;
-const TASK_RE = /^- \[[ x]\] /;
+const TASK_RE = /^([ \t]*)- \[[ x]\] /;
+const LEADING_WS_RE = /^[ \t]*/;
 
 // ---------------------------------------------------------------------------
 // Heading commands
@@ -211,9 +215,9 @@ export const setParagraph: StateCommand = lineCommand((line) => {
 
 export const toggleBulletList: StateCommand = lineCommand((line, _idx, allLines) => {
   const allHave = allLines.every((l) => BULLET_RE.test(l));
-  if (allHave) return line.replace(BULLET_RE, "");
+  if (allHave) return line.replace(BULLET_RE, "$1");
   if (BULLET_RE.test(line)) return line;
-  return `- ${line}`;
+  return line.replace(LEADING_WS_RE, "$&- ");
 }, "input.format.bulletList");
 
 export const toggleNumberedList: StateCommand = lineCommand((line, idx, allLines) => {
@@ -232,9 +236,11 @@ export const toggleBlockquote: StateCommand = lineCommand((line, _idx, allLines)
 
 export const toggleTaskList: StateCommand = lineCommand((line, _idx, allLines) => {
   const allHave = allLines.every((l) => TASK_RE.test(l));
-  if (allHave) return line.replace(TASK_RE, "");
+  if (allHave) return line.replace(TASK_RE, "$1");
   if (TASK_RE.test(line)) return line;
-  return `- [ ] ${line}`;
+  // A plain bullet becomes a task in place rather than gaining a second marker.
+  if (BULLET_RE.test(line)) return line.replace(BULLET_RE, "$1- [ ] ");
+  return line.replace(LEADING_WS_RE, "$&- [ ] ");
 }, "input.format.taskList");
 
 // ---------------------------------------------------------------------------

@@ -8,8 +8,21 @@
       "category": "Editor",
       "type": "number",
       "default": 16,
-      "cssVar": "--writer-editor-font-size",
+      "cssVar": "--writer-editor-base-font-size",
       "cssFormat": "px"
+    },
+    {
+      "key": "editor.zoom",
+      "label": "Zoom",
+      "description": "Editor text zoom in percent, on top of Font Size. Cmd+= and Cmd+- step through presets; Cmd+0 returns to 100.",
+      "category": "Editor",
+      "type": "range",
+      "min": 50,
+      "max": 300,
+      "step": 5,
+      "scope": "global",
+      "cssVar": "--writer-editor-zoom",
+      "default": 100
     },
     {
       "key": "editor.line-height",
