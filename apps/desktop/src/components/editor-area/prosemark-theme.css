@@ -247,9 +247,10 @@
 
 /* Space between consecutive list items (bullet, task, ordered), the same
    at every depth. The list extension puts the class on an item's marker
-   line only when another item precedes it at the same level, so the
-   first item stays flush against the paragraph or heading above, and a
-   hard-wrapped item's continuation lines stay tight. */
+   line whenever a list item sits above it (the previous item, or the
+   parent for a nested list's first child), so only the first item of a
+   top-level list stays flush against the paragraph or heading above, and
+   a hard-wrapped item's continuation lines stay tight. */
 .cm-editor .cm-list-item-gap {
   padding-top: var(--writer-list-item-gap, 0.4em);
 }

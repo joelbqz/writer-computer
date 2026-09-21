@@ -71,11 +71,13 @@ const isOrderedMarkText = (s: string): boolean => ORDERED_MARKER_RE.test(s);
 // column while longer markers can still grow.
 const orderedLineStyle = `padding-inline-start: ${LIST_UNIT_CH.toString()}ch; text-indent: -3.4ch;`;
 
-// Marker-line decoration. Items that follow another item at the same level
-// carry `cm-list-item-gap`, which the theme turns into a little space above
-// the line so consecutive items read as separate entries rather than as
-// hard-wrapped lines of one paragraph. The first item of a list stays flush
-// against whatever precedes it; the gap is the same at every depth.
+// Marker-line decoration. Items with a list item above them carry
+// `cm-list-item-gap`, which the theme turns into a little space above the
+// line so consecutive items read as separate entries rather than as
+// hard-wrapped lines of one paragraph. Only the first item of a top-level
+// list stays flush against the paragraph or heading above it; a nested
+// list's first child is spaced from its parent like every other item, so
+// the spacing inside a list is uniform. See `hasListItemGap`.
 const LIST_ITEM_GAP_CLASS = "cm-list-item-gap";
 const listMarkerLineDecoration = (style: string, gap: boolean) =>
   Decoration.line(
@@ -211,7 +213,7 @@ function buildListDecorations(state: EditorState): ListDecorations {
           allRanges.push(listBodyDecoration.range(prefixEnd, line.to));
         }
         const item = node.node.parent;
-        const gap = item !== null && prevListItem(item) !== null;
+        const gap = item !== null && hasListItemGap(item, line);
         allRanges.push(listMarkerLineDecoration(orderedLineStyle, gap).range(line.from));
         if (item) {
           pushContinuationLines(state, item, LIST_UNIT_CH, allRanges, atomicRanges);
@@ -295,7 +297,7 @@ function buildListDecorations(state: EditorState): ListDecorations {
       const prefixCh = (depth + 1) * LIST_UNIT_CH;
       const lineStyle = `padding-inline-start: ${prefixCh.toString()}ch; text-indent: -${prefixCh.toString()}ch;`;
       const item = node.node.parent;
-      const gap = item !== null && prevListItem(item) !== null;
+      const gap = item !== null && hasListItemGap(item, line);
       allRanges.push(listMarkerLineDecoration(lineStyle, gap).range(line.from));
       if (item) {
         pushContinuationLines(state, item, prefixCh, allRanges, atomicRanges);
@@ -393,6 +395,16 @@ function prevListItem(item: SyntaxNode): SyntaxNode | null {
 function parentListItem(item: SyntaxNode): SyntaxNode | null {
   const parent = item.parent?.parent ?? null;
   return parent?.name === "ListItem" ? parent : null;
+}
+
+// Whether the item's marker line gets the item gap: there is a list item
+// above it, either the previous item at its level or, for a nested list's
+// first child, its parent. A parent whose marker shares the line (`- - b`)
+// is not above it.
+function hasListItemGap(item: SyntaxNode, line: Line): boolean {
+  if (prevListItem(item) !== null) return true;
+  const parent = parentListItem(item);
+  return parent !== null && parent.from < line.from;
 }
 
 function listItemLineOf(state: EditorState, item: SyntaxNode): ListItemLine | null {

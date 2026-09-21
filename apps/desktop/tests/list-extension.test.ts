@@ -915,8 +915,12 @@ describe("listDecorationsField", () => {
     expect(gapLines(makeState("para\n- a\n- b\n- [ ] c"))).toEqual([3, 4]);
   });
 
-  test("gaps at every depth, but not a nested list's first child", () => {
-    expect(gapLines(makeState("- a\n  - b\n  - c\n- d\n  1. e\n  2. f"))).toEqual([3, 4, 6]);
+  test("gaps at every depth, including a nested list's first child", () => {
+    expect(gapLines(makeState("- a\n  - b\n  - c\n- d\n  1. e\n  2. f"))).toEqual([2, 3, 4, 5, 6]);
+  });
+
+  test("does not gap a nested item whose parent marker shares its line", () => {
+    expect(gapLines(makeState("- - b\n  - c"))).toEqual([2]);
   });
 
   test("gaps an item that opens a new list right after another list", () => {
