@@ -6,6 +6,7 @@
 
 ## Done
 
+- Nested list editing audit: [`SPECs/nested-list-editing-audit-spec.md`](SPECs/nested-list-editing-audit-spec.md) — Tab/Shift-Tab take their target from the syntax tree (ordered parents, loose lists, tab indentation, odd indents), a selected parent moves its subtree with it, Enter on an empty nested item outdents instead of wiping, the bullet/task toggles keep indent on nested lines, and hard-wrapped items pad their continuation lines to the body column. The spec holds the full pass/fail matrix; four follow-ups added under Up Next.
 - Sidebar "Folders first" toggle: [`SPECs/sidebar-sort-options-spec.md`](SPECs/sidebar-sort-options-spec.md) — the sort submenu is renamed "Sort by" and ends with a "Folders first" check item, persisted as `appearance.sidebar-folders-first` (default on, the previous behavior). Off sorts folders and files together by the selected mode like `ls`. `sortTreeEntries` and `flattenTree` take a `foldersFirst` flag; no backend change since folders already carry both timestamps.
 - Sidebar sort options: [`SPECs/sidebar-sort-options-spec.md`](SPECs/sidebar-sort-options-spec.md) — right-click the sidebar for a "Sort files by" submenu with name, modified-time, and created-time modes in both directions, persisted as `appearance.sidebar-sort`. Folders stay first and alphabetical; "name" is the visible label (title or filename stem). One registry in `sidebar-sort.ts` drives the comparator and the menu; `DirEntry` gains `created_at`, and own saves patch the tree's cached `modified_at` since the watcher suppresses them.
 - Last Cmd+W hides the window: [`SPECs/last-cmd-w-hides-window-spec.md`](SPECs/last-cmd-w-hides-window-spec.md) — Cmd+W with no file open requests a window close; the main window's close-requested handler hides it instead of destroying it (so the app keeps running and a Dock click brings it back via `RunEvent::Reopen`), while secondary and standalone windows still close. Every focus-existing-window path and in-place runtime open now reveals a hidden main window.
@@ -69,6 +70,11 @@
 - Mermaid drag-selection edit-mode flip: [`SPECs/mermaid-drag-selection-edit-mode-flip-spec.md`](SPECs/mermaid-drag-selection-edit-mode-flip-spec.md) — freeze `editMode` for the duration of a pointer drag-selection so the widget doesn't flip into source view mid-drag.
 
 ## Up Next
+
+- Backspace on an empty nested item at depth 2 or deeper leaves a whitespace-only line (`····- ` → `··`), per the literal "marker plus one indent level" rule in [`SPECs/list-prefix-interaction-zones-spec.md`](SPECs/list-prefix-interaction-zones-spec.md). Consider outdenting to the parent's indent instead, matching Enter on an empty nested item.
+- Tab on a list line beyond the committed parse frontier falls through to `indentWithTab` and inserts a literal tab (`isOnListLine` is tree-gated). Only reproduced artificially on a 300 kB document; see section 8 of [`SPECs/nested-list-editing-audit-spec.md`](SPECs/nested-list-editing-audit-spec.md). A regex fallback when `syntaxTreeAvailable` is false at the line would close it.
+- Nested ordered items (now reachable with Tab) render with the fixed 3ch ordered hanging indent, so their leading source spaces stay visible; give ordered lines the same depth-aware indent as bullets.
+- Cmd+Shift+8 on a task line strips `- ` and leaves `[ ] text`; it should probably strip the whole task prefix or leave the line alone.
 
 ## Backlog
 

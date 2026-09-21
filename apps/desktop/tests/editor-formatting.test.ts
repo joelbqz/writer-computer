@@ -238,6 +238,21 @@ describe("toggleBulletList", () => {
     const s = run(toggleBulletList, "hello\nworld", 0, 11);
     expect(doc(s)).toBe("- hello\n- world");
   });
+
+  test("removes a nested bullet's marker in place, keeping its indent", () => {
+    const s = run(toggleBulletList, "- a\n  - b", 8);
+    expect(doc(s)).toBe("- a\n  b");
+  });
+
+  test("adds the marker after existing indent on a nested plain line", () => {
+    const s = run(toggleBulletList, "- a\n  text", 8);
+    expect(doc(s)).toBe("- a\n  - text");
+  });
+
+  test("treats a parent and its nested child as all-bulleted", () => {
+    const s = run(toggleBulletList, "- a\n  - b", 0, 9);
+    expect(doc(s)).toBe("a\n  b");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -290,6 +305,26 @@ describe("toggleTaskList", () => {
   test("removes checked task prefix", () => {
     const s = run(toggleTaskList, "- [x] hello\n- [x] world", 0, 23);
     expect(doc(s)).toBe("hello\nworld");
+  });
+
+  test("turns a bullet into a task in place", () => {
+    const s = run(toggleTaskList, "- hello", 0);
+    expect(doc(s)).toBe("- [ ] hello");
+  });
+
+  test("turns a nested bullet into a nested task", () => {
+    const s = run(toggleTaskList, "- a\n  - b", 8);
+    expect(doc(s)).toBe("- a\n  - [ ] b");
+  });
+
+  test("adds the task prefix after existing indent", () => {
+    const s = run(toggleTaskList, "- a\n  text", 8);
+    expect(doc(s)).toBe("- a\n  - [ ] text");
+  });
+
+  test("removes a nested task's prefix, keeping its indent", () => {
+    const s = run(toggleTaskList, "- a\n  - [ ] b", 10);
+    expect(doc(s)).toBe("- a\n  b");
   });
 });
 
