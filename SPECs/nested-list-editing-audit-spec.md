@@ -205,6 +205,42 @@ issue" for someone hitting the shortcut on an already-nested line.
   `tests/editor-formatting.test.ts` (+8); `e2e/specs/nested-list.spec.js`
   for the rendered result.
 
+## Second pass
+
+A re-audit after the four list PRs (#136, #137, #138 and the toggle fix)
+merged, probing the merged code with the same method. The gap class, the
+empty-item Enter outdent, the selection Tab, tab-indented lists, and the
+bullet/task toggles all held up. Three inconsistencies were found and fixed.
+
+| Scenario                                                               | Before                                                        | Expected                                              | Result      |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------- | ----------- |
+| Loose item with a second paragraph: `- a⏎⏎··b one⏎··b two`             | `b one` at the margin with its spaces visible; `b two` padded | both lines padded, indent hidden                      | FAIL, fixed |
+| Second paragraph of an item that also holds a nested list              | unpadded                                                      | padded by the item's depth                            | FAIL, fixed |
+| Backspace at marker start of `→→- c` under `→- b`                      | `- c` (two characters removed, two levels)                    | `→- c`                                                | FAIL, fixed |
+| Backspace at marker start of `···- b` under `1. a`                     | `·- b` (one stray space)                                      | `- b`                                                 | FAIL, fixed |
+| Tab on `- b one⏎··b two` (caret on the marker line)                    | `··- b one⏎··b two` (wrapped line left behind as a lazy line) | `··- b one⏎····b two`                                 | FAIL, fixed |
+| Shift-Tab on `→- b one⏎→··b two`                                       | wrapped line keeps its tab                                    | `- b one⏎··b two`                                     | FAIL, fixed |
+| Tab / Shift-Tab with a lazy wrapped line indented less than the marker | untouched                                                     | untouched (it has no position relative to the marker) | PASS        |
+| Enter on a continuation line                                           | lang-markdown continues the paragraph with `⏎··`              | same                                                  | PASS        |
+| Single-caret Tab on a parent: `- a⏎- b⏎··- c`, Tab on b                | `··- b⏎··- c` (c becomes b's sibling)                         | open question, see below                              | NOTE        |
+| List inside a blockquote with a wrapped line: `> - one⏎>···two`        | padded, but the spaces after `>` stay visible                 | collapsed                                             | NOTE        |
+| `- - b` (nested marker on the same line)                               | two conflicting line decorations on one line                  | one                                                   | NOTE, older |
+
+The first three rows share one cause: the marker line and the item's other
+lines were handled by three different pieces of code. `itemParagraphLines`
+now lists every line of an item's own `Paragraph`/`Task` children other
+than the marker line, and both the decoration builder and
+`reindentListLines` read from it, so an item renders and moves as one unit.
+Backspace at the marker or body start takes its whitespace from
+`reindentTarget("outdent")`, the same target Shift-Tab uses, instead of a
+fixed two characters.
+
+Single-caret Tab on a parent is a design choice rather than a bug: Obsidian
+indents only the caret's line (as Writer does), Notion and Bear move the
+subtree. Left as is; the selection path already moves the subtree for users
+who want that. The blockquote and same-line-marker rows predate these PRs
+and are cosmetic in rare documents.
+
 ## Not exercised
 
 - Soft wrapping of a long single-line nested item (CSS; needs the built
@@ -218,7 +254,9 @@ issue" for someone hitting the shortcut on an already-nested line.
 
 ## Follow-ups (in TODOS.md)
 
-- Backspace on an empty depth-2+ item leaves a whitespace-only line.
+- Backspace on an empty depth-2+ item leaves a whitespace-only line (now
+  the parent's whitespace rather than a fixed two spaces, but still
+  whitespace).
 - Tab on a list line past the committed parse falls through to a literal tab.
 - Nested ordered items render with a fixed 3ch indent.
 - Cmd+Shift+8 on a task line strips `- ` and leaves `[ ] text`.
