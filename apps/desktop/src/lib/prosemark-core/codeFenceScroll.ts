@@ -1,6 +1,12 @@
 import { syntaxTree } from "@codemirror/language";
 import { type EditorState, StateEffect, StateField } from "@codemirror/state";
-import { type EditorView, ViewPlugin, type ViewUpdate } from "@codemirror/view";
+import {
+  type EditorView,
+  layer,
+  type LayerMarker,
+  ViewPlugin,
+  type ViewUpdate,
+} from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
 import { isFrontmatterNode } from "./markdown/frontmatter";
 
@@ -18,7 +24,9 @@ import { isFrontmatterNode } from "./markdown/frontmatter";
  * outside the lines, so a line scrolling natively would leave them stale, and
  * CodeMirror's own scroll-into-view would scroll individual lines out of sync.
  * Going through a transaction instead means the decoration rebuild redraws the
- * layers, and the caret is revealed by the same offset the wheel moves.
+ * layers, and the caret is revealed by the same offset the wheel moves. For the
+ * same reason there is no native scrollbar: an overflowing block gets a thumb
+ * drawn in its own layer along its bottom edge, dragged through the same effect.
  */
 
 export type CodeBlockScroll = { from: number; offset: number };
@@ -30,6 +38,14 @@ export const setCodeBlockScroll = StateEffect.define<CodeBlockScroll>({
 export const CODE_LINE_CLASS = "cm-fenced-code-line";
 export const CODE_LINE_FIRST_CLASS = "cm-fenced-code-line-first";
 export const CODE_LINE_LAST_CLASS = "cm-fenced-code-line-last";
+export const SCROLLBAR_THUMB_CLASS = "cm-code-scrollbar-thumb";
+const SCROLLBAR_DRAGGING_CLASS = "cm-code-scrollbar-dragging";
+
+/** Scrollbar thumb thickness, its gap from the block's bottom edge, and the
+ *  shortest it gets on a very wide block. */
+const THUMB_HEIGHT = 6;
+const THUMB_INSET = 3;
+const MIN_THUMB_WIDTH = 24;
 
 /** Pixels per notch when a wheel reports line-based deltas (mice, not trackpads). */
 const LINE_DELTA_PX = 16;
@@ -91,6 +107,27 @@ export function revealOffset(offset: number, caretX: number, left: number, right
   return offset;
 }
 
+/** Thumb placement for a block scrolled by `offset` out of `max`, on a track
+ *  as wide as the block's visible width. The thumb's share of the track is the
+ *  visible share of the content; `perPixel` is how far the offset moves per
+ *  pixel the thumb is dragged. */
+export function thumbGeometry(
+  offset: number,
+  max: number,
+  trackWidth: number,
+): { left: number; width: number; perPixel: number } {
+  const width = Math.min(
+    trackWidth,
+    Math.max(MIN_THUMB_WIDTH, (trackWidth * trackWidth) / (trackWidth + max)),
+  );
+  const travel = trackWidth - width;
+  return {
+    left: travel > 0 ? (travel * clampOffset(offset, max)) / max : 0,
+    width,
+    perPixel: travel > 0 ? max / travel : 0,
+  };
+}
+
 export function wheelDeltaX(
   event: Pick<WheelEvent, "deltaX" | "deltaMode">,
   visibleWidth: number,
@@ -146,8 +183,7 @@ function lineBox(line: Element): { left: number; right: number } {
 /** How far the block containing `line` can scroll: its widest rendered line
  *  minus the visible width. Lines outside the rendered viewport are unknown;
  *  the bound grows once they render. */
-function maxScrollOffset(line: Element): number {
-  const box = lineBox(line);
+function maxScrollOffset(line: Element, box = lineBox(line)): number {
   let widest = 0;
   for (const el of blockLineElements(line)) widest = Math.max(widest, contentWidth(el));
   return Math.ceil(widest - (box.right - box.left));
@@ -219,6 +255,139 @@ function handleWheel(event: WheelEvent, view: EditorView): boolean {
   return true;
 }
 
+class ScrollbarThumb implements LayerMarker {
+  constructor(
+    readonly from: number,
+    readonly left: number,
+    readonly top: number,
+    readonly width: number,
+    readonly max: number,
+    readonly perPixel: number,
+  ) {}
+
+  draw(): HTMLElement {
+    const el = document.createElement("div");
+    el.className = SCROLLBAR_THUMB_CLASS;
+    this.apply(el);
+    return el;
+  }
+
+  update(el: HTMLElement): boolean {
+    this.apply(el);
+    return true;
+  }
+
+  eq(other: ScrollbarThumb): boolean {
+    return (
+      this.from === other.from &&
+      this.left === other.left &&
+      this.top === other.top &&
+      this.width === other.width &&
+      this.max === other.max &&
+      this.perPixel === other.perPixel
+    );
+  }
+
+  private apply(el: HTMLElement) {
+    el.style.left = `${this.left}px`;
+    el.style.top = `${this.top}px`;
+    el.style.width = `${this.width}px`;
+    el.style.height = `${THUMB_HEIGHT}px`;
+    el.dataset.from = String(this.from);
+    el.dataset.max = String(this.max);
+    el.dataset.perPixel = String(this.perPixel);
+  }
+}
+
+/** Read phase: one thumb per overflowing block whose closing line is rendered,
+ *  laid along that line's content box, just above its bottom edge. */
+function scrollbarMarkers(view: EditorView): ScrollbarThumb[] {
+  const offsets = view.state.field(codeBlockScrollField);
+  const scroller = view.scrollDOM.getBoundingClientRect();
+  const baseLeft = scroller.left - view.scrollDOM.scrollLeft * view.scaleX;
+  const baseTop = scroller.top - view.scrollDOM.scrollTop * view.scaleY;
+  const thumbs: ScrollbarThumb[] = [];
+  const seen = new Set<number>();
+
+  for (const { from, to } of view.visibleRanges) {
+    syntaxTree(view.state).iterate({
+      from,
+      to,
+      enter: (node) => {
+        if (!isCodeBlockNode(node)) return;
+        if (seen.has(node.from) || node.to > view.viewport.to) return false;
+        seen.add(node.from);
+        const last = lineElementAt(view, node.to);
+        if (!last?.classList.contains(CODE_LINE_LAST_CLASS)) return false;
+
+        const box = lineBox(last);
+        const max = maxScrollOffset(last, box);
+        if (max <= 0) return false;
+        const trackWidth = box.right - box.left;
+        const thumb = thumbGeometry(offsets.get(node.from) ?? 0, max, trackWidth);
+        thumbs.push(
+          new ScrollbarThumb(
+            node.from,
+            box.left + thumb.left - baseLeft,
+            last.getBoundingClientRect().bottom - THUMB_INSET - THUMB_HEIGHT - baseTop,
+            thumb.width,
+            max,
+            thumb.perPixel,
+          ),
+        );
+        return false;
+      },
+    });
+  }
+
+  return thumbs;
+}
+
+/** Drags a thumb. Moves are tracked on the window for the length of the drag
+ *  (so the thumb keeps following the pointer outside it, and a redraw that
+ *  replaces thumb elements doesn't end the drag), dispatching the block's
+ *  offset as the pointer moves. */
+function mountScrollbarDrag(dom: HTMLElement, view: EditorView) {
+  dom.addEventListener("mousedown", (event) => {
+    if (event.button !== 0 || !(event.target instanceof HTMLElement)) return;
+    const thumb = event.target.closest<HTMLElement>(`.${SCROLLBAR_THUMB_CLASS}`);
+    if (!thumb) return;
+    event.preventDefault();
+
+    const from = Number(thumb.dataset.from);
+    const max = Number(thumb.dataset.max);
+    const perPixel = Number(thumb.dataset.perPixel);
+    const startX = event.clientX;
+    const startOffset = view.state.field(codeBlockScrollField).get(from) ?? 0;
+    const win = dom.ownerDocument.defaultView ?? window;
+
+    const move = (moveEvent: MouseEvent) => {
+      const next = clampOffset(startOffset + (moveEvent.clientX - startX) * perPixel, max);
+      if (next === (view.state.field(codeBlockScrollField).get(from) ?? 0)) return;
+      view.dispatch({ effects: setCodeBlockScroll.of({ from, offset: next }) });
+    };
+    const up = () => {
+      thumb.classList.remove(SCROLLBAR_DRAGGING_CLASS);
+      win.removeEventListener("mousemove", move);
+      win.removeEventListener("mouseup", up);
+    };
+    thumb.classList.add(SCROLLBAR_DRAGGING_CLASS);
+    win.addEventListener("mousemove", move);
+    win.addEventListener("mouseup", up);
+  });
+}
+
+const codeBlockScrollbarLayer = layer({
+  above: true,
+  class: "cm-code-scrollbar-layer",
+  markers: scrollbarMarkers,
+  update: (update) =>
+    update.docChanged ||
+    update.viewportChanged ||
+    update.state.field(codeBlockScrollField) !== update.startState.field(codeBlockScrollField),
+  mount: mountScrollbarDrag,
+});
+
 const codeBlockScrollPlugin = ViewPlugin.fromClass(
   class {
     private destroyed = false;
@@ -254,4 +423,8 @@ const codeBlockScrollPlugin = ViewPlugin.fromClass(
   { eventHandlers: { wheel: handleWheel } },
 );
 
-export const codeBlockScrollExtension = [codeBlockScrollField, codeBlockScrollPlugin];
+export const codeBlockScrollExtension = [
+  codeBlockScrollField,
+  codeBlockScrollPlugin,
+  codeBlockScrollbarLayer,
+];

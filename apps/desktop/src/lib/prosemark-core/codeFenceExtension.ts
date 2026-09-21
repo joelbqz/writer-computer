@@ -210,6 +210,17 @@ const codeFenceThemeSpec = {
     borderBottomLeftRadius: "0.4rem",
     borderBottomRightRadius: "0.4rem",
   },
+  // Drawn by `codeBlockScrollbarLayer` along the bottom of a block whose
+  // lines overflow; styled like the app's overlay scrollbars.
+  ".cm-code-scrollbar-thumb": {
+    borderRadius: "3px",
+    backgroundColor: "var(--scrollbar-thumb, rgba(128, 128, 128, 0.5))",
+    opacity: "0.6",
+    transition: "opacity 120ms",
+  },
+  ".cm-code-scrollbar-thumb:hover, .cm-code-scrollbar-thumb.cm-code-scrollbar-dragging": {
+    opacity: "1",
+  },
   ".cm-code-block-info": {
     float: "right",
     padding: "0.2rem",

@@ -2,7 +2,7 @@
 
 ## 2026-09-21
 
-- Code blocks no longer wrap long lines. A line wider than the editor column is cut off at the block's edge and the whole block scrolls sideways: swipe horizontally on a trackpad (or hold Shift and scroll) anywhere over the block, and every line moves together so indentation stays aligned. The block also scrolls on its own to keep the caret in view, so pressing End on a long line or typing past the edge reveals the text you are editing. Frontmatter gets the same treatment.
+- Code blocks no longer wrap long lines. A line wider than the editor column is cut off at the block's edge and the whole block scrolls sideways: swipe horizontally on a trackpad (or hold Shift and scroll) anywhere over the block, and every line moves together so indentation stays aligned. A block that overflows shows a thin scrollbar along its bottom edge. The scrollbar tracks the scroll position and can be dragged. The block also scrolls on its own to keep the caret in view, so pressing End on a long line or typing past the edge reveals the text you are editing. Frontmatter gets the same treatment.
 
 ## 2026-09-15
 

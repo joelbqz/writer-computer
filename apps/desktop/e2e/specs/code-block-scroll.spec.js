@@ -4,7 +4,8 @@ import { ok } from "node:assert/strict";
 // block whose one line is far wider than the editor column, opens it, and
 // asserts the line does not wrap, a horizontal wheel gesture scrolls every
 // line of the block together (as a negative `text-indent`), and moving the
-// caret to the end of the long line reveals it
+// caret to the end of the long line reveals it, and the block shows a
+// draggable scrollbar thumb along its bottom edge
 // (see SPECs/code-block-horizontal-scroll-spec.md).
 //
 // Requires a restorable workspace: seed
@@ -167,7 +168,7 @@ describe("Code block horizontal scrolling", function () {
 
   it("reveals the caret when it moves to the end of the long line", async function () {
     const caret = await browser.execute(() => {
-      const view = document.querySelector(".cm-content").cmView.view;
+      const view = document.querySelector(".cm-content").cmTile.root.view;
       const lineEl = document.querySelectorAll(".cm-fenced-code-line")[2];
       const line = view.state.doc.lineAt(view.posAtDOM(lineEl));
       view.dispatch({ selection: { anchor: line.to } });
@@ -178,7 +179,7 @@ describe("Code block horizontal scrolling", function () {
     await browser.waitUntil(
       async () => {
         const result = await browser.execute((pos) => {
-          const view = document.querySelector(".cm-content").cmView.view;
+          const view = document.querySelector(".cm-content").cmTile.root.view;
           const coords = view.coordsAtPos(pos);
           const lineEl = document.querySelectorAll(".cm-fenced-code-line")[2];
           const rect = lineEl.getBoundingClientRect();
@@ -201,5 +202,71 @@ describe("Code block horizontal scrolling", function () {
     if (process.env.VERIFY_SHOT_DIR) {
       await browser.saveScreenshot(`${process.env.VERIFY_SHOT_DIR}/code-block-caret-revealed.png`);
     }
+  });
+
+  /** Geometry of the scrollbar thumbs and of the block's closing line. */
+  async function scrollbar() {
+    return browser.execute(() => {
+      const lines = document.querySelectorAll(".cm-fenced-code-line");
+      const last = lines[lines.length - 1].getBoundingClientRect();
+      return {
+        last: { left: last.left, right: last.right, bottom: last.bottom },
+        textIndent: lines[2].style.textIndent,
+        thumbs: Array.from(document.querySelectorAll(".cm-code-scrollbar-thumb")).map((el) => {
+          const rect = el.getBoundingClientRect();
+          return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+        }),
+      };
+    });
+  }
+
+  it("shows a scrollbar thumb at the block's scroll position and drags it back", async function () {
+    const before = await scrollbar();
+    ok(before.thumbs.length === 1, `expected one thumb, got ${before.thumbs.length}`);
+    const [thumb] = before.thumbs;
+    ok(
+      thumb.bottom <= before.last.bottom && thumb.bottom > before.last.bottom - 12,
+      `thumb (${thumb.top}-${thumb.bottom}) should sit on the block's bottom edge (${before.last.bottom})`,
+    );
+    // Scrolled to the end by the caret reveal, so the thumb ends at the track end
+    // (the closing line's right padding edge, 12px in).
+    ok(
+      Math.abs(thumb.right - (before.last.right - 12)) < 2,
+      `thumb right ${thumb.right} should reach the track end ${before.last.right - 12}`,
+    );
+
+    if (process.env.VERIFY_SHOT_DIR) {
+      await browser.saveScreenshot(`${process.env.VERIFY_SHOT_DIR}/code-block-scrollbar.png`);
+    }
+
+    // The WebDriver plugin sends no mouse moves, so the drag is dispatched
+    // directly: press on the thumb, move the window, release.
+    await browser.execute(() => {
+      const thumb = document.querySelector(".cm-code-scrollbar-thumb");
+      const rect = thumb.getBoundingClientRect();
+      const y = (rect.top + rect.bottom) / 2;
+      const x = (rect.left + rect.right) / 2;
+      const init = (clientX) => ({
+        clientX,
+        clientY: y,
+        button: 0,
+        bubbles: true,
+        cancelable: true,
+      });
+      thumb.dispatchEvent(new MouseEvent("mousedown", init(x)));
+      window.dispatchEvent(new MouseEvent("mousemove", init(x - 150)));
+      window.dispatchEvent(new MouseEvent("mousemove", init(x - 2000)));
+      window.dispatchEvent(new MouseEvent("mouseup", init(x - 2000)));
+    });
+
+    await browser.waitUntil(async () => (await scrollbar()).textIndent === "", {
+      timeout: 5_000,
+      timeoutMsg: "dragging the thumb to the start did not scroll the block back to zero",
+    });
+    const after = await scrollbar();
+    ok(
+      Math.abs(after.thumbs[0].left - (after.last.left + 12)) < 2,
+      `thumb left ${after.thumbs[0].left} should return to the track start ${after.last.left + 12}`,
+    );
   });
 });

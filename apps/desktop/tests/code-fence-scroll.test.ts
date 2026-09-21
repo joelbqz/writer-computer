@@ -12,6 +12,7 @@ import {
   codeBlockScrollField,
   revealOffset,
   setCodeBlockScroll,
+  thumbGeometry,
   wheelDeltaX,
 } from "../src/lib/prosemark-core/codeFenceScroll";
 import { withFullParse } from "./helpers/parsed-state";
@@ -132,6 +133,22 @@ describe("scroll geometry", () => {
     expect(revealOffset(50, 330, 100, 300)).toBe(80);
   });
 
+  test("thumbGeometry sizes the thumb to the visible share and slides it with the offset", () => {
+    // 400px visible out of 800px content: half-width thumb, 200px of travel.
+    expect(thumbGeometry(0, 400, 400)).toEqual({ left: 0, width: 200, perPixel: 2 });
+    expect(thumbGeometry(200, 400, 400)).toEqual({ left: 100, width: 200, perPixel: 2 });
+    expect(thumbGeometry(400, 400, 400)).toEqual({ left: 200, width: 200, perPixel: 2 });
+    // A stale offset past the end pins the thumb to the end of the track.
+    expect(thumbGeometry(900, 400, 400).left).toBe(200);
+  });
+
+  test("thumbGeometry keeps a minimum thumb width on very wide blocks", () => {
+    const { left, width, perPixel } = thumbGeometry(10_000, 10_000, 100);
+    expect(width).toBe(24);
+    expect(left).toBe(76);
+    expect(perPixel).toBeCloseTo(10_000 / 76);
+  });
+
   test("wheelDeltaX scales line and page deltas into pixels", () => {
     expect(wheelDeltaX({ deltaX: 12, deltaMode: 0 }, 400)).toBe(12);
     expect(wheelDeltaX({ deltaX: 2, deltaMode: 1 }, 400)).toBe(32);
@@ -144,5 +161,10 @@ describe("codeFenceTheme", () => {
     const line = __testCodeFenceExtension.codeFenceThemeSpec[".cm-fenced-code-line"];
     expect(line.whiteSpace).toBe("pre");
     expect(line.overflowX).toBe("clip");
+  });
+
+  test("styles the overflow scrollbar thumb", () => {
+    const thumb = __testCodeFenceExtension.codeFenceThemeSpec[".cm-code-scrollbar-thumb"];
+    expect(thumb.backgroundColor).toContain("--scrollbar-thumb");
   });
 });

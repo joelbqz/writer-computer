@@ -38,13 +38,21 @@ of breaking mid-token and destroying indentation.
   change that reveals it (deferred with `setTimeout` because measure writes run
   inside the update cycle). The same pass clamps visible blocks whose offset
   exceeds their maximum after the editor widened.
+- Scrollbar: lines aren't scroll containers, so there is no native scrollbar.
+  A CodeMirror `layer` draws one thumb per overflowing block whose closing
+  line is rendered, 3px above the block's bottom edge and spanning its content
+  box. The thumb's width is the visible share of the content (at least 24px)
+  and its position tracks the offset (`thumbGeometry`). Dragging it takes
+  mouse moves on the window for the length of the drag and dispatches `setCodeBlockScroll`.
 
 ## Validation
 
 - Unit tests (`tests/code-fence-scroll.test.ts`): block lookup, field
-  set/remove/remap/prune, per-line `text-indent` decoration, geometry helpers,
-  theme rules.
+  set/remove/remap/prune, per-line `text-indent` decoration, geometry helpers
+  (including thumb size and position), theme rules.
 - E2E (`e2e/specs/code-block-scroll.spec.js`): long line renders unwrapped at
   the same height as a short one; a synthetic horizontal wheel scrolls all
   lines together; the offset clamps at the widest line and returns to zero;
-  moving the caret to the end of the long line reveals it.
+  moving the caret to the end of the long line reveals it; the thumb sits on
+  the block's bottom edge at the scrolled position, and dragging it to the
+  start scrolls the block back to zero.
