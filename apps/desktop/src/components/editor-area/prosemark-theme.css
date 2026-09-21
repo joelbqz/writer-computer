@@ -259,10 +259,18 @@
    1.6em (H1) gives a ~46px line box: a wrapped title reads as two loosely
    stacked lines and every heading carries an oversized band of leading.
    Tighten to 1.3 (the unitless factor scales with each heading's own
-   font-size); `.cm-markdown-heading`'s `padding-top` keeps the section gap. */
+   font-size); `.cm-markdown-heading`'s `padding-top` keeps the section gap.
+
+   Dropping 1.8 to 1.3 also took a quarter of the heading's font-size of
+   half-leading off the bottom of the line box, which was the only space
+   between a heading and the paragraph or list right under it. Put it back
+   as `padding-bottom`. The heading font-size lives on the inner text span
+   (the highlight style), not on the line, so `em` here is the body size:
+   0.35em is the 5.6px an H2 used to have, close enough for every level. */
 .cm-editor .cm-heading-line {
   position: relative;
   line-height: 1.3;
+  padding-bottom: 0.35em;
 }
 
 .cm-editor .cm-heading-hash {
