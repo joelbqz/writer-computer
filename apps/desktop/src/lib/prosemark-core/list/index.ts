@@ -1,4 +1,4 @@
-import { syntaxTree } from "@codemirror/language";
+import { syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
 import {
   type ChangeSpec,
   EditorSelection,
@@ -445,7 +445,21 @@ function parseBulletTaskLineAt(state: EditorState, pos: number): ParsedBulletTas
 function listLineAt(state: EditorState, pos: number): ParsedBulletTaskLine | null {
   const parsed = parseBulletTaskLineAt(state, pos);
   if (!parsed) return null;
-  return isOnListLine(state, pos) ? parsed : null;
+  if (isOnListLine(state, pos)) return parsed;
+  // Past the committed parse (a long note right after a keystroke) the tree
+  // says nothing about this line, so the prefix grammar decides; otherwise
+  // Enter, Backspace and Tab would fall through to the generic markdown
+  // handlers and behave like the list extension was not there.
+  return syntaxTreeAvailable(state, state.doc.lineAt(pos).to) ? null : parsed;
+}
+
+// A line that stops being a list item becomes a paragraph. Left directly
+// under the item above it, it would be a lazy continuation of that item per
+// CommonMark (`- a⏎What` renders `What` as part of `a`), so the list and
+// the paragraph get a blank line between them unless one is there already.
+function listExitSeparator(state: EditorState, line: Line): string {
+  const prevBlank = line.number === 1 || state.doc.line(line.number - 1).length === 0;
+  return prevBlank ? "" : "\n";
 }
 
 function clampCollapsedListPrefixRange(state: EditorState, range: SelectionRange): SelectionRange {
@@ -758,8 +772,7 @@ const listEnter: StateCommand = ({ state, dispatch }) => {
       );
       return true;
     }
-    const prevBlank = line.number === 1 || state.doc.line(line.number - 1).length === 0;
-    const separator = prevBlank ? "" : "\n";
+    const separator = listExitSeparator(state, line);
     dispatch(
       state.update({
         changes: { from: line.from, to: line.to, insert: separator },
@@ -836,10 +849,16 @@ const listBackspace: StateCommand = ({ state, dispatch }) => {
 
   if (effectiveHead === parsed.bodyFrom) {
     const ws = parsed.indentLen > 0 ? outdentWs() : "";
+    // A nested item's text stays a continuation of its parent (one level
+    // out, per the interaction-zones spec); a top-level one becomes a
+    // paragraph, separated from the list above like Enter on an empty item.
+    const separator =
+      parsed.indentLen === 0 ? listExitSeparator(state, state.doc.lineAt(head)) : "";
+    const insert = separator + ws;
     dispatch(
       state.update({
-        changes: { from: parsed.lineFrom, to: parsed.bodyFrom, insert: ws },
-        selection: { anchor: parsed.lineFrom + ws.length },
+        changes: { from: parsed.lineFrom, to: parsed.bodyFrom, insert },
+        selection: { anchor: parsed.lineFrom + insert.length },
         userEvent: "delete.list",
       }),
     );
