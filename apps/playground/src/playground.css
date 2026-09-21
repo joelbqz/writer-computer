@@ -1,0 +1,70 @@
+/* The handful of app tokens the editor theme reads. Values mirror the light
+   defaults in apps/desktop/src/App.css; the rest of that file is chrome. */
+:root {
+  --accent: #ff6a00;
+  --bg-base: #ffffff;
+  --fg-base: #111111;
+  --contrast: 0.328;
+  --ui-font:
+    -apple-system-body, ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, Arial,
+    sans-serif;
+  --mono-font: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --text-primary: var(--fg-base);
+  --text-secondary: color-mix(in srgb, var(--fg-base) 80%, transparent);
+  --text-muted: color-mix(in srgb, var(--fg-base) 54%, transparent);
+  --item-hover-bg: color-mix(in srgb, var(--fg-base) calc(var(--contrast) * 16%), transparent);
+  --item-active-bg: color-mix(in srgb, var(--fg-base) calc(var(--contrast) * 26%), transparent);
+  --code-bg: color-mix(in srgb, var(--fg-base) calc(var(--contrast) * 16%), transparent);
+  --blockquote-border: color-mix(in srgb, var(--fg-base) calc(var(--contrast) * 58%), transparent);
+  --link-color: var(--accent);
+  --editor-selection-bg: color-mix(in srgb, var(--accent) 30%, transparent);
+  --writer-editor-side-padding: 2rem;
+  --writer-editor-outer-width: calc(640px + 2rem + 2rem);
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--ui-font);
+}
+
+.pg {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.pg-editor {
+  padding: 24px 0;
+  overflow: auto;
+}
+
+.pg-source {
+  border-left: 1px solid color-mix(in srgb, var(--fg-base) 12%, transparent);
+  padding: 24px;
+  font: 13px/1.5 var(--mono-font);
+  white-space: pre;
+  overflow: auto;
+}
+
+.pg-source .ws {
+  color: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.pg-source .caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.2em;
+  vertical-align: text-bottom;
+  background: var(--accent);
+}
+
+.pg-toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 0 24px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
