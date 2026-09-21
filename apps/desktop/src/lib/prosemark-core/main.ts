@@ -7,6 +7,7 @@ export * from "./markdown";
 export * from "./urlClass";
 export * from "./tabWidthExtension";
 export * from "./codeFenceExtension";
+export * from "./offscreenSelectionHighlight";
 export * from "./list";
 export * from "./imageSrc";
 export * from "./links";

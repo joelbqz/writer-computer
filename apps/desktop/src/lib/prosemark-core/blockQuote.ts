@@ -8,7 +8,7 @@ import {
   WidgetType,
   type DecorationSet,
 } from "@codemirror/view";
-import { treeChanged } from "./utils";
+import { treeChanged, renderedRanges, renderedRangesChanged } from "./utils";
 
 class NestedBlockQuoteBorder extends WidgetType {
   constructor(public offset: number) {
@@ -45,7 +45,7 @@ function measureBlockQuotes(view: EditorView): MeasureData {
   const seen = new Set<number>();
   const tree = syntaxTree(view.state);
 
-  for (const { from, to } of view.visibleRanges) {
+  for (const { from, to } of renderedRanges(view)) {
     tree.iterate({
       from,
       to,
@@ -113,7 +113,7 @@ export const blockQuoteExtension = ViewPlugin.fromClass(
         this.decorations = this.decorations.map(u.changes);
       }
 
-      if (u.docChanged || u.viewportChanged || treeChanged(u)) {
+      if (u.docChanged || renderedRangesChanged(u) || treeChanged(u)) {
         this.requestMeasure(u.view);
       }
     }

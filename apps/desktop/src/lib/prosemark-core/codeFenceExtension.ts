@@ -12,7 +12,7 @@ import {
   codeBlockScrollExtension,
   codeBlockScrollField,
 } from "./codeFenceScroll";
-import { treeChanged } from "./utils";
+import { renderedRanges, renderedRangesChanged, treeChanged } from "./utils";
 
 const fallbackMonospaceCodeFont =
   "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
@@ -105,7 +105,11 @@ const buildCodeBlockDecorations = (
 };
 
 const codeBlockDecorations = (view: EditorView) =>
-  buildCodeBlockDecorations(view.state, view.visibleRanges, view.state.field(codeBlockScrollField));
+  buildCodeBlockDecorations(
+    view.state,
+    renderedRanges(view),
+    view.state.field(codeBlockScrollField),
+  );
 
 class CodeBlockInfoWidget extends WidgetType {
   constructor(
@@ -164,7 +168,7 @@ const codeBlockDecorationsPlugin = ViewPlugin.fromClass(
     update(update: ViewUpdate) {
       if (
         update.docChanged ||
-        update.viewportChanged ||
+        renderedRangesChanged(update) ||
         treeChanged(update) ||
         update.state.field(codeBlockScrollField) !== update.startState.field(codeBlockScrollField)
       ) {

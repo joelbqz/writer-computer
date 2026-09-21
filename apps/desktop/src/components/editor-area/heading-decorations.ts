@@ -14,7 +14,7 @@ import {
   type SelectionRange,
 } from "@codemirror/state";
 import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
-import { treeChanged } from "@/lib/prosemark-core/utils";
+import { renderedRanges, renderedRangesChanged, treeChanged } from "@/lib/prosemark-core/utils";
 
 type SyntaxNode = ReturnType<typeof syntaxTree>["topNode"];
 
@@ -171,14 +171,19 @@ function clampRangesToZones(
 function buildDecorations(view: EditorView): DecorationSet {
   const decos: { from: number; to: number; deco: Decoration }[] = [];
   const tree = syntaxTree(view.state);
+  // A heading can touch two rendered ranges (a setext heading with the caret
+  // on its underline, scrolled out of the viewport); decorate it once.
+  const seen = new Set<number>();
 
-  for (const { from, to } of view.visibleRanges) {
+  for (const { from, to } of renderedRanges(view)) {
     tree.iterate({
       from,
       to,
       enter(node) {
         const level = getMarkdownHeadingLevel(node.name);
         if (level === null) return undefined;
+        if (seen.has(node.from)) return false;
+        seen.add(node.from);
 
         const lineFrom = view.state.doc.lineAt(node.from).from;
         decos.push({ from: lineFrom, to: lineFrom, deco: lineDecos[level]! });
@@ -214,7 +219,7 @@ const headingPlugin = ViewPlugin.fromClass(
     }
 
     update(update: ViewUpdate) {
-      if (update.docChanged || update.viewportChanged || treeChanged(update)) {
+      if (update.docChanged || renderedRangesChanged(update) || treeChanged(update)) {
         this.decorations = buildDecorations(update.view);
       }
     }

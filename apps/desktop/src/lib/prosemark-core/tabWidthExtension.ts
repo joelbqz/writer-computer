@@ -7,6 +7,7 @@ import {
   type DecorationSet,
   type ViewUpdate,
 } from "@codemirror/view";
+import { renderedRanges, renderedRangesChanged } from "./utils";
 
 // Issue #96 ("Text Vibrating like crazy"):
 // Native tab rendering can vary enough to throw off pixel-based indent
@@ -37,7 +38,7 @@ const buildTabWidthDecorations = (view: EditorView): DecorationSet => {
   const builder = new RangeSetBuilder<Decoration>();
   const visitedTabPositions = new Set<number>();
 
-  for (const { from, to } of view.visibleRanges) {
+  for (const { from, to } of renderedRanges(view)) {
     // Scan the whole visible range directly rather than iterating line-by-line.
     // Visible ranges can overlap, so dedupe by absolute tab position.
     const visibleText = view.state.doc.sliceString(from, to);
@@ -64,7 +65,7 @@ const fixedTabWidthDecorations = ViewPlugin.fromClass(
     }
 
     update(update: ViewUpdate) {
-      if (update.docChanged || update.viewportChanged) {
+      if (update.docChanged || renderedRangesChanged(update)) {
         this.decorations = buildTabWidthDecorations(update.view);
       }
     }

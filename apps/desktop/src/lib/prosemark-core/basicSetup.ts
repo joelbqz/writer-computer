@@ -7,6 +7,7 @@ import { defaultHideExtensions } from "./hide";
 import { defaultFoldableSyntaxExtensions } from "./fold";
 import { urlClassExtension } from "./urlClass";
 import { codeBlockDecorationsExtension, codeFenceTheme } from "./codeFenceExtension";
+import { offscreenSelectionHighlightExtension } from "./offscreenSelectionHighlight";
 import {
   baseSyntaxHighlights,
   baseTheme,
@@ -33,6 +34,7 @@ export const prosemarkBasicSetup = (): Extension => [
   listExtension,
   fixedTabWidthExtension,
   codeBlockDecorationsExtension,
+  offscreenSelectionHighlightExtension,
 
   // Basic CodeMirror Setup
   dropCursor(),
