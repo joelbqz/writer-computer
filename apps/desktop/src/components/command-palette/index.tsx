@@ -28,6 +28,7 @@ import {
   useOpenTabs,
 } from "@/hooks/use-tabs";
 import { useTheme } from "@/hooks/use-theme";
+import { resetZoom, zoomIn, zoomOut } from "@/hooks/zoom-api";
 import { useFuzzySearch } from "./use-fuzzy-search";
 import { useGlobalRecentFiles } from "@/hooks/use-global-recent-files";
 import { openStandaloneFile } from "@/hooks/use-open-drop";
@@ -193,6 +194,33 @@ export function CommandPalette() {
       description: "Command",
       run: () => {
         toggleTheme();
+        close();
+      },
+    },
+    {
+      id: "zoom-in",
+      label: "Zoom In",
+      description: "Command",
+      run: () => {
+        zoomIn();
+        close();
+      },
+    },
+    {
+      id: "zoom-out",
+      label: "Zoom Out",
+      description: "Command",
+      run: () => {
+        zoomOut();
+        close();
+      },
+    },
+    {
+      id: "zoom-reset",
+      label: "Reset Zoom",
+      description: "Command",
+      run: () => {
+        resetZoom();
         close();
       },
     },

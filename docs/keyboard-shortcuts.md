@@ -17,12 +17,20 @@ These shortcuts are handled by the global `useKeyboardShortcuts` hook and work r
 | Ctrl+Tab        | Next tab                                                           |
 | Ctrl+Shift+Tab  | Previous tab                                                       |
 | Cmd+1 ... Cmd+9 | Jump to Nth tab                                                    |
+| Cmd+= / Cmd++   | Zoom in (whole window; numpad + works too)                         |
+| Cmd+-           | Zoom out (Cmd+Shift+- and numpad − work too)                       |
+| Cmd+0           | Actual size (zoom back to 100%)                                    |
 | Alt+ArrowLeft   | Navigate back                                                      |
 | Alt+ArrowRight  | Navigate forward                                                   |
 
+Zoom scales the whole window, like a browser, in preset stops (50–300%). The
+current percent is the global `window.zoom` setting (Preferences → Window →
+Zoom) and is restored on launch. It never changes `editor.font-size`.
+
 In compact single-file windows, sidebar and tab-management shortcuts do not
 create hidden UI state: Cmd+\\, Cmd+T, Ctrl+Tab, Ctrl+Shift+Tab, and Cmd+1 ...
-Cmd+9 are ignored. Cmd+P, Cmd+O, Cmd+N, and history navigation still work.
+Cmd+9 are ignored. Cmd+P, Cmd+O, Cmd+N, zoom, and history navigation still
+work.
 
 ## Menu Accelerators
 

@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import sidebarEntryKinds from "@shared/sidebar-entry-kinds.json";
@@ -293,6 +294,12 @@ export function showMainWindow(): Promise<void> {
  *  so the main window is hidden rather than destroyed (`lib.rs`). */
 export function closeWindow(): Promise<void> {
   return getCurrentWindow().close();
+}
+
+/** Scale this window's whole page (WKWebView `pageZoom`); 1 is actual size.
+ *  Needs `core:webview:allow-set-webview-zoom` in the capability. */
+export function setWebviewZoom(scaleFactor: number): Promise<void> {
+  return getCurrentWebview().setZoom(scaleFactor);
 }
 
 // Image commands

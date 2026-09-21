@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-21
+
+- Add view zoom. Cmd+= (also Cmd+Shift+= for a literal Cmd++, and the numpad +) makes the whole window bigger one stop at a time, Cmd+- makes it smaller, and Cmd+0 returns to actual size, the same as in a browser. Zoom scales everything, sidebar included, so a note mirrored to a meeting screen reads at a distance; hide the sidebar with Cmd+\ if you want only the text. The stops run from 50% to 300% (100, 110, 125, 150, 175, 200, 250, 300 going up). The level is remembered across launches, appears under Preferences → Window as Zoom, and never touches the editor Font Size setting, so resetting zoom returns to your chosen size. The commands are also in the command palette as Zoom In, Zoom Out, and Reset Zoom, and they work in compact single-file windows. A focused Mermaid diagram no longer zooms itself on Cmd+=, Cmd+-, or Cmd+0.
+
 ## 2026-09-15
 
 - Tighten the marketing site's stacked layout below 900px. The demo-video strip now sits in normal flow at the bottom of the same container as the hero (the page fills one viewport with the hero taking the remaining height) instead of being pinned to the viewport, so it scrolls away with the content. The feature list, the caption, and the headline also drop to their mobile sizes across the whole stacked range, so tablets match phones rather than inheriting the 48px desktop headline. On the narrowest phones (375px and below) the headline, the header buttons, the download button, and the feature list shrink a step further, with the header buttons matched to the download button, so the first screen stays readable. The feature list and the caption then step back up a little above 375px. The release badge next to the download button now reads "Beta" instead of "Alpha".

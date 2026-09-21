@@ -350,6 +350,18 @@
       "default": true
     },
     {
+      "key": "window.zoom",
+      "label": "Zoom",
+      "description": "Whole-window zoom in percent. Cmd+= and Cmd+- step through presets; Cmd+0 returns to 100.",
+      "category": "Window",
+      "type": "range",
+      "min": 50,
+      "max": 300,
+      "step": 5,
+      "scope": "global",
+      "default": 100
+    },
+    {
       "key": "search.debounce-ms",
       "label": "Search Debounce",
       "description": "Delay in milliseconds before performing search",
