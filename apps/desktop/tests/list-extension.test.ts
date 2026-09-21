@@ -308,6 +308,27 @@ describe("listEnter", () => {
     expect(state.doc.toString()).toBe("");
   });
 
+  test("ending a list leaves a blank line so the next paragraph is not a continuation", () => {
+    const { state } = run(listEnter, makeMarked("- a\n- |"));
+    expect(markedDoc(state)).toBe("- a\n\n|");
+    // Text typed there is a paragraph of its own, not padded under `a`.
+    const typed = withFullParse(
+      state.update({ changes: { from: state.doc.length, insert: "What" } }).state,
+    );
+    expect(isOnListLine(typed, typed.doc.length)).toBe(false);
+    expect(listItemLineAt(typed, typed.doc.lineAt(typed.doc.length))).toBeNull();
+  });
+
+  test("ending a list in the middle keeps the items after it", () => {
+    const { state } = run(listEnter, makeMarked("- a\n- [ ] |\n- b"));
+    expect(markedDoc(state)).toBe("- a\n\n|\n- b");
+  });
+
+  test("does not add a second blank line when ending a loose list", () => {
+    const { state } = run(listEnter, makeMarked("- a\n\n- |"));
+    expect(markedDoc(state)).toBe("- a\n\n|");
+  });
+
   test("outdents an empty nested item one level instead of wiping it", () => {
     const { state, ran } = run(listEnter, makeMarked("- a\n  - |"));
     expect(ran).toBe(true);

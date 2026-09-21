@@ -738,8 +738,11 @@ const listEnter: StateCommand = ({ state, dispatch }) => {
   const line = state.doc.lineAt(sel.head);
 
   // Empty list item: a nested one steps out to its parent's level (prefix
-  // kept, so the user is still on a bullet); a top-level one is wiped so
-  // the caret lands on a plain paragraph line.
+  // kept, so the user is still on a bullet); a top-level one ends the list.
+  // Its prefix goes, and a blank line is kept between the list and the
+  // caret (added unless the line above is blank already): without it,
+  // whatever is typed next is a lazy continuation of the last item per
+  // CommonMark (`- a⏎What` renders `What` as part of `a`).
   if (parsed.bodyFrom === line.to) {
     const entry = listItemLineAt(state, line);
     const parent = entry ? parentListItem(entry.item) : null;
@@ -755,10 +758,12 @@ const listEnter: StateCommand = ({ state, dispatch }) => {
       );
       return true;
     }
+    const prevBlank = line.number === 1 || state.doc.line(line.number - 1).length === 0;
+    const separator = prevBlank ? "" : "\n";
     dispatch(
       state.update({
-        changes: { from: line.from, to: line.to },
-        selection: { anchor: line.from },
+        changes: { from: line.from, to: line.to, insert: separator },
+        selection: { anchor: line.from + separator.length },
         userEvent: "delete.empty-list-marker",
       }),
     );
