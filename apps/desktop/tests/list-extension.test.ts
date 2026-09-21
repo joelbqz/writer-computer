@@ -5,6 +5,7 @@ import {
   type StateCommand,
   type Transaction,
 } from "@codemirror/state";
+import { history, undo } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
 import { GFM } from "@lezer/markdown";
 import { computeCheckboxToggle, listExtension, __test } from "../src/lib/prosemark-core/list";
@@ -16,7 +17,7 @@ const {
   isOnListLine,
   listPrefixBoundaryMove,
   parseBulletTaskLine,
-  findPrevListItemIndent,
+  listItemLineAt,
   listEnter,
   listBackspace,
   listIndent,
@@ -27,11 +28,27 @@ const {
 function makeState(doc: string, anchor = 0, head?: number): EditorState {
   const state = EditorState.create({
     doc,
-    extensions: [markdown({ extensions: [GFM] }), listExtension],
+    extensions: [markdown({ extensions: [GFM] }), listExtension, history()],
     selection: EditorSelection.single(anchor, head ?? anchor),
   });
   // Full parse committed so `isOnListLine` and `listDecorationsField` see it.
   return withFullParse(state);
+}
+
+// `doc` with `|` marking the caret, or two `|` marking a selection.
+function makeMarked(marked: string): EditorState {
+  const anchor = marked.indexOf("|");
+  const rest = marked.slice(anchor + 1);
+  const headOffset = rest.indexOf("|");
+  const head = headOffset >= 0 ? anchor + headOffset : anchor;
+  return makeState(marked.replace(/\|/g, ""), anchor, head);
+}
+
+// Result doc with `|` re-inserted at the main selection's head.
+function markedDoc(state: EditorState): string {
+  const doc = state.doc.toString();
+  const head = state.selection.main.head;
+  return `${doc.slice(0, head)}|${doc.slice(head)}`;
 }
 
 function run(cmd: StateCommand, state: EditorState): { state: EditorState; ran: boolean } {
@@ -203,28 +220,45 @@ describe("list prefix caret zones", () => {
 });
 
 // ---------------------------------------------------------------------------
-// findPrevListItemIndent
+// listItemLineAt
 // ---------------------------------------------------------------------------
 
-describe("findPrevListItemIndent", () => {
-  test("returns the prior list item's indent", () => {
-    const s = makeState("- a\n  - b\n");
-    expect(findPrevListItemIndent(s, 2, () => true)).toBe(0);
+describe("listItemLineAt", () => {
+  const entryAt = (doc: string, lineNumber: number) => {
+    const s = makeState(doc);
+    return listItemLineAt(s, s.doc.line(lineNumber));
+  };
+
+  test("reads the leading whitespace and the child content column", () => {
+    expect(entryAt("- a\n  - b", 2)).toMatchObject({
+      markFrom: 6,
+      leadingWs: "  ",
+      contentWs: "    ",
+    });
   });
 
-  test("returns -1 when prior line is blank", () => {
-    const s = makeState("- a\n\n- b");
-    expect(findPrevListItemIndent(s, 3, () => true)).toBe(-1);
+  test("a child of an ordered item needs the ordered marker's width", () => {
+    expect(entryAt("1. a", 1)).toMatchObject({ leadingWs: "", contentWs: "   " });
+    expect(entryAt("10. a", 1)).toMatchObject({ leadingWs: "", contentWs: "    " });
   });
 
-  test("respects the predicate filter for indent-only constraints", () => {
-    const s = makeState("- a\n  - b\n    - c\n");
-    // Looking for a list item with indent ≤ 4 from line 3: that's `  - b` (2).
-    expect(findPrevListItemIndent(s, 3, (i) => i <= 4)).toBe(2);
-    // Looking for indent strictly < 4: same answer (2).
-    expect(findPrevListItemIndent(s, 3, (i) => i < 4)).toBe(2);
-    // Looking for indent strictly < 2 from line 2: `- a` at 0.
-    expect(findPrevListItemIndent(s, 2, (i) => i < 2)).toBe(0);
+  test("keeps tabs in the child indent so tab-indented lists stay tab-indented", () => {
+    expect(entryAt("- a\n\t- b", 2)).toMatchObject({ leadingWs: "\t", contentWs: "\t  " });
+    expect(entryAt("-\tb", 1)).toMatchObject({ leadingWs: "", contentWs: " \t" });
+  });
+
+  test("uses the real content column when extra spaces follow the marker", () => {
+    expect(entryAt("-   a", 1)).toMatchObject({ contentWs: "    " });
+  });
+
+  test("a task's content column is after `- `, not after the checkbox", () => {
+    expect(entryAt("- [ ] a", 1)).toMatchObject({ contentWs: "  " });
+  });
+
+  test("returns null on non-list lines and on blank lines inside a list", () => {
+    expect(entryAt("para", 1)).toBeNull();
+    expect(entryAt("- a\n\n- b", 2)).toBeNull();
+    expect(entryAt("- a\n  cont", 2)).toBeNull();
   });
 });
 
@@ -274,10 +308,40 @@ describe("listEnter", () => {
     expect(state.doc.toString()).toBe("");
   });
 
-  test("wipes the line when empty nested item (`  - `)", () => {
-    const s = makeState("- a\n  - ", 8);
-    const { state } = run(listEnter, s);
-    expect(state.doc.toString()).toBe("- a\n");
+  test("outdents an empty nested item one level instead of wiping it", () => {
+    const { state, ran } = run(listEnter, makeMarked("- a\n  - |"));
+    expect(ran).toBe(true);
+    expect(markedDoc(state)).toBe("- a\n- |");
+  });
+
+  test("outdents an empty depth-2 item to its parent's indent", () => {
+    const { state } = run(listEnter, makeMarked("- a\n  - b\n    - |"));
+    expect(markedDoc(state)).toBe("- a\n  - b\n  - |");
+  });
+
+  test("keeps the task box when outdenting an empty nested task", () => {
+    const { state } = run(listEnter, makeMarked("- a\n  - b\n    - [ ] |"));
+    expect(markedDoc(state)).toBe("- a\n  - b\n  - [ ] |");
+  });
+
+  test("outdents an empty nested item across a loose list's blank line", () => {
+    const { state } = run(listEnter, makeMarked("- a\n\n  - |"));
+    expect(markedDoc(state)).toBe("- a\n\n- |");
+  });
+
+  test("outdents an empty tab-indented item to the parent's whitespace", () => {
+    const { state } = run(listEnter, makeMarked("- a\n\t- b\n\t  - |"));
+    expect(markedDoc(state)).toBe("- a\n\t- b\n\t- |");
+  });
+
+  test("inherits a depth-3 prefix on continuation", () => {
+    const { state } = run(listEnter, makeMarked("- a\n  - b\n    - c\n      - d|"));
+    expect(markedDoc(state)).toBe("- a\n  - b\n    - c\n      - d\n      - |");
+  });
+
+  test("splits a nested item at the caret and carries the prefix", () => {
+    const { state } = run(listEnter, makeMarked("- a\n  - b\n    - c|d"));
+    expect(markedDoc(state)).toBe("- a\n  - b\n    - c\n    - |d");
   });
 
   test("defers to default Enter when cursor is at/before the prefix end", () => {
@@ -415,6 +479,109 @@ describe("listIndent (Tab)", () => {
     expect(ran).toBe(true);
     expect(state.doc.toString()).toBe("- a\npara\n  - b");
   });
+
+  test("nests a bullet under a different bullet character", () => {
+    expect(markedDoc(run(listIndent, makeMarked("* a\n- b|")).state)).toBe("* a\n  - b|");
+    expect(markedDoc(run(listIndent, makeMarked("- a\n+ b|")).state)).toBe("- a\n  + b|");
+  });
+
+  test("nests a bullet under an ordered parent at the ordered content column", () => {
+    const { state } = run(listIndent, makeMarked("1. a\n- b|"));
+    expect(markedDoc(state)).toBe("1. a\n   - b|");
+    expect(prefixMarks(state).map((m) => m.style)).toEqual([
+      "width: 6ch; --cm-list-marker-offset: 3ch; --cm-list-marker-width: 3ch",
+    ]);
+  });
+
+  test("nests an ordered item under the item before it", () => {
+    expect(markedDoc(run(listIndent, makeMarked("- a\n1. b|")).state)).toBe("- a\n  1. b|");
+    expect(markedDoc(run(listIndent, makeMarked("1. a\n2. b|")).state)).toBe("1. a\n   2. b|");
+  });
+
+  test("nests under a tab-indented sibling with a tab, not spaces before the tab", () => {
+    const { state } = run(listIndent, makeMarked("- a\n\t- b\n\t- c|"));
+    expect(markedDoc(state)).toBe("- a\n\t- b\n\t  - c|");
+    expect(prefixMarks(state).map((m) => m.style)).toEqual([
+      "width: 3ch; --cm-list-marker-offset: 0ch; --cm-list-marker-width: 3ch",
+      "width: 6ch; --cm-list-marker-offset: 3ch; --cm-list-marker-width: 3ch",
+      "width: 9ch; --cm-list-marker-offset: 6ch; --cm-list-marker-width: 3ch",
+    ]);
+  });
+
+  test("is a no-op on a tab-indented item that is already as deep as it can go", () => {
+    const { state, ran } = run(listIndent, makeMarked("- a\n\t- b|"));
+    expect(ran).toBe(true);
+    expect(state.doc.toString()).toBe("- a\n\t- b");
+  });
+
+  test("nests under an oddly indented sibling in one press", () => {
+    // `   - c` (three spaces) is still b's sibling per CommonMark; d nests
+    // under it at c's content column, not at a hard-coded +2.
+    const { state } = run(listIndent, makeMarked("- a\n  - b\n   - c\n  - d|"));
+    expect(markedDoc(state)).toBe("- a\n  - b\n   - c\n     - d|");
+  });
+
+  test("nests across a blank line in a loose list", () => {
+    expect(markedDoc(run(listIndent, makeMarked("- a\n\n- b|")).state)).toBe("- a\n\n  - b|");
+    expect(markedDoc(run(listIndent, makeMarked("- a\n\n  - b\n\n  - c|")).state)).toBe(
+      "- a\n\n  - b\n\n    - c|",
+    );
+  });
+
+  test("does not nest across a paragraph that ends the list", () => {
+    const { state, ran } = run(listIndent, makeMarked("- a\n\npara\n\n- b|"));
+    expect(ran).toBe(true);
+    expect(state.doc.toString()).toBe("- a\n\npara\n\n- b");
+  });
+
+  test("keeps a caret at the line start in place and moves a body caret with the text", () => {
+    expect(markedDoc(run(listIndent, makeMarked("- a\n|- b")).state)).toBe("- a\n|  - b");
+    expect(markedDoc(run(listIndent, makeMarked("- a\n- |b")).state)).toBe("- a\n  - |b");
+  });
+
+  test("moves a selected parent's children with it", () => {
+    const { state } = run(listIndent, makeMarked("- x\n|- a\n  - b\n    - c|"));
+    expect(state.doc.toString()).toBe("- x\n  - a\n    - b\n      - c");
+    expect([state.selection.main.from, state.selection.main.to]).toEqual([4, 27]);
+  });
+
+  test("shifts a selection of mixed depths as one block", () => {
+    const { state } = run(listIndent, makeMarked("- a\n|- b\n  - c\n- d|"));
+    expect(state.doc.toString()).toBe("- a\n  - b\n    - c\n  - d");
+  });
+
+  test("leaves a selected subtree alone when its root cannot nest", () => {
+    const { state, ran } = run(listIndent, makeMarked("|- a\n  - b\n    - c|"));
+    expect(ran).toBe(true);
+    expect(state.doc.toString()).toBe("- a\n  - b\n    - c");
+  });
+
+  test("nests selected nested siblings one under the other", () => {
+    const { state } = run(listIndent, makeMarked("- a\n  |- b\n  - c|"));
+    expect(state.doc.toString()).toBe("- a\n  - b\n    - c");
+  });
+
+  test("undo after a selection Tab restores the document and selection", () => {
+    const before = makeMarked("- x\n|- a\n  - b\n    - c|");
+    let state = run(listIndent, before).state;
+    undo({
+      state,
+      dispatch: (tr) => {
+        state = tr.state;
+      },
+    });
+    expect(state.doc.toString()).toBe(before.doc.toString());
+    expect(state.selection.toJSON()).toEqual(before.selection.toJSON());
+  });
+
+  test("works on freshly pasted nested lines", () => {
+    const base = makeState("- a\n", 4);
+    const pasted = withFullParse(
+      base.update({ changes: { from: 4, insert: "- p\n  - q" }, selection: { anchor: 4 } }).state,
+    );
+    const selected = pasted.update({ selection: EditorSelection.single(4, 13) }).state;
+    expect(run(listIndent, selected).state.doc.toString()).toBe("- a\n  - p\n    - q");
+  });
 });
 
 describe("listOutdent (Shift-Tab)", () => {
@@ -446,6 +613,40 @@ describe("listOutdent (Shift-Tab)", () => {
     const { state, ran } = run(listOutdent, s);
     expect(ran).toBe(true);
     expect(state.doc.toString()).toBe("- a\n- b\n- c");
+  });
+
+  test("lifts a bullet out from under an ordered parent", () => {
+    expect(markedDoc(run(listOutdent, makeMarked("1. a\n   - b|")).state)).toBe("1. a\n- b|");
+  });
+
+  test("outdents a tab-indented item to its parent's whitespace", () => {
+    expect(markedDoc(run(listOutdent, makeMarked("- a\n\t- b\n\t  - c|")).state)).toBe(
+      "- a\n\t- b\n\t- c|",
+    );
+    expect(markedDoc(run(listOutdent, makeMarked("- a\n\t- b|")).state)).toBe("- a\n- b|");
+  });
+
+  test("lifts an oddly indented sibling to the parent level in one press", () => {
+    const { state } = run(listOutdent, makeMarked("- a\n  - b\n   - c|\n  - d"));
+    expect(markedDoc(state)).toBe("- a\n  - b\n- c|\n  - d");
+  });
+
+  test("outdents across a blank line in a loose list", () => {
+    expect(markedDoc(run(listOutdent, makeMarked("- a\n\n  - b|")).state)).toBe("- a\n\n- b|");
+  });
+
+  test("moves a selected parent's children with it", () => {
+    const { state } = run(listOutdent, makeMarked("- x\n|  - a\n    - b\n      - c|"));
+    expect(state.doc.toString()).toBe("- x\n- a\n  - b\n    - c");
+  });
+
+  test("moves tab-indented children by the parent's whitespace, not by two chars", () => {
+    const { state } = run(listOutdent, makeMarked("- x\n|\t- a\n\t  - b|"));
+    expect(state.doc.toString()).toBe("- x\n- a\n  - b");
+  });
+
+  test("keeps a caret at the line start in place", () => {
+    expect(markedDoc(run(listOutdent, makeMarked("- a\n|  - b")).state)).toBe("- a\n|- b");
   });
 });
 
@@ -571,6 +772,87 @@ describe("listDecorationsField", () => {
         style: "width: 3ch; --cm-list-marker-offset: 0ch; --cm-list-marker-width: 3ch",
       },
     ]);
+  });
+
+  // Line decorations (padding) and replaced ranges on continuation lines
+  // of an item's own paragraph.
+  function continuationDecos(state: EditorState) {
+    const decos = state.field(__test.listDecorationsField);
+    const lines: Array<{ line: number; style: string }> = [];
+    const hidden: Array<[number, number]> = [];
+    decos.all.between(0, state.doc.length, (from, to, deco) => {
+      const spec = deco.spec as { attributes?: { style?: string }; class?: string };
+      const isMarkerLine = /text-indent/.test(spec.attributes?.style ?? "");
+      if (deco.spec.widget === undefined && from === to && !spec.class && !isMarkerLine) {
+        lines.push({ line: state.doc.lineAt(from).number, style: spec.attributes?.style ?? "" });
+      } else if (from < to && deco === __test.listContinuationIndentDecoration) {
+        hidden.push([from, to]);
+      }
+    });
+    return { lines, hidden };
+  }
+
+  test("pads a hard-wrapped item's continuation lines to the body column", () => {
+    const s = makeState("- one two\n  three four\nfive");
+    expect(continuationDecos(s)).toEqual({
+      lines: [
+        { line: 2, style: "padding-inline-start: 3ch;" },
+        { line: 3, style: "padding-inline-start: 3ch;" },
+      ],
+      hidden: [[10, 12]],
+    });
+    // The collapsed indent is one atomic step.
+    let atomic = 0;
+    s.field(__test.listDecorationsField).atomic.between(10, 12, () => {
+      atomic++;
+    });
+    expect(atomic).toBe(1);
+  });
+
+  test("pads nested, task, and ordered continuation lines by their own depth", () => {
+    const s = makeState("- a\n  - [ ] b\n    c\n1. d\n   e");
+    expect(continuationDecos(s)).toEqual({
+      lines: [
+        { line: 3, style: "padding-inline-start: 6ch;" },
+        { line: 5, style: "padding-inline-start: 3ch;" },
+      ],
+      hidden: [
+        [14, 18],
+        [25, 28],
+      ],
+    });
+  });
+
+  test("leaves nested items, blank lines, and later paragraphs alone", () => {
+    const s = makeState("- a\n  - b\n\n  para");
+    expect(continuationDecos(s).lines).toEqual([]);
+  });
+
+  // Line numbers whose marker line carries the item-gap class.
+  function gapLines(state: EditorState): number[] {
+    const out: number[] = [];
+    state.field(__test.listDecorationsField).all.between(0, state.doc.length, (from, to, deco) => {
+      if (from === to && (deco.spec as { class?: string }).class === __test.LIST_ITEM_GAP_CLASS) {
+        out.push(state.doc.lineAt(from).number);
+      }
+    });
+    return out;
+  }
+
+  test("gaps items that follow another item, not the first of a list", () => {
+    expect(gapLines(makeState("para\n- a\n- b\n- [ ] c"))).toEqual([3, 4]);
+  });
+
+  test("gaps at every depth, but not a nested list's first child", () => {
+    expect(gapLines(makeState("- a\n  - b\n  - c\n- d\n  1. e\n  2. f"))).toEqual([3, 4, 6]);
+  });
+
+  test("gaps an item that opens a new list right after another list", () => {
+    expect(gapLines(makeState("1. a\n- b\n* c"))).toEqual([2, 3]);
+  });
+
+  test("does not gap continuation lines or items after a blank line's paragraph", () => {
+    expect(gapLines(makeState("- a\n  wrapped\n- b\n\npara\n\n- c"))).toEqual([3]);
   });
 
   test("marks checked tasks and carries nested marker geometry", () => {

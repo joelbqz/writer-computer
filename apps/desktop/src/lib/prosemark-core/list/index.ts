@@ -4,6 +4,7 @@ import {
   EditorSelection,
   EditorState,
   type Extension,
+  type Line,
   Prec,
   type Range,
   type SelectionRange,
@@ -12,17 +13,13 @@ import {
   type TransactionSpec,
 } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, keymap } from "@codemirror/view";
+import type { SyntaxNode } from "@lezer/common";
 import { eventHandlersWithClass } from "../utils";
 
 // Visual list geometry. Keep indent steps and marker column aligned to the
 // source prefix width; caret boundary tuning happens on the inner source mark.
 const LIST_UNIT_CH = 3;
 const LIST_INDENT_SPACES = 2;
-
-// Cap on how far `findPrevListItemIndent` walks backward looking for a
-// parent. List nesting in practice is shallow; this avoids O(n) on giant
-// docs with no blank-line breaks between items.
-const PREV_LIST_LOOKBACK = 256;
 
 // Measurable source-backed rendering of bullet/task prefixes. The full source
 // prefix (leading whitespace + `- ` or `- [ ] `) remains in normal inline flow
@@ -73,11 +70,18 @@ const isOrderedMarkText = (s: string): boolean => ORDERED_MARKER_RE.test(s);
 // Ordered markers stay as source text (the digits matter), but the marker span
 // has a minimum width so one- and two-digit numbers share the same visual
 // column while longer markers can still grow.
-const orderedLineDecoration = Decoration.line({
-  attributes: {
-    style: `padding-inline-start: ${LIST_UNIT_CH.toString()}ch; text-indent: -3.4ch;`,
-  },
-});
+const orderedLineStyle = `padding-inline-start: ${LIST_UNIT_CH.toString()}ch; text-indent: -3.4ch;`;
+
+// Marker-line decoration. Items that follow another item at the same level
+// carry `cm-list-item-gap`, which the theme turns into a little space above
+// the line so consecutive items read as separate entries rather than as
+// hard-wrapped lines of one paragraph. The first item of a list stays flush
+// against whatever precedes it; the gap is the same at every depth.
+const LIST_ITEM_GAP_CLASS = "cm-list-item-gap";
+const listMarkerLineDecoration = (style: string, gap: boolean) =>
+  Decoration.line(
+    gap ? { class: LIST_ITEM_GAP_CLASS, attributes: { style } } : { attributes: { style } },
+  );
 const orderedMarkerDecoration = Decoration.mark({
   class: "cm-list-ordered-marker",
   attributes: { style: `min-width: ${LIST_UNIT_CH.toString()}ch;` },
@@ -86,6 +90,39 @@ const orderedMarkerDecoration = Decoration.mark({
 // A list marker is followed by a space OR tab per CommonMark; accept both
 // in the trailing-char gates so tab-separated markers render.
 const isMarkerTrailingChar = (ch: string): boolean => ch === " " || ch === "\t";
+
+// Continuation lines of an item's own paragraph (a hard-wrapped body, with or
+// without the conventional leading indent) sit at the body column: pad the
+// line by the item's prefix width and collapse the source indentation, which
+// would otherwise show as literal spaces before the text. The collapsed
+// whitespace is atomic so the caret and Backspace treat it as one step.
+const listContinuationIndentDecoration = Decoration.replace({});
+const LEADING_WS_RE = /^[ \t]+/;
+
+function pushContinuationLines(
+  state: EditorState,
+  item: SyntaxNode,
+  paddingCh: number,
+  allRanges: Range<Decoration>[],
+  atomicRanges: Range<Decoration>[],
+): void {
+  const lineStyle = `padding-inline-start: ${paddingCh.toString()}ch;`;
+  for (let child = item.firstChild; child; child = child.nextSibling) {
+    if (child.name !== "Paragraph" && child.name !== "Task") continue;
+    const first = state.doc.lineAt(child.from).number;
+    const last = state.doc.lineAt(child.to).number;
+    for (let n = first + 1; n <= last; n++) {
+      const line = state.doc.line(n);
+      if (line.length === 0) continue;
+      allRanges.push(Decoration.line({ attributes: { style: lineStyle } }).range(line.from));
+      const ws = LEADING_WS_RE.exec(line.text)?.[0].length ?? 0;
+      if (ws > 0) {
+        allRanges.push(listContinuationIndentDecoration.range(line.from, line.from + ws));
+        atomicRanges.push(listPrefixMarkerDecoration.range(line.from, line.from + ws));
+      }
+    }
+  }
+}
 
 interface ParsedBulletTaskLine {
   lineFrom: number;
@@ -160,7 +197,12 @@ function buildListDecorations(state: EditorState): ListDecorations {
         if (prefixEnd < line.to) {
           allRanges.push(listBodyDecoration.range(prefixEnd, line.to));
         }
-        allRanges.push(orderedLineDecoration.range(line.from));
+        const item = node.node.parent;
+        const gap = item !== null && prevListItem(item) !== null;
+        allRanges.push(listMarkerLineDecoration(orderedLineStyle, gap).range(line.from));
+        if (item) {
+          pushContinuationLines(state, item, LIST_UNIT_CH, allRanges, atomicRanges);
+        }
         return;
       }
 
@@ -239,7 +281,12 @@ function buildListDecorations(state: EditorState): ListDecorations {
       // continuation lines keep the padding so body text stays aligned.
       const prefixCh = (depth + 1) * LIST_UNIT_CH;
       const lineStyle = `padding-inline-start: ${prefixCh.toString()}ch; text-indent: -${prefixCh.toString()}ch;`;
-      allRanges.push(Decoration.line({ attributes: { style: lineStyle } }).range(line.from));
+      const item = node.node.parent;
+      const gap = item !== null && prevListItem(item) !== null;
+      allRanges.push(listMarkerLineDecoration(lineStyle, gap).range(line.from));
+      if (item) {
+        pushContinuationLines(state, item, prefixCh, allRanges, atomicRanges);
+      }
     },
   });
 
@@ -266,25 +313,78 @@ const listDecorationsField = StateField.define<ListDecorations>({
   ],
 });
 
-// Find the indent of the nearest list-item line above `lineNumber` whose
-// own indent matches the predicate. Used by indent / outdent to align the
-// current line to a valid CommonMark parent. Returns -1 if none found
-// before a blank line breaks the list context, or after PREV_LIST_LOOKBACK
-// lines (defensive cap so giant docs don't pay an O(n) scan per keystroke).
-const findPrevListItemIndent = (
-  state: EditorState,
-  lineNumber: number,
-  predicate: (indent: number) => boolean,
-): number => {
-  const stop = Math.max(1, lineNumber - PREV_LIST_LOOKBACK);
-  for (let i = lineNumber - 1; i >= stop; i--) {
-    const prev = state.doc.line(i);
-    if (prev.text.trim() === "") return -1;
-    const parsed = parseBulletTaskLine(prev);
-    if (parsed && predicate(parsed.indentLen)) return parsed.indentLen;
-  }
-  return -1;
-};
+// A list item line as the syntax tree sees it — bullet, task, or ordered.
+// `leadingWs` is the source whitespace before the marker. `contentWs` is the
+// whitespace a line needs to nest under this item: the leading whitespace
+// plus the marker span with non-tab characters turned into spaces, so a
+// child of `1. a` gets three spaces, a child of `\t- b` gets a tab and two
+// spaces, and a child of `-   a` lands on the real content column. Lezer
+// decides all of that per CommonMark, so nesting targets come from its tree
+// rather than from a hand-rolled line scan: that keeps Tab correct across
+// blank lines (loose lists), continuation paragraphs, ordered parents, and
+// tab indentation, none of which a "previous line with a smaller indent"
+// walk gets right.
+interface ListItemLine {
+  line: Line;
+  item: SyntaxNode;
+  markFrom: number;
+  leadingWs: string;
+  contentWs: string;
+}
+
+function listItemLineAt(state: EditorState, line: Line): ListItemLine | null {
+  // The first `ListMark` on the line belongs to the line's own item; a
+  // marker nested on the same line (`- - b`) comes later in document order.
+  let mark: SyntaxNode | null = null;
+  syntaxTree(state).iterate({
+    from: line.from,
+    to: line.to,
+    enter: (node) => {
+      if (mark) return false;
+      if (node.name === "ListMark" && node.from >= line.from) {
+        mark = node.node;
+        return false;
+      }
+      return undefined;
+    },
+  });
+  if (!mark) return null;
+  const markNode: SyntaxNode = mark;
+  const item = markNode.parent;
+  if (!item || item.name !== "ListItem") return null;
+
+  const content = markNode.nextSibling;
+  const contentFrom =
+    content && content.from <= line.to ? content.from : Math.min(markNode.to + 1, line.to);
+  const leadingWs = state.doc.sliceString(line.from, markNode.from);
+  const contentWs =
+    leadingWs + state.doc.sliceString(markNode.from, contentFrom).replace(/[^\t]/g, " ");
+  return { line, item, markFrom: markNode.from, leadingWs, contentWs };
+}
+
+const isListNode = (node: SyntaxNode | null): node is SyntaxNode =>
+  node?.name === "BulletList" || node?.name === "OrderedList";
+
+// The item just before `item` at the same nesting level: its previous
+// sibling, or the last item of an adjacent list when `item` opens a new
+// list (a different bullet character, or a bullet after an ordered item).
+function prevListItem(item: SyntaxNode): SyntaxNode | null {
+  const prev = item.prevSibling;
+  if (prev?.name === "ListItem") return prev;
+  const prevList = item.parent?.prevSibling ?? null;
+  if (!isListNode(prevList)) return null;
+  const last = prevList.lastChild;
+  return last?.name === "ListItem" ? last : null;
+}
+
+function parentListItem(item: SyntaxNode): SyntaxNode | null {
+  const parent = item.parent?.parent ?? null;
+  return parent?.name === "ListItem" ? parent : null;
+}
+
+function listItemLineOf(state: EditorState, item: SyntaxNode): ListItemLine | null {
+  return listItemLineAt(state, state.doc.lineAt(item.from));
+}
 
 // Walk the syntax tree across the entire line range looking for a list
 // marker. The previous `resolveInner(pos)` ancestor-walk approach worked
@@ -364,57 +464,84 @@ function selectedLineNumbers(state: EditorState): number[] {
   return [...numbers].sort((a, b) => a - b);
 }
 
-const listIndentSelection: StateCommand = ({ state, dispatch }) => {
-  const changes: ChangeSpec[] = [];
-  let sawListLine = false;
+type ReindentMode = "indent" | "outdent";
 
-  for (const lineNumber of selectedLineNumbers(state)) {
-    const line = state.doc.line(lineNumber);
-    const parsed = listLineAt(state, line.from);
-    if (!parsed) continue;
-    sawListLine = true;
+// Tab nests an item under the item before it at the same level, so the new
+// indent is that item's content column. Shift-Tab lifts an item to its
+// parent's indent (top-level items stay put). `null` means the line has
+// nowhere to go.
+function reindentTarget(
+  state: EditorState,
+  mode: ReindentMode,
+  entry: ListItemLine,
+): string | null {
+  if (mode === "indent") {
+    const prev = prevListItem(entry.item);
+    return prev ? (listItemLineOf(state, prev)?.contentWs ?? null) : null;
+  }
+  const parent = parentListItem(entry.item);
+  if (!parent) return entry.leadingWs === "" ? null : "";
+  return listItemLineOf(state, parent)?.leadingWs ?? null;
+}
 
-    const prevIndent = findPrevListItemIndent(
-      state,
-      line.number,
-      (indent) => indent <= parsed.indentLen,
+// Tab / Shift-Tab over every selected list line. Lines are visited top to
+// bottom; a line indented deeper than the last line that chose its own
+// target is that line's descendant and moves with it (same whitespace edit),
+// so a selected parent drags its children along instead of leaving them
+// behind as its new siblings. Every other line picks its own target from the
+// pre-edit tree. Non-list lines are left alone; Tab is still consumed when
+// any list line was selected so `indentWithTab` can't insert a literal tab.
+const reindentListLines =
+  (mode: ReindentMode): StateCommand =>
+  ({ state, dispatch }) => {
+    if (state.readOnly) return false;
+    const changes: ChangeSpec[] = [];
+    let sawListLine = false;
+    let anchor: { oldWs: string; newWs: string } | null = null;
+
+    for (const lineNumber of selectedLineNumbers(state)) {
+      const entry = listItemLineAt(state, state.doc.line(lineNumber));
+      if (!entry) continue;
+      sawListLine = true;
+
+      let newWs: string;
+      if (
+        anchor &&
+        entry.leadingWs.length > anchor.oldWs.length &&
+        entry.leadingWs.startsWith(anchor.oldWs)
+      ) {
+        newWs = anchor.newWs + entry.leadingWs.slice(anchor.oldWs.length);
+      } else {
+        newWs = reindentTarget(state, mode, entry) ?? entry.leadingWs;
+        anchor = { oldWs: entry.leadingWs, newWs };
+      }
+      if (newWs === entry.leadingWs) continue;
+      changes.push({ from: entry.line.from, to: entry.markFrom, insert: newWs });
+    }
+
+    if (!sawListLine) return false;
+    if (changes.length === 0) return true;
+
+    const changeSet = state.changes(changes);
+    // A caret at a line start stays there; anything at or after the marker
+    // rides along with the re-indented prefix.
+    const mapPos = (pos: number) =>
+      changeSet.mapPos(pos, pos === state.doc.lineAt(pos).from ? -1 : 1);
+    const selection = EditorSelection.create(
+      state.selection.ranges.map((range) =>
+        EditorSelection.range(mapPos(range.anchor), mapPos(range.head)),
+      ),
+      state.selection.mainIndex,
     );
-    if (prevIndent < 0) continue;
-
-    const targetIndent = prevIndent + LIST_INDENT_SPACES;
-    if (parsed.indentLen >= targetIndent) continue;
-
-    changes.push({ from: line.from, insert: " ".repeat(targetIndent - parsed.indentLen) });
-  }
-
-  if (!sawListLine) return false;
-  if (changes.length > 0) {
-    dispatch(state.update({ changes, userEvent: "input.indent" }));
-  }
-  return true;
-};
-
-const listOutdentSelection: StateCommand = ({ state, dispatch }) => {
-  const changes: ChangeSpec[] = [];
-  let sawListLine = false;
-
-  for (const lineNumber of selectedLineNumbers(state)) {
-    const line = state.doc.line(lineNumber);
-    const parsed = listLineAt(state, line.from);
-    if (!parsed) continue;
-    sawListLine = true;
-    if (parsed.indentLen === 0) continue;
-
-    const removeLen = Math.min(LIST_INDENT_SPACES, parsed.indentLen);
-    changes.push({ from: line.from, to: line.from + removeLen });
-  }
-
-  if (!sawListLine) return false;
-  if (changes.length > 0) {
-    dispatch(state.update({ changes, userEvent: "delete.outdent" }));
-  }
-  return true;
-};
+    dispatch(
+      state.update({
+        changes: changeSet,
+        selection,
+        userEvent: mode === "indent" ? "input.indent" : "delete.outdent",
+      }),
+    );
+    return true;
+  };
 
 function listPrefixBoundaryMove(state: EditorState, direction: "left" | "right"): number | null {
   const sel = state.selection.main;
@@ -556,79 +683,12 @@ const listPrefixArrowKeymap = Prec.highest(
 // handlers testable: tests can call them with `{state, dispatch}` directly
 // (no `EditorView`/DOM needed). EditorView satisfies the same shape, so
 // they still bind to the keymap without changes.
-
-// Tab on a list line: nest one level deeper by aligning to the previous
-// list item's content column (= prev indent + 2 for `- ` markers). That
-// matches CommonMark's rule that a nested item's indent must be ≥ the
-// parent's content column, while staying within the parent's `+3` window
-// (which is what blanket "insert 2 spaces" violates once the chain of
-// parents above isn't deep enough — Lezer reclassifies the line as a code
-// continuation and the bullet vanishes). Always consumes Tab on a list
-// line (even when nesting is a no-op) so `indentWithTab` doesn't fall
-// through and insert a literal `\t` — that would break the list parse.
-const listIndent: StateCommand = ({ state, dispatch }) => {
-  if (state.readOnly) return false;
-  if (state.selection.ranges.length !== 1 || !state.selection.main.empty) {
-    return listIndentSelection({ state, dispatch });
-  }
-  const sel = state.selection.main;
-  if (!isOnListLine(state, sel.head)) return false;
-
-  const line = state.doc.lineAt(sel.head);
-  // Ordered-list lines: nothing to nest, but still consume Tab (see above).
-  const parsed = parseBulletTaskLine(line);
-  if (!parsed) return true;
-  const currentIndent = parsed.indentLen;
-
-  const prevIndent = findPrevListItemIndent(state, line.number, (i) => i <= currentIndent);
-  if (prevIndent < 0) return true;
-  const targetIndent = prevIndent + LIST_INDENT_SPACES;
-  if (currentIndent >= targetIndent) return true;
-
-  const insertLen = targetIndent - currentIndent;
-  dispatch(
-    state.update({
-      changes: { from: line.from, insert: " ".repeat(insertLen) },
-      selection: { anchor: sel.head + insertLen },
-      userEvent: "input.indent",
-    }),
-  );
-  return true;
-};
-
-// Shift-Tab on a list line: align to the nearest previous list item with
-// a strictly shallower indent — i.e. step up one nesting level.
-const listOutdent: StateCommand = ({ state, dispatch }) => {
-  if (state.readOnly) return false;
-  if (state.selection.ranges.length !== 1 || !state.selection.main.empty) {
-    return listOutdentSelection({ state, dispatch });
-  }
-  const sel = state.selection.main;
-  if (!isOnListLine(state, sel.head)) return false;
-
-  const line = state.doc.lineAt(sel.head);
-  const parsed = parseBulletTaskLine(line);
-  if (!parsed) return true;
-  const currentIndent = parsed.indentLen;
-  if (currentIndent === 0) return true;
-
-  const prevIndent = findPrevListItemIndent(state, line.number, (i) => i < currentIndent);
-  const targetIndent = Math.max(0, prevIndent);
-
-  const removeLen = currentIndent - targetIndent;
-  if (removeLen <= 0) return true;
-
-  const cursorOffsetInLine = sel.head - line.from;
-  const newHead = line.from + Math.max(targetIndent, cursorOffsetInLine - removeLen);
-  dispatch(
-    state.update({
-      changes: { from: line.from, to: line.from + removeLen },
-      selection: { anchor: newHead },
-      userEvent: "delete.outdent",
-    }),
-  );
-  return true;
-};
+//
+// Tab always consumes the keystroke on a list line (even when nesting is a
+// no-op) so `indentWithTab` doesn't fall through and insert a literal `\t`,
+// which would break the list parse.
+const listIndent: StateCommand = reindentListLines("indent");
+const listOutdent: StateCommand = reindentListLines("outdent");
 
 const listEnter: StateCommand = ({ state, dispatch }) => {
   if (state.readOnly) return false;
@@ -644,8 +704,24 @@ const listEnter: StateCommand = ({ state, dispatch }) => {
 
   const line = state.doc.lineAt(sel.head);
 
-  // Empty list item → wipe and break out of the list.
+  // Empty list item: a nested one steps out to its parent's level (prefix
+  // kept, so the user is still on a bullet); a top-level one is wiped so
+  // the caret lands on a plain paragraph line.
   if (parsed.bodyFrom === line.to) {
+    const entry = listItemLineAt(state, line);
+    const parent = entry ? parentListItem(entry.item) : null;
+    const parentLine = parent ? listItemLineOf(state, parent) : null;
+    if (entry && parentLine) {
+      const delta = parentLine.leadingWs.length - entry.leadingWs.length;
+      dispatch(
+        state.update({
+          changes: { from: line.from, to: entry.markFrom, insert: parentLine.leadingWs },
+          selection: { anchor: line.to + delta },
+          userEvent: "delete.outdent",
+        }),
+      );
+      return true;
+    }
     dispatch(
       state.update({
         changes: { from: line.from, to: line.to },
@@ -803,7 +879,9 @@ export const __test = {
   isOnListLine,
   listPrefixBoundaryMove,
   parseBulletTaskLine,
-  findPrevListItemIndent,
+  listItemLineAt,
+  listContinuationIndentDecoration,
+  LIST_ITEM_GAP_CLASS,
   listEnter,
   listBackspace,
   listIndent,
