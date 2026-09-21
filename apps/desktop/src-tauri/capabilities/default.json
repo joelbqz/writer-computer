@@ -12,7 +12,6 @@
     "store:default",
     "core:window:allow-show",
     "core:window:allow-close",
-    "core:window:allow-start-dragging",
-    "core:webview:allow-set-webview-zoom"
+    "core:window:allow-start-dragging"
   ]
 }

@@ -2,10 +2,9 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { DEFAULT_ZOOM, ZOOM_SETTING_KEY, zoomInFrom, zoomOutFrom } from "@/lib/zoom";
 
 // Imperative zoom actions for the keyboard handler and the command palette.
-// Every path writes the `window.zoom` setting; the settings store applies it
-// to the webview as a side effect, so there is one write path. A rejected
-// `setZoom` (only a missing permission can cause it) is logged by
-// `applyWindowZoom` and retried on the next change.
+// Every path writes the `editor.zoom` setting; the settings store pushes it
+// to `--writer-editor-zoom` through the generic cssVar binding, so there is
+// one write path and no zoom-specific side effect.
 
 function writeZoom(next: number) {
   const { settings, setSetting } = useSettingsStore.getState();

@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import * as tauri from "@/lib/tauri";
 import { applyCssVarBindings, applyTheme } from "@/lib/theme";
-import { applyWindowZoom, ZOOM_SETTING_KEY } from "@/lib/zoom";
 import type { SettingsMap, SettingKey } from "@/lib/settings-schema";
 
 interface SettingsState {
@@ -27,7 +26,6 @@ interface SettingsState {
 function applySettingsSideEffects(settings: Record<string, unknown>) {
   applyTheme(settings["appearance.theme"], settings);
   applyCssVarBindings(settings);
-  applyWindowZoom(settings[ZOOM_SETTING_KEY]);
 }
 
 interface PersistedSettingValue {

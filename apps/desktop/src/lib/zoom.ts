@@ -1,10 +1,11 @@
 import { SETTINGS_SCHEMA } from "./settings-schema";
-import * as tauri from "./tauri";
 
-/** Whole-window zoom, stored as a percent so the Preferences range control
+/** Editor text zoom, stored as a percent so the Preferences range control
  *  renders it without decimals and the schema's `min`/`max` own the clamp.
- *  The webview receives it as a scale factor (`percent / 100`). */
-export const ZOOM_SETTING_KEY = "window.zoom" as const;
+ *  The schema binds it to `--writer-editor-zoom`; `App.css` multiplies it
+ *  into `--writer-editor-font-size` on top of the Font Size setting, so the
+ *  editor scales while the rest of the UI stays put. */
+export const ZOOM_SETTING_KEY = "editor.zoom" as const;
 
 /** Stops that Cmd+= / Cmd+- walk through, in percent. Mirrors the browser
  *  ladder so a presenter gets the familiar 110 → 125 → 150 progression. The
@@ -49,22 +50,4 @@ export function zoomOutFrom(current: unknown): number {
     if (stop < percent) return stop;
   }
   return ZOOM_MIN;
-}
-
-let lastAppliedPercent: number | null = null;
-
-/** Settings side effect: push the persisted zoom to this window's webview.
- *  Runs on every settings change, so it dedupes on the last percent it sent
- *  and unrelated writes cost no IPC. An absent value means settings have not
- *  hydrated yet (or a fixture without the key): nothing to apply. */
-export function applyWindowZoom(value: unknown): void {
-  if (value === undefined || value === null) return;
-  const percent = normalizeZoom(value);
-  if (percent === lastAppliedPercent) return;
-  lastAppliedPercent = percent;
-  tauri.setWebviewZoom(percent / 100).catch((error: unknown) => {
-    // Let the next change retry rather than believing the zoom landed.
-    lastAppliedPercent = null;
-    console.error("Failed to apply window zoom", error);
-  });
 }

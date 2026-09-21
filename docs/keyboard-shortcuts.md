@@ -17,15 +17,16 @@ These shortcuts are handled by the global `useKeyboardShortcuts` hook and work r
 | Ctrl+Tab        | Next tab                                                           |
 | Ctrl+Shift+Tab  | Previous tab                                                       |
 | Cmd+1 ... Cmd+9 | Jump to Nth tab                                                    |
-| Cmd+= / Cmd++   | Zoom in (whole window; numpad + works too)                         |
-| Cmd+-           | Zoom out (Cmd+Shift+- and numpad − work too)                       |
+| Cmd+= / Cmd++   | Zoom editor text in (numpad + works too)                           |
+| Cmd+-           | Zoom editor text out (Cmd+Shift+- and numpad − work too)           |
 | Cmd+0           | Actual size (zoom back to 100%)                                    |
 | Alt+ArrowLeft   | Navigate back                                                      |
 | Alt+ArrowRight  | Navigate forward                                                   |
 
-Zoom scales the whole window, like a browser, in preset stops (50–300%). The
-current percent is the global `window.zoom` setting (Preferences → Window →
-Zoom) and is restored on launch. It never changes `editor.font-size`.
+Zoom scales the note text only, in preset stops (50–300%); the sidebar, tab
+strip, and status bar keep their size. The current percent is the global
+`editor.zoom` setting (Preferences → Editor → Zoom), restored on launch, and
+is multiplied on top of `editor.font-size`, which it never changes.
 
 In compact single-file windows, sidebar and tab-management shortcuts do not
 create hidden UI state: Cmd+\\, Cmd+T, Ctrl+Tab, Ctrl+Shift+Tab, and Cmd+1 ...

@@ -116,8 +116,9 @@ export function useKeyboardShortcuts() {
       }
 
       // Cmd+= / Cmd++ / Cmd+numpad + — zoom in; Cmd+- — zoom out; Cmd+0 —
-      // actual size. Whole-window zoom, so compact windows take it too. Alt
-      // chords are left alone: Cmd+Alt+0 is the editor's "strip heading".
+      // actual size. Editor text zoom (a percent on top of Font Size), so it
+      // needs no workspace and compact windows take it too. Alt chords are
+      // left alone: Cmd+Alt+0 is the editor's "strip heading".
       if (mod && !e.altKey) {
         if (e.key === "=" || e.key === "+" || e.code === "NumpadAdd") {
           e.preventDefault();

@@ -2,7 +2,7 @@
 
 ## 2026-09-21
 
-- Add view zoom. Cmd+= (also Cmd+Shift+= for a literal Cmd++, and the numpad +) makes the whole window bigger one stop at a time, Cmd+- makes it smaller, and Cmd+0 returns to actual size, the same as in a browser. Zoom scales everything, sidebar included, so a note mirrored to a meeting screen reads at a distance; hide the sidebar with Cmd+\ if you want only the text. The stops run from 50% to 300% (100, 110, 125, 150, 175, 200, 250, 300 going up). The level is remembered across launches, appears under Preferences → Window as Zoom, and never touches the editor Font Size setting, so resetting zoom returns to your chosen size. The commands are also in the command palette as Zoom In, Zoom Out, and Reset Zoom, and they work in compact single-file windows. A focused Mermaid diagram no longer zooms itself on Cmd+=, Cmd+-, or Cmd+0.
+- Add editor zoom. Cmd+= (also Cmd+Shift+= for a literal Cmd++, and the numpad +) makes the note text bigger one stop at a time, Cmd+- makes it smaller, and Cmd+0 returns to actual size. Only the note scales: the sidebar, tab strip, and status bar keep their size, so a note mirrored to a meeting screen reads at a distance without the chrome growing with it. The stops run from 50% to 300% (100, 110, 125, 150, 175, 200, 250, 300 going up). The level is remembered across launches, appears under Preferences → Editor as Zoom next to Font Size, and multiplies on top of Font Size rather than changing it, so resetting zoom returns to your chosen size. The commands are also in the command palette as Zoom In, Zoom Out, and Reset Zoom, and they work in compact single-file windows. A focused Mermaid diagram no longer zooms itself on Cmd+=, Cmd+-, or Cmd+0.
 
 ## 2026-09-15
 

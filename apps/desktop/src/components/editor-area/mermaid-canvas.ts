@@ -337,8 +337,8 @@ export function mountMermaidCanvas(
     // Don't hijack keys typed inside the inline source editor.
     if (editing && editorPanel.contains(e.target as Node)) return;
     if (e.target instanceof HTMLButtonElement) return;
-    // Cmd/Ctrl chords are app shortcuts (Cmd+= / Cmd+- / Cmd+0 zoom the whole
-    // window); only bare keys drive the canvas.
+    // Cmd/Ctrl chords are app shortcuts (Cmd+= / Cmd+- / Cmd+0 zoom the
+    // editor); only bare keys drive the canvas.
     if (e.metaKey || e.ctrlKey) return;
     let handled = true;
     switch (e.key) {

@@ -30,8 +30,8 @@ TODO: "View zoom shortcuts" (In Progress). Spec: [`SPECs/view-zoom-shortcuts-spe
 
 ## Result
 
-- Mechanism: whole-window WKWebView page zoom (see spec for the tradeoff against editor-font zoom).
-- New: `lib/zoom.ts` (ladder, normalize/step, `applyWindowZoom` with dedupe and explicit error log), `hooks/zoom-api.ts` (`zoomIn`/`zoomOut`/`resetZoom` over `setSetting`, no-op at bounds), `tests/zoom.test.ts` (10 tests), `e2e/specs/window-zoom.spec.js`.
-- Changed: schema (`window.zoom`), settings store side effect, `lib/tauri.ts` wrapper, keyboard hook, command palette, Mermaid canvas modifier guard, capability permission, `docs/keyboard-shortcuts.md`, CHANGELOG, TODOS.
-- No Rust code changed; `cargo test`/`clippy`/`fmt --check` run to validate the capability compiles. JS-only shortcut handling: no View menu needed.
-- Verification: `vp check` 0 errors, `vp test` 607/607, cargo test 168/168. Runtime: `e2e/specs/window-zoom.spec.js` against the `--features e2e` build, 8/8 passing (Cmd+=, Cmd+Shift+=, numpad +/−, Cmd+-, Cmd+0, Alt chord ignored, persistence across reload with `window.innerWidth` ≈ base/1.25, palette commands present and working, `editor.font-size` unchanged).
+- Mechanism: editor text zoom. First landed as whole-window WKWebView page zoom (commit be5eeae); the human asked for editor-only scope, so the follow-up commit swaps the mechanism: `editor.zoom` (percent, cssVar `--writer-editor-zoom`), `editor.font-size` rebound to `--writer-editor-base-font-size`, and `App.css` derives `--writer-editor-font-size` from the two. No permission, no IPC, no zoom-specific side effect.
+- New: `lib/zoom.ts` (ladder, normalize/step), `hooks/zoom-api.ts` (`zoomIn`/`zoomOut`/`resetZoom` over `setSetting`, no-op at bounds), `tests/zoom.test.ts`, `e2e/specs/editor-zoom.spec.js`.
+- Changed: schema, `App.css`, keyboard hook, command palette, Mermaid canvas modifier guard, `docs/keyboard-shortcuts.md`, CHANGELOG, TODOS.
+- No Rust code changed. JS-only shortcut handling: no View menu needed.
+- Verification: recorded in the final report; `e2e/specs/editor-zoom.spec.js` checks the rendered `.cm-content` font size scales while the sidebar font size and `window.innerWidth` stay fixed, that a changed Font Size is multiplied, persistence across reload, and the palette commands.
