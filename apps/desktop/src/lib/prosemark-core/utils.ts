@@ -25,6 +25,66 @@ export function treeChanged(update: { state: EditorState; startState: EditorStat
   return syntaxTree(update.state) !== syntaxTree(update.startState);
 }
 
+/** The lines CodeMirror renders outside the viewport. `ViewState.updateForViewport`
+ *  keeps the main selection's anchor and head lines in the DOM wherever the
+ *  viewport is, and the measure loop writes what those lines measure at into
+ *  the height map. A plugin that only decorates `view.visibleRanges` leaves
+ *  them bare, so a heading or code line holding the caret measures at
+ *  plain-paragraph height once it scrolls out, and everything above the
+ *  viewport moves by the difference. See docs/editor.md ("Decorate what
+ *  CodeMirror renders"). */
+export function offscreenSelectionLines(view: {
+  state: EditorState;
+  viewport: RangeLike;
+}): RangeLike[] {
+  const { anchor, head } = view.state.selection.main;
+  const { from, to } = view.viewport;
+  const lines: RangeLike[] = [];
+  for (const pos of anchor === head ? [head] : [anchor, head]) {
+    if (pos >= from && pos <= to) continue;
+    const line = view.state.doc.lineAt(pos);
+    if (lines.some((l) => l.from === line.from)) continue;
+    lines.push({ from: line.from, to: line.to });
+  }
+  return lines;
+}
+
+/** Everything CodeMirror has in the DOM: `view.visibleRanges` plus
+ *  `offscreenSelectionLines`, sorted and disjoint. Decoration plugins build
+ *  from this, never from `view.visibleRanges` directly, and rebuild on
+ *  `renderedRangesChanged` rather than `update.viewportChanged`. */
+export function renderedRanges(view: {
+  state: EditorState;
+  viewport: RangeLike;
+  visibleRanges: readonly RangeLike[];
+}): readonly RangeLike[] {
+  const extra = offscreenSelectionLines(view);
+  if (extra.length === 0) return view.visibleRanges;
+  return [...view.visibleRanges, ...extra].sort((a, b) => a.from - b.from);
+}
+
+/** True when `renderedRanges` may differ from the previous update: the
+ *  viewport moved, or the selection's off-viewport lines changed. A caret
+ *  moving between lines inside the viewport does not count. */
+export function renderedRangesChanged(update: {
+  viewportChanged: boolean;
+  selectionSet: boolean;
+  startState: EditorState;
+  view: { state: EditorState; viewport: RangeLike };
+}): boolean {
+  if (update.viewportChanged) return true;
+  if (!update.selectionSet) return false;
+  const before = offscreenSelectionLines({
+    state: update.startState,
+    viewport: update.view.viewport,
+  });
+  const after = offscreenSelectionLines(update.view);
+  return (
+    before.length !== after.length ||
+    before.some((r, i) => r.from !== after[i]!.from || r.to !== after[i]!.to)
+  );
+}
+
 function isWidgetType(value: unknown): value is WidgetType {
   return (
     typeof value === "object" &&

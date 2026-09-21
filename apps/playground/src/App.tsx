@@ -9,6 +9,7 @@ import {
   prosemarkBaseThemeSetup,
   prosemarkMarkdownSyntaxExtensions,
 } from "@/lib/prosemark-core/main";
+import { headingDecorations } from "@/components/editor-area/heading-decorations";
 import { markdownFormatting } from "@/components/editor-area/markdown-formatting";
 import { viewportParsePlugin } from "@/components/editor-area/viewport-parse";
 import "@/components/editor-area/prosemark-theme.css";
@@ -74,6 +75,7 @@ export function App() {
           drawSelection(),
           prosemarkBaseThemeSetup(),
           viewportParsePlugin,
+          headingDecorations,
           markdownFormatting,
           EditorView.updateListener.of((update) => {
             if (update.docChanged) setDoc(update.state.doc.toString());
@@ -85,7 +87,8 @@ export function App() {
       }),
     });
     // Exposed for browser automation: `window.__view.state.doc.toString()`.
-    (window as unknown as { __view: EditorView }).__view = view;
+    (window as unknown as { __view: EditorView; __EditorView: typeof EditorView }).__view = view;
+    (window as unknown as { __EditorView: typeof EditorView }).__EditorView = EditorView;
     view.focus();
     return () => view.destroy();
   }, []);

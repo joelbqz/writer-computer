@@ -29,6 +29,7 @@ import {
 } from "@/lib/wiki-links";
 import { attachStableImageHeight } from "@/lib/prosemark-core/fold/image";
 import { getEffectiveSelectionRanges } from "./drag-selection-gate";
+import { renderedRanges, renderedRangesChanged } from "@/lib/prosemark-core/utils";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -200,7 +201,7 @@ function buildDecorations(view: EditorView, getFilePath: () => string): Decorati
   const workspaceRoot = getWorkspaceRoot();
   const currentFilePath = getFilePath() || null;
 
-  for (const { from, to } of view.visibleRanges) {
+  for (const { from, to } of renderedRanges(view)) {
     const text = doc.sliceString(from, to);
     WIKI_LINK_RE.lastIndex = 0;
     let match;
@@ -246,7 +247,7 @@ function wikiLinkDecorations(getFilePath: () => string) {
       }
 
       update(update: ViewUpdate) {
-        if (update.docChanged || update.viewportChanged || update.selectionSet) {
+        if (update.docChanged || renderedRangesChanged(update) || update.selectionSet) {
           this.decorations = buildDecorations(update.view, getFilePath);
         }
       }
