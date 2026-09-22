@@ -2,6 +2,7 @@
 
 ## 2026-09-22
 
+- Fix holding Down (or Up) in a long note leaving the caret behind: the view scrolled for about a screen, then stopped while the caret kept moving off-screen. The box the editor sits in was only as tall as the window, and CodeMirror won't scroll past the edge of a box its content overflows, so it never asked the real scroll area to move further. That box now grows with the note (and still fills the window for short notes), so the view follows the caret to the end and back. Reported in [#125](https://github.com/joelbqz/writer-computer/issues/125).
 - Make writer.computer's download button always point at the latest published release. The site used to bake the version in when it was deployed, so it went on offering an old build (0.6.1, while 0.7.2 was out) until someone redeployed it by hand. The page now asks GitHub for the latest published release when it loads and points the button and the version label at that release's macOS DMG; the built-in version is only shown if GitHub cannot be reached. See [docs/website-deploy.md](./docs/website-deploy.md).
 
 ## 2026-09-21

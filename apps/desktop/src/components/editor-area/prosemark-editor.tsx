@@ -21,5 +21,8 @@ export function ProseMarkEditor({
     autoFocus ?? false,
     onViewChange,
   );
-  return <div ref={editorRef} className="h-full" />;
+  // `min-h-full`, not `h-full`: CodeMirror's scroll-into-view clips the caret
+  // rect to every ancestor whose content overflows it, so a viewport-high
+  // mount would stop the outer scroller once the caret passed its bottom.
+  return <div ref={editorRef} className="min-h-full" />;
 }
