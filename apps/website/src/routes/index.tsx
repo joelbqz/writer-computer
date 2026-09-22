@@ -2,6 +2,7 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 
 import { useAnalytics } from "../analytics";
 import { AppleGlyph, WriterMark } from "../components/Mark";
+import { useLatestRelease } from "../use-latest-release";
 
 const FEATURES = [
   { label: "Private", description: "all your documents live in your computer" },
@@ -29,6 +30,7 @@ export const Route = createFileRoute("/")({
 
 function HomePage() {
   const capture = useAnalytics();
+  const release = useLatestRelease();
 
   return (
     <div className="page">
@@ -65,14 +67,14 @@ function HomePage() {
         <div className="cta">
           <a
             className="download"
-            href={__WRITER_DMG_URL__}
-            onClick={() => capture("download_started", { app_version: __WRITER_VERSION__ })}
+            href={release.dmgUrl}
+            onClick={() => capture("download_started", { app_version: release.version })}
           >
             <AppleGlyph size={20} />
             <span>Download for MacOS</span>
           </a>
           <span className="beta-pill">Beta</span>
-          <span className="version">v{__WRITER_VERSION__}</span>
+          <span className="version">v{release.version}</span>
         </div>
 
         <p className="caption">Free and open source. Forever</p>

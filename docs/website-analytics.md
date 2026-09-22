@@ -21,8 +21,11 @@ Four events. That is the whole list.
 | `github_opened`    | The **GitHub** link in the header is clicked        |
 | `download_started` | The **Download for MacOS** button is clicked        |
 
-`download_started` carries one property, `app_version` — the version the site
-was built to advertise, taken from `tauri.conf.json`. No other event carries a
+`download_started` carries one property, `app_version` — the version the
+button pointed at when it was clicked. That is GitHub's latest published release
+once the page has looked it up (see [website-deploy.md](./website-deploy.md),
+"Download link"), or the version the site was built with, from
+`tauri.conf.json`, if that lookup did not answer. No other event carries a
 custom property, and `useAnalytics` is typed so that no other property can be
 attached without changing this document in the same commit.
 
