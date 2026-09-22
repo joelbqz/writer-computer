@@ -33,6 +33,7 @@ export default defineConfig({
     port: 5173,
   },
   define: {
+    __WRITER_RELEASE_REPO__: JSON.stringify(RELEASE_REPO),
     __WRITER_VERSION__: JSON.stringify(VERSION),
     __WRITER_DMG_URL__: JSON.stringify(DMG_URL),
     __WRITER_RELEASES_URL__: JSON.stringify(RELEASES_URL),

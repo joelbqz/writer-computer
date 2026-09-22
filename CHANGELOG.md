@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-22
+
+- Make writer.computer's download button always point at the latest published release. The site used to bake the version in when it was deployed, so it went on offering an old build (0.6.1, while 0.7.2 was out) until someone redeployed it by hand. The page now asks GitHub for the latest published release when it loads and points the button and the version label at that release's macOS DMG; the built-in version is only shown if GitHub cannot be reached. See [docs/website-deploy.md](./docs/website-deploy.md).
+
 ## 2026-09-21
 
 - Fix text and lists sitting too close under a heading. Tightening the heading line-height also removed the small breathing space below a heading, so a paragraph or list that followed it directly nearly touched the title. Heading lines now carry a little padding underneath (5.6px at the default size, the same at every level), so the gap matches what it was before.
