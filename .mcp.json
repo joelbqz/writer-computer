@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "forge": {
+      "type": "http",
+      "url": "https://forge.ui8.ai/mcp"
+    }
+  }
+}
