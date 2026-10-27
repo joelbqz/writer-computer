@@ -223,6 +223,14 @@ a {
   line-height: 1;
 }
 
+.intro {
+  margin: 20px 0 0;
+  max-width: 620px;
+  color: var(--ink-60);
+  font-size: 16px;
+  line-height: 1.45;
+}
+
 .caption {
   margin: 25px 0 0;
   color: var(--ink-60);
@@ -233,21 +241,26 @@ a {
 
 /* ---------- features ---------- */
 .features {
+  margin-top: auto;
+  padding-top: 32px;
+}
+
+.feature-list {
   list-style: none;
-  margin: auto 0 0;
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 13px;
+  gap: 8px;
 }
 
 .feature {
   font-size: 16px;
-  line-height: 1;
+  line-height: 1.3;
 }
 
 .feature-label {
-  padding-right: 6px;
+  padding-right: 2px;
   color: var(--ink);
   font-weight: 400;
 }
@@ -270,7 +283,11 @@ a {
 }
 
 .shot {
+  /* Containing block for the sr-only caption, so it can't widen the page
+     from inside the horizontally scrolling strip on mobile. */
+  position: relative;
   display: block;
+  margin: 0;
   width: 100%;
   height: auto;
   aspect-ratio: 1920 / 1206;
@@ -285,6 +302,75 @@ a {
   height: 100%;
   object-fit: cover;
   opacity: 1;
+}
+
+/* ---------- details (below the hero) ---------- */
+.details {
+  max-width: calc(720px + 2 * var(--gutter-x));
+  padding: 120px var(--gutter-x) 0;
+}
+
+.details-section + .details-section {
+  margin-top: 80px;
+}
+
+.details h2 {
+  margin: 0 0 20px;
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.details h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.details p {
+  margin: 0;
+  color: var(--ink-60);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.details p + p {
+  margin-top: 12px;
+}
+
+.faq-item + .faq-item {
+  margin-top: 24px;
+}
+
+.site-footer {
+  padding: 80px var(--gutter-x) 47px;
+}
+
+.site-footer p {
+  margin: 0;
+  color: var(--ink-50);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.site-footer a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ---------- responsive ---------- */
@@ -331,13 +417,39 @@ a {
     font-size: 12px;
   }
 
+  .intro {
+    margin-top: 12px;
+    font-size: 15px;
+  }
+
   .features {
-    gap: 8px;
+    padding-top: 24px;
   }
 
   .feature {
     font-size: 15px;
     line-height: 140%;
+  }
+
+  .details {
+    padding: 64px 20px 0;
+  }
+
+  .details-section + .details-section {
+    margin-top: 56px;
+  }
+
+  .details h2 {
+    font-size: 20px;
+  }
+
+  .details p,
+  .details h3 {
+    font-size: 15px;
+  }
+
+  .site-footer {
+    padding: 56px 20px 24px;
   }
 
   .headline {
