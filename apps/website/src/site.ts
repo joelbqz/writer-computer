@@ -16,6 +16,15 @@ export const AUTHOR_GITHUB_URL = "https://github.com/joelbqz";
 export const LATEST_RELEASE_URL = `${__WRITER_REPO_URL__}/releases/latest`;
 
 /**
+ * Measured on v0.8.0: the DMG is 6.1 MB, `Writer.app.tar.gz` 5.7 MB, and the
+ * installed `Writer.app` 9.2 MB. Re-measure when a release grows; the
+ * installed figure has little headroom. `llms.txt` and the README repeat these.
+ * The non-breaking spaces keep the number and unit on one line.
+ */
+export const DOWNLOAD_SIZE = "about 6\u00a0MB";
+export const INSTALLED_SIZE = "under 10\u00a0MB";
+
+/**
  * A `head().scripts` entry carrying JSON-LD. `<` is escaped so no string in the
  * data (the FAQ mentions `<details>`) can close the script element early.
  */

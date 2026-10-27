@@ -30,6 +30,11 @@ enterprise AI company), iA Writer (a direct competitor) and LibreOffice Writer.
 - **Platform and license wording.** At the owner's request the copy, JSON-LD,
   `llms.txt` and README say "macOS" and "free and open source" and nothing more
   specific: no chip or architecture requirement, no license name or link.
+- **Selling points up front.** Three claims lead the definition, the feature
+  list, the FAQ, the JSON-LD description, `llms.txt` and the README: a small
+  download (about 6 MB, under 10 MB installed), faster startup than Apple Notes
+  and Obsidian (the owner's claim; no benchmark numbers are published), and
+  instant cold starts on very large workspaces.
 - **Static discovery files** live in `apps/website/public/` and are copied to
   `dist/client/` by the build. They carry no version number, so they don't go
   stale between deploys.
@@ -54,6 +59,14 @@ enterprise AI company), iA Writer (a direct competitor) and LibreOffice Writer.
   Mermaid 12.1 type), KaTeX math (`$`, `$$`), HTML blocks, YAML frontmatter as
   properties, fenced code highlighting: `editor-extensions.ts`.
 - Telemetry: `docs/telemetry.md`.
+- Size (v0.8.0): DMG 6.1 MB, `Writer.app.tar.gz` 5.7 MB (GitHub release
+  assets), installed `Writer.app` 9.2 MB. Held in `src/site.ts`.
+- Cold starts independent of workspace size: `get_startup_state` →
+  `build_restore_bundle` reads settings, the workspace's top-level directory,
+  the session and the active note; `prepare_workspace_state` hands the watcher,
+  the full gitignore load and the index walk to a background thread
+  (`run_workspace_bootstrap`), so the window doesn't wait on them.
+- "Faster than Apple Notes and Obsidian": the owner's claim, not measured here.
 
 ## Deliverables
 

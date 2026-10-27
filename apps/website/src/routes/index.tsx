@@ -2,15 +2,23 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 
 import { useAnalytics } from "../analytics";
 import { AppleGlyph, WriterMark } from "../components/Mark";
-import { PRODUCT_NAME, SITE_URL, jsonLdScript } from "../site";
+import { DOWNLOAD_SIZE, INSTALLED_SIZE, PRODUCT_NAME, SITE_URL, jsonLdScript } from "../site";
 import { useLatestRelease } from "../use-latest-release";
 
 const FEATURES = [
+  { label: "Blazing fast", description: "Starts faster than Apple Notes and Obsidian." },
+  {
+    label: "Instant cold starts",
+    description: "Even very large workspaces open right away; indexing runs in the background.",
+  },
+  {
+    label: "Tiny",
+    description: `Only ${DOWNLOAD_SIZE} to download and ${INSTALLED_SIZE} installed.`,
+  },
   {
     label: "Private",
     description: "Your documents stay on your computer as plain markdown files.",
   },
-  { label: "Blazing fast", description: "Cold starts take a fraction of a second." },
   {
     label: "Extended markdown",
     description: "Mermaid diagrams, tables, math and HTML render right in the editor.",
@@ -73,6 +81,14 @@ const FAQ = [
   {
     question: `Is ${PRODUCT_NAME} open source?`,
     answer: `Yes. The full source code is on GitHub at github.com/joelbqz/writer-computer.`,
+  },
+  {
+    question: `Is ${PRODUCT_NAME} fast?`,
+    answer: `Yes. ${PRODUCT_NAME} starts faster than Apple Notes and Obsidian, and cold starts stay instant even on very large workspaces: it opens the window with just the top level of your folder and the note you had open, and builds the search index in the background.`,
+  },
+  {
+    question: `How big is ${PRODUCT_NAME}?`,
+    answer: `Small. The download is ${DOWNLOAD_SIZE} and the installed app is ${INSTALLED_SIZE}.`,
   },
   {
     question: "Does it work with my Obsidian vault?",
@@ -151,10 +167,11 @@ function HomePage() {
             </h1>
 
             <p className="intro">
-              {PRODUCT_NAME} is a free and open-source markdown editor for macOS. It's made for
-              people who keep their writing in plain-text folders: Obsidian vaults, docs repos and
-              personal wikis. Open a folder and edit its files in place; your notes stay ordinary
-              markdown files on your disk.
+              {PRODUCT_NAME} is a free and open-source markdown editor for macOS. It's{" "}
+              {DOWNLOAD_SIZE} to download, starts faster than Apple Notes and Obsidian, and opens
+              very large workspaces instantly. It's made for people who keep their writing in
+              plain-text folders: Obsidian vaults, docs repos and personal wikis. Your notes stay
+              ordinary markdown files on your disk.
             </p>
 
             <div className="cta">

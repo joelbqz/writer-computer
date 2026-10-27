@@ -75,6 +75,10 @@ product is defined; "Writer" alone collides with other products. See
   (name, URLs). The root route's head carries the
   `SoftwareApplication` + `Person` JSON-LD; the homepage's head carries the
   `FAQPage` JSON-LD, built from the same array as the visible FAQ.
+- The download and installed sizes in `site.ts` were measured from the v0.8.0
+  release (DMG 6.1 MB, installed app 9.2 MB). Re-measure when a release grows,
+  and update `llms.txt` and the README with them; "under 10 MB installed" has
+  little headroom.
 - `apps/website/public/robots.txt`, `sitemap.xml` and `llms.txt` are copied to
   `dist/client/` as-is. They repeat some of `site.ts` by hand, so a change to a
   stated fact (name, URLs) updates them in the same commit. They

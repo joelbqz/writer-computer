@@ -380,6 +380,16 @@ a {
   }
 }
 
+/* The sticky hero is exactly one viewport tall; on short desktop windows its
+   content would run past the bottom and never scroll into view. */
+@media (min-width: 900px) and (max-height: 719px) {
+  .hero {
+    position: static;
+    height: auto;
+    min-height: 100vh;
+  }
+}
+
 @media (max-width: 899px) {
   .page {
     flex-direction: column;

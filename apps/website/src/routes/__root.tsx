@@ -8,6 +8,7 @@ import styles from "../styles.css?url";
 import {
   AUTHOR_GITHUB_URL,
   AUTHOR_X_URL,
+  DOWNLOAD_SIZE,
   LATEST_RELEASE_URL,
   PRODUCT_NAME,
   SHORT_NAME,
@@ -16,9 +17,8 @@ import {
 } from "../site";
 
 const TITLE = `${PRODUCT_NAME} — free, open-source markdown editor for macOS`;
-const DESCRIPTION = `${PRODUCT_NAME} is a free, open-source markdown editor for macOS. Edit Obsidian vaults, docs repos and wikis as plain markdown files on your Mac.`;
-const OG_DESCRIPTION =
-  "A free, open-source markdown editor for macOS that edits your folders of plain markdown files in place.";
+const DESCRIPTION = `${PRODUCT_NAME} is a free, open-source markdown editor for macOS. It's ${DOWNLOAD_SIZE} to download, starts faster than Apple Notes and Obsidian, and opens very large workspaces instantly.`;
+const OG_DESCRIPTION = `A free, open-source markdown editor for macOS: ${DOWNLOAD_SIZE} to download and faster to start than Apple Notes and Obsidian.`;
 
 const AUTHOR_ID = `${SITE_URL}/#author`;
 
