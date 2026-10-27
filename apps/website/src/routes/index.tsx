@@ -2,14 +2,7 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 
 import { useAnalytics } from "../analytics";
 import { AppleGlyph, WriterMark } from "../components/Mark";
-import {
-  LICENSE_NAME,
-  LICENSE_URL,
-  PRODUCT_NAME,
-  REQUIREMENTS,
-  SITE_URL,
-  jsonLdScript,
-} from "../site";
+import { PRODUCT_NAME, SITE_URL, jsonLdScript } from "../site";
 import { useLatestRelease } from "../use-latest-release";
 
 const FEATURES = [
@@ -79,11 +72,7 @@ const FAQ = [
   },
   {
     question: `Is ${PRODUCT_NAME} open source?`,
-    answer: `Yes. The full source code is on GitHub at github.com/joelbqz/writer-computer, under the GNU General Public License v3.0 (GPL-3.0).`,
-  },
-  {
-    question: "Does it run on Intel Macs, Windows or Linux?",
-    answer: `No. ${PRODUCT_NAME} is only released for Macs with Apple silicon (M1 or later). There are no downloads for Intel Macs, Windows or Linux.`,
+    answer: `Yes. The full source code is on GitHub at github.com/joelbqz/writer-computer.`,
   },
   {
     question: "Does it work with my Obsidian vault?",
@@ -162,10 +151,10 @@ function HomePage() {
             </h1>
 
             <p className="intro">
-              {PRODUCT_NAME} is a free, open-source ({LICENSE_NAME}) markdown editor for macOS on
-              Apple silicon. It's made for people who keep their writing in plain-text folders:
-              Obsidian vaults, docs repos and personal wikis. Open a folder and edit its files in
-              place; your notes stay ordinary markdown files on your disk.
+              {PRODUCT_NAME} is a free and open-source markdown editor for macOS. It's made for
+              people who keep their writing in plain-text folders: Obsidian vaults, docs repos and
+              personal wikis. Open a folder and edit its files in place; your notes stay ordinary
+              markdown files on your disk.
             </p>
 
             <div className="cta">
@@ -234,8 +223,7 @@ function HomePage() {
 
       <footer className="site-footer">
         <p>
-          {PRODUCT_NAME} v{release.version}. {REQUIREMENTS}. Free and open source under{" "}
-          <a href={LICENSE_URL}>{LICENSE_NAME}</a>.
+          {PRODUCT_NAME} v{release.version} for macOS. Free and open source.
         </p>
       </footer>
     </>

@@ -13,15 +13,7 @@ export const PRODUCT_NAME = "Writer Computer";
 export const SHORT_NAME = "Writer";
 export const AUTHOR_X_URL = "https://x.com/joelbqz";
 export const AUTHOR_GITHUB_URL = "https://github.com/joelbqz";
-export const LICENSE_NAME = "GPL-3.0";
-export const LICENSE_URL = `${__WRITER_REPO_URL__}/blob/master/LICENSE`;
 export const LATEST_RELEASE_URL = `${__WRITER_REPO_URL__}/releases/latest`;
-
-/**
- * Every Apple silicon Mac ships with macOS 11 or later, so the bundle's
- * `minimumSystemVersion` (10.15) never binds; the chip is the requirement.
- */
-export const REQUIREMENTS = "Requires a Mac with Apple silicon (M1 or later)";
 
 /**
  * A `head().scripts` entry carrying JSON-LD. `<` is escaped so no string in the

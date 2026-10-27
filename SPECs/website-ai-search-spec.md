@@ -6,8 +6,7 @@ AI search engines (ChatGPT, Perplexity, Claude, Google AI Overviews) answer
 "what is a good markdown editor for my Obsidian vault on a Mac" by quoting pages
 they can read. writer.computer gives them almost nothing: the prerendered
 homepage is ~6.6 KB with one `h1`, five feature labels and nine uncaptioned
-videos. There is no definition of the product, no requirements, no license or
-privacy statement, no FAQ, no structured data, no `llms.txt` or `sitemap.xml`,
+videos. There is no definition of the product, no privacy statement, no FAQ, no structured data, no `llms.txt` or `sitemap.xml`,
 and `robots.txt` is Cloudflare's managed stub with no `Sitemap` line.
 
 The name is also ambiguous. "Writer" alone collides with writer.com (an
@@ -26,8 +25,11 @@ enterprise AI company), iA Writer (a direct competitor) and LibreOffice Writer.
   drift.
 - **Keep the design.** The first screen is unchanged apart from a short
   definition paragraph under the headline and fuller feature sentences. The new
-  text (folders section, FAQ, version and requirements line) sits below the
+  text (folders section, FAQ, version line) sits below the
   hero/video columns in the same type and colours.
+- **Platform and license wording.** At the owner's request the copy, JSON-LD,
+  `llms.txt` and README say "macOS" and "free and open source" and nothing more
+  specific: no chip or architecture requirement, no license name or link.
 - **Static discovery files** live in `apps/website/public/` and are copied to
   `dist/client/` by the build. They carry no version number, so they don't go
   stale between deploys.
@@ -37,11 +39,7 @@ enterprise AI company), iA Writer (a direct competitor) and LibreOffice Writer.
 
 ## Facts and where they were verified
 
-- Free, GPL-3.0: `LICENSE`.
-- Apple silicon only: `scripts/distribute.sh` builds on the host and the site
-  links only `*_aarch64.dmg`. `minimumSystemVersion` is `10.15`, but every Apple
-  silicon Mac ships with macOS 11 or later, so the stated requirement is "a Mac
-  with Apple silicon (M1 or later)".
+- Free and open source: the repository is public on GitHub.
 - `.gitignore` respected, hidden folders skipped: `commands/fs.rs`
   (`visible_fs_entry`), `commands/search.rs` (`git_ignore(true)`).
 - Files written in place, unchanged except for your edits: `write_file_impl`
@@ -60,7 +58,7 @@ enterprise AI company), iA Writer (a direct competitor) and LibreOffice Writer.
 ## Deliverables
 
 1. Homepage copy: definition paragraph, fuller features, "Works with the
-   folders you already have", FAQ, version/requirements line, real `h2`s,
+   folders you already have", FAQ, version line, real `h2`s,
    captions for the demo videos.
 2. Head: title, description, og tags, canonical link.
 3. JSON-LD: `SoftwareApplication` + `Person` in the root head; `FAQPage` in the

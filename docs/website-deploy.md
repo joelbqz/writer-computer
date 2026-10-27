@@ -72,12 +72,12 @@ product is defined; "Writer" alone collides with other products. See
 `SPECs/website-ai-search-spec.md`.
 
 - `apps/website/src/site.ts` holds the facts stated in more than one place
-  (name, URLs, license, requirements). The root route's head carries the
+  (name, URLs). The root route's head carries the
   `SoftwareApplication` + `Person` JSON-LD; the homepage's head carries the
   `FAQPage` JSON-LD, built from the same array as the visible FAQ.
 - `apps/website/public/robots.txt`, `sitemap.xml` and `llms.txt` are copied to
   `dist/client/` as-is. They repeat some of `site.ts` by hand, so a change to a
-  stated fact (requirements, license, URLs) updates them in the same commit. They
+  stated fact (name, URLs) updates them in the same commit. They
   carry no version number on purpose, so they don't go stale between deploys.
 - Cloudflare can override `robots.txt`: its managed robots.txt / content-signals
   setting serves or prepends its own. After a deploy, check

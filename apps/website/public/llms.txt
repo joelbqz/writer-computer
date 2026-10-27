@@ -1,14 +1,14 @@
 # Writer Computer
 
-> Writer Computer is a free, open-source (GPL-3.0) markdown editor for macOS on Apple silicon. It is made for people who keep their writing in plain-text folders, such as Obsidian vaults, docs repos and personal wikis, and it edits those files in place as ordinary markdown on disk.
+> Writer Computer is a free and open-source markdown editor for macOS. It is made for people who keep their writing in plain-text folders, such as Obsidian vaults, docs repos and personal wikis, and it edits those files in place as ordinary markdown on disk.
 
 Writer Computer is often called "Writer" for short. It is not related to writer.com, iA Writer or LibreOffice Writer.
 
 Key facts:
 
 - Price: free. No account, no subscription, no paid tier.
-- License: GNU General Public License v3.0 (GPL-3.0). Source code on GitHub.
-- Platform: macOS, on Macs with Apple silicon (M1 or later). There are no Intel Mac, Windows or Linux builds.
+- Open source: the full source code is on GitHub.
+- Platform: macOS.
 - Files: opens any folder of markdown files as a workspace and edits the files in place. It does not move, rename or convert files. Pasting an image into `note.md` saves it in a `note-assets` folder next to the note.
 - Folders: files excluded by `.gitignore` and hidden folders (such as `.git` and `.obsidian`) are left out of the sidebar and search. Each workspace can have its own window.
 - Obsidian: follows `[[wikilinks]]` with autocomplete and shows `![[image]]` embeds. Obsidian plugins and callouts are not supported.
@@ -23,7 +23,6 @@ Key facts:
 - [Releases](https://github.com/joelbqz/writer-computer/releases): downloads and release notes
 - [Telemetry disclosure](https://github.com/joelbqz/writer-computer/blob/master/docs/telemetry.md): every event and property the app can send, and how to keep it off
 - [Changelog](https://github.com/joelbqz/writer-computer/blob/master/CHANGELOG.md): user-visible changes
-- [License](https://github.com/joelbqz/writer-computer/blob/master/LICENSE): GPL-3.0
 
 ## Optional
 

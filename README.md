@@ -1,11 +1,10 @@
 # Writer Computer
 
-Writer Computer is a free, open-source (GPL-3.0) markdown editor for macOS. It is
-made for people who keep their writing in plain-text folders, such as Obsidian
-vaults, docs repos and personal wikis: open a folder and edit its files in place,
-and they stay ordinary markdown on your disk. Download it from
-[writer.computer](https://writer.computer). It needs a Mac with Apple silicon (M1
-or later).
+Writer Computer is a free and open-source markdown editor for macOS. It is made
+for people who keep their writing in plain-text folders, such as Obsidian vaults,
+docs repos and personal wikis: open a folder and edit its files in place, and they
+stay ordinary markdown on your disk. Download it for macOS from
+[writer.computer](https://writer.computer).
 
 ![Writer Computer](./assets/screenshot.png)
 
