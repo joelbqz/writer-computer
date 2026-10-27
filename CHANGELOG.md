@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-27
+
+- writer.computer now says what Writer Computer is in words, not just videos: a short definition under the headline (free, open source under GPL-3.0, macOS on Apple silicon, made for Obsidian vaults, docs repos and wikis), fuller feature descriptions, a section on working with the folders you already have, answers to common questions (price, license, Intel/Windows/Linux, Obsidian vaults, whether it changes your files, data collection, supported markdown) and the current version with its requirements. The first screen looks the same apart from the definition; the rest sits below the videos. Search engines and AI assistants get structured data describing the app and the FAQ, a sitemap, a `robots.txt` that points to it, and an `llms.txt` summary. "Writer Computer" is now the full name wherever the product is introduced, here and in the README, so it isn't confused with other apps called Writer; in the app it is still Writer.
+
 ## 2026-10-17
 
 - Draw every kind of Mermaid diagram. Diagrams now render with [Pele](https://pele.run) instead of beautiful-mermaid, which only drew flowcharts, sequence, class, state, entity-relationship and XY charts and showed "Invalid mermaid header" for the rest. Gantt charts, pie charts, user journeys, git graphs, mindmaps, timelines, quadrant charts, Sankey, block, architecture, kanban, requirement, C4, packet, radar and treemap diagrams (every type built into Mermaid 12.1) now draw in the same canvas, with the same pan, zoom, fullscreen and Edit code panel. Layouts differ from before: Pele places nodes and routes edges its own way.
