@@ -1,10 +1,15 @@
-# Writer
+# Writer Computer
 
-Fast and lightweight app for your workspace's markdown files
+Writer Computer is a free, open-source (GPL-3.0) markdown editor for macOS. It is
+made for people who keep their writing in plain-text folders, such as Obsidian
+vaults, docs repos and personal wikis: open a folder and edit its files in place,
+and they stay ordinary markdown on your disk. Download it from
+[writer.computer](https://writer.computer). It needs a Mac with Apple silicon (M1
+or later).
 
-![Writer](./assets/screenshot.png)
+![Writer Computer](./assets/screenshot.png)
 
-It is built with Tauri v2, React, Zustand, CodeMirror, and Rust. The app keeps documents on disk, respects workspace `.gitignore` rules, supports multiple windows, renders extended markdown such as tables and Mermaid diagrams, and ships with a signed macOS release flow.
+In the app and in casual use it is just "Writer". It is built with Tauri v2, React, Zustand, CodeMirror, and Rust. The app keeps documents on disk, respects workspace `.gitignore` rules, supports multiple windows, renders extended markdown such as tables and Mermaid diagrams, and ships with a signed macOS release flow.
 
 ## Repository
 
