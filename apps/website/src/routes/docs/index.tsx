@@ -6,7 +6,7 @@ import { DOCS } from "../../docs/pages";
 import { PRODUCT_NAME } from "../../site";
 
 const TITLE = `Docs — ${PRODUCT_NAME}`;
-const DESCRIPTION = `How to use ${PRODUCT_NAME}, the free, open-source markdown editor for macOS: opening folders and Obsidian vaults, Mermaid diagrams, LaTeX math, keyboard shortcuts and privacy.`;
+const DESCRIPTION = `How to use ${PRODUCT_NAME}, the free, open-source markdown editor for macOS: opening folders and Obsidian vaults, Mermaid diagrams, LaTeX math and keyboard shortcuts.`;
 
 export const Route = createFileRoute("/docs/")({
   head: () => sectionIndexHead(DOCS, TITLE, DESCRIPTION),

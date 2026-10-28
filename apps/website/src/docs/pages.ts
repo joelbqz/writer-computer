@@ -42,12 +42,5 @@ export const DOCS: ContentSection = {
       // The app's canonical shortcut map, published as is.
       source: "../../docs/keyboard-shortcuts.md",
     },
-    {
-      slug: "privacy",
-      title: "Privacy and telemetry",
-      description:
-        "What Writer Computer sends and never sends: usage data is off until you turn it on, and your notes, file names and paths never leave your Mac.",
-      source: "src/docs/privacy.md",
-    },
   ],
 };
