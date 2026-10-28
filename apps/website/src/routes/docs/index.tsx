@@ -24,7 +24,7 @@ export const Route = createFileRoute("/docs/")({
 function DocsIndex() {
   return (
     <article className="doc">
-      <h1>{PRODUCT_NAME} docs</h1>
+      <h1>Overview</h1>
       <p>
         {PRODUCT_NAME} is a free, open-source markdown editor for macOS that opens the folders you
         already have. These pages cover what it reads, how it treats your files and how to use it.
