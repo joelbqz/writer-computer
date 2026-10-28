@@ -21,7 +21,7 @@ Key facts:
 
 ## Links
 
-- [FAQ](https://writer.computer/faq/): what Writer Computer is, its speed and size, and answers about price, source code, Obsidian vaults, your files, data and markdown support
+- [Features](https://writer.computer/features/): what Writer Computer is and does, its speed and size, and answers about price, source code, Obsidian vaults, your files and data
 - [Homepage](https://writer.computer/): download and overview
 - [Source code](https://github.com/joelbqz/writer-computer): GitHub repository
 - [Releases](https://github.com/joelbqz/writer-computer/releases): downloads and release notes
