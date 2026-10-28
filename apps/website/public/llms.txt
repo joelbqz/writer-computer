@@ -1,0 +1,32 @@
+# Writer Computer
+
+> Writer Computer is a free, open-source markdown editor for macOS. It is about a 6 MB download, starts faster than Apple Notes and Obsidian, and opens the folders you already have (Obsidian vaults, docs repos, wikis) as plain markdown.
+
+Writer Computer is often called "Writer" for short. It is not related to writer.com, iA Writer or LibreOffice Writer.
+
+Key facts:
+
+- Price: free. No account, no subscription, no paid tier.
+- Open source: the full source code is on GitHub.
+- Platform: macOS.
+- Size: about 6 MB to download, under 10 MB installed.
+- Speed: starts faster than Apple Notes and Obsidian.
+- Cold starts: instant even on very large workspaces. The window opens with the top level of the folder and the last open note; the file watcher and search index are built in the background.
+- Files: opens any folder of markdown files as a workspace and edits the files in place. It does not move, rename or convert files. Pasting an image into `note.md` saves it in a `note-assets` folder next to the note.
+- Folders: files excluded by `.gitignore` and hidden folders (such as `.git` and `.obsidian`) are left out of the sidebar and search. Each workspace can have its own window.
+- Obsidian: follows `[[wikilinks]]` with autocomplete and shows `![[image]]` embeds. Note embeds, Obsidian plugins and callouts are not supported.
+- Markdown: CommonMark with GitHub-flavored tables, task lists and strikethrough; Mermaid diagrams; KaTeX math with `$` and `$$`; HTML blocks such as `<details>`; YAML frontmatter shown as editable properties; syntax-highlighted code blocks. Footnotes are not rendered.
+- Privacy: usage telemetry is opt-in and off by default. It never includes document contents, file names or paths. Declining sends a single event recording that choice.
+- Built with Tauri v2, React, CodeMirror and Rust.
+
+## Links
+
+- [Homepage](https://writer.computer/): download and overview
+- [Source code](https://github.com/joelbqz/writer-computer): GitHub repository
+- [Releases](https://github.com/joelbqz/writer-computer/releases): downloads and release notes
+- [Telemetry disclosure](https://github.com/joelbqz/writer-computer/blob/master/docs/telemetry.md): every event and property the app can send, and how to keep it off
+- [Changelog](https://github.com/joelbqz/writer-computer/blob/master/CHANGELOG.md): user-visible changes
+
+## Optional
+
+- [Author on X](https://x.com/joelbqz): release announcements

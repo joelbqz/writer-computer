@@ -64,6 +64,31 @@ it keeps the fallback current. The logic lives in
 `apps/website/src/latest-release.ts`; the release asset naming it depends on is
 set by `scripts/distribute.sh`, so renaming the DMG there means updating both.
 
+## Search engines and AI crawlers
+
+The site is written to be read without JavaScript: everything it says is in the
+prerendered `index.html`. The homepage's visible copy is the owner's and stays
+short; the full fact sheet is `llms.txt`. "Writer Computer" is the canonical
+name wherever the product is defined; "Writer" alone collides with other products. See
+`SPECs/website-ai-search-spec.md`.
+
+- `apps/website/src/site.ts` holds the facts stated in more than one place
+  (name, URLs). The root route's head carries the
+  `SoftwareApplication` + `Person` JSON-LD.
+- The download and installed sizes in `site.ts` were measured from the v0.8.0
+  release (DMG 6.1 MB, installed app 9.2 MB). Re-measure when a release grows,
+  and update `llms.txt` and the README with them; "under 10 MB installed" has
+  little headroom.
+- `apps/website/public/robots.txt`, `sitemap.xml` and `llms.txt` are copied to
+  `dist/client/` as-is. They repeat some of `site.ts` by hand, so a change to a
+  stated fact (name, URLs) updates them in the same commit. They
+  carry no version number on purpose, so they don't go stale between deploys.
+- Cloudflare can override `robots.txt`: its managed robots.txt / content-signals
+  setting serves or prepends its own. After a deploy, check
+  `curl https://writer.computer/robots.txt` shows the `Sitemap:` line. Cloudflare's
+  AI-crawler blocking (GPTBot, ClaudeBot, CCBot get a 403 at the edge) is also a
+  dashboard setting, independent of `robots.txt`.
+
 ## Notes
 
 - Do not use GitHub Pages for this website.

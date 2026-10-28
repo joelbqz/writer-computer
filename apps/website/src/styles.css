@@ -247,7 +247,8 @@ a {
 }
 
 .feature-label {
-  padding-right: 6px;
+  /* Plus the space character between label and description. */
+  padding-right: 2px;
   color: var(--ink);
   font-weight: 400;
 }
@@ -270,7 +271,11 @@ a {
 }
 
 .shot {
+  /* Containing block for the sr-only caption, so it can't widen the page
+     from inside the horizontally scrolling strip on mobile. */
+  position: relative;
   display: block;
+  margin: 0;
   width: 100%;
   height: auto;
   aspect-ratio: 1920 / 1206;
@@ -285,6 +290,18 @@ a {
   height: 100%;
   object-fit: cover;
   opacity: 1;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ---------- responsive ---------- */

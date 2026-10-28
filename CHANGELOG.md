@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-27
+
+- writer.computer is easier for search engines and AI assistants to read and quote: the page now has a proper title and description (a free, open-source markdown editor for macOS; about 6 MB; faster to start than Apple Notes and Obsidian; opens very large workspaces instantly), structured data describing the app, descriptions of each demo video for screen readers, a sitemap, a `robots.txt` that points to it, and an `llms.txt` fact sheet. The homepage looks the same as before, with a typo fixed ("cold starts take a fraction of a second"), a new "Tiny" line (about a 6 MB download) and LaTeX math added to "Extended markdown". "Writer Computer" is now the full name wherever the product is introduced, here and in the README, so it isn't confused with other apps called Writer; in the app it is still Writer.
+
 ## 2026-10-17
 
 - Draw every kind of Mermaid diagram. Diagrams now render with [Pele](https://pele.run) instead of beautiful-mermaid, which only drew flowcharts, sequence, class, state, entity-relationship and XY charts and showed "Invalid mermaid header" for the rest. Gantt charts, pie charts, user journeys, git graphs, mindmaps, timelines, quadrant charts, Sankey, block, architecture, kanban, requirement, C4, packet, radar and treemap diagrams (every type built into Mermaid 12.1) now draw in the same canvas, with the same pan, zoom, fullscreen and Edit code panel. Layouts differ from before: Pele places nodes and routes edges its own way.
