@@ -23,10 +23,11 @@ enterprise AI company), iA Writer (a direct competitor) and LibreOffice Writer.
   an engine every fact. It also keeps the `FAQPage` JSON-LD in the same document
   as the visible text it must mirror, generated from one array so the two cannot
   drift.
-- **Keep the design.** The first screen is unchanged apart from a short
-  definition paragraph under the headline and fuller feature sentences. The new
-  text (folders section, FAQ, version line) sits below the
-  hero/video columns in the same type and colours.
+- **Keep the design and the tone.** The first screen is unchanged apart from a
+  two-sentence definition under the headline. Feature lines stay short,
+  lowercase fragments, and each FAQ answer is one or two short sentences, at
+  the owner's request. The new text (folders section, FAQ, version line) sits
+  below the hero/video columns in the same type and colours.
 - **Platform and license wording.** At the owner's request the copy, JSON-LD,
   `llms.txt` and README say "macOS" and "free and open source" and nothing more
   specific: no chip or architecture requirement, no license name or link.
@@ -53,7 +54,7 @@ enterprise AI company), iA Writer (a direct competitor) and LibreOffice Writer.
   (`commands/images.rs`). `.writer/config` is only written through a
   workspace-scoped setting, which no UI calls today.
 - Wikilinks with autocomplete and `![[image]]` embeds:
-  `wiki-link-extension.ts`. Callouts and footnotes are not rendered (TODOS.md,
+  `wiki-link-extension.ts`; note embeds stay plain links (`wiki-links.ts`). Callouts and footnotes are not rendered (TODOS.md,
   hand-typing QA pass).
 - Markdown: GFM (tables, task lists, strikethrough), Mermaid (Pele, every
   Mermaid 12.1 type), KaTeX math (`$`, `$$`), HTML blocks, YAML frontmatter as
@@ -70,7 +71,7 @@ enterprise AI company), iA Writer (a direct competitor) and LibreOffice Writer.
 
 ## Deliverables
 
-1. Homepage copy: definition paragraph, fuller features, "Works with the
+1. Homepage copy: definition paragraph, feature descriptions, "Works with the
    folders you already have", FAQ, version line, real `h2`s,
    captions for the demo videos.
 2. Head: title, description, og tags, canonical link.

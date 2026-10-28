@@ -17,8 +17,8 @@ import {
 } from "../site";
 
 const TITLE = `${PRODUCT_NAME} — free, open-source markdown editor for macOS`;
-const DESCRIPTION = `${PRODUCT_NAME} is a free, open-source markdown editor for macOS. It's ${DOWNLOAD_SIZE} to download, starts faster than Apple Notes and Obsidian, and opens very large workspaces instantly.`;
-const OG_DESCRIPTION = `A free, open-source markdown editor for macOS: ${DOWNLOAD_SIZE} to download and faster to start than Apple Notes and Obsidian.`;
+const DESCRIPTION = `${PRODUCT_NAME} is a free, open-source markdown editor for macOS. About ${DOWNLOAD_SIZE}, starts faster than Apple Notes and Obsidian, and opens the folders you already have as plain markdown.`;
+const OG_DESCRIPTION = `A free, open-source markdown editor for macOS. About ${DOWNLOAD_SIZE} and faster to start than Apple Notes and Obsidian.`;
 
 const AUTHOR_ID = `${SITE_URL}/#author`;
 

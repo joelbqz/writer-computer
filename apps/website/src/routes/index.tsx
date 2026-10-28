@@ -2,32 +2,17 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 
 import { useAnalytics } from "../analytics";
 import { AppleGlyph, WriterMark } from "../components/Mark";
-import { DOWNLOAD_SIZE, INSTALLED_SIZE, PRODUCT_NAME, SITE_URL, jsonLdScript } from "../site";
+import { DOWNLOAD_SIZE, INSTALLED_SIZE_LIMIT, PRODUCT_NAME, SITE_URL, jsonLdScript } from "../site";
 import { useLatestRelease } from "../use-latest-release";
 
 const FEATURES = [
-  { label: "Blazing fast", description: "Starts faster than Apple Notes and Obsidian." },
-  {
-    label: "Instant cold starts",
-    description: "Even very large workspaces open right away; indexing runs in the background.",
-  },
-  {
-    label: "Tiny",
-    description: `Only ${DOWNLOAD_SIZE} to download and ${INSTALLED_SIZE} installed.`,
-  },
-  {
-    label: "Private",
-    description: "Your documents stay on your computer as plain markdown files.",
-  },
-  {
-    label: "Extended markdown",
-    description: "Mermaid diagrams, tables, math and HTML render right in the editor.",
-  },
-  {
-    label: "Multiwindow",
-    description: "Open each workspace in its own window and switch between them quickly.",
-  },
-  { label: "Frontmatter", description: "YAML frontmatter shows up as properties you can edit." },
+  { label: "Blazing fast", description: "starts faster than Apple Notes and Obsidian" },
+  { label: "Instant cold starts", description: "even on very large workspaces" },
+  { label: "Tiny", description: `about ${DOWNLOAD_SIZE} download` },
+  { label: "Private", description: "your documents stay on your computer" },
+  { label: "Extended markdown", description: "mermaid charts, tables and HTML" },
+  { label: "Multiwindow", description: "snappy switch between workspaces" },
+  { label: "Frontmatter", description: "YAML metadata built in" },
 ];
 
 const DEMOS = [
@@ -74,37 +59,38 @@ const DEMOS = [
 // cannot disagree. Plain text only: structured data has no markup. Every answer
 // is checked against the code and docs; see `SPECs/website-ai-search-spec.md`.
 const FAQ = [
-  {
-    question: `Is ${PRODUCT_NAME} free?`,
-    answer: `Yes. ${PRODUCT_NAME} is free to download and use. There is no account to create, no subscription and no paid tier.`,
-  },
+  { question: `Is ${PRODUCT_NAME} free?`, answer: "Yes. No account, no subscription." },
   {
     question: `Is ${PRODUCT_NAME} open source?`,
-    answer: `Yes. The full source code is on GitHub at github.com/joelbqz/writer-computer.`,
+    answer: "Yes. The source is on GitHub at github.com/joelbqz/writer-computer.",
   },
   {
     question: `Is ${PRODUCT_NAME} fast?`,
-    answer: `Yes. ${PRODUCT_NAME} starts faster than Apple Notes and Obsidian, and cold starts stay instant even on very large workspaces: it opens the window with just the top level of your folder and the note you had open, and builds the search index in the background.`,
+    answer:
+      "Yes. At launch it reads only the top level of your folder and the note you had open; indexing runs in the background.",
   },
   {
     question: `How big is ${PRODUCT_NAME}?`,
-    answer: `Small. The download is ${DOWNLOAD_SIZE} and the installed app is ${INSTALLED_SIZE}.`,
+    answer: `About ${DOWNLOAD_SIZE} to download, under ${INSTALLED_SIZE_LIMIT} installed.`,
   },
   {
-    question: "Does it work with my Obsidian vault?",
-    answer: `Yes. Open the vault folder and ${PRODUCT_NAME} edits its notes in place. It follows [[wikilinks]], suggests note names as you type one, and shows ![[image]] embeds. It leaves the .obsidian settings folder alone. Obsidian plugins and callouts are not supported.`,
+    question: `Does ${PRODUCT_NAME} work with my Obsidian vault?`,
+    answer:
+      "Yes. Open the vault folder; wikilinks and image embeds work. Plugins and callouts don't.",
   },
   {
     question: `Does ${PRODUCT_NAME} change or move my files?`,
-    answer: `No. Notes stay ordinary .md files where they are, and saving writes your text back to the same file. Nothing is moved, renamed or converted unless you do it in the app. The one thing it adds is a folder next to a note (note-assets for note.md) when you paste an image into that note.`,
+    answer:
+      "No. Notes stay .md files where they are. Pasted images go in a folder next to the note.",
   },
   {
     question: `Does ${PRODUCT_NAME} collect any data?`,
-    answer: `Only if you opt in. Usage data is off until you turn it on in the first-run prompt or in Preferences, and then covers a few events, such as app opened and file created, tied to a random install ID. It never includes your documents, file names or paths. If you answer Not now, the app sends one event recording that choice and nothing after it.`,
+    answer:
+      "Only opt-in usage data, never your documents, file names or paths. Declining sends one event recording that choice.",
   },
   {
     question: "Which markdown features are supported?",
-    answer: `CommonMark with GitHub-flavored tables, task lists and strikethrough, plus Mermaid diagrams, math with $ and $$ (KaTeX), HTML blocks such as <details>, YAML frontmatter shown as editable properties, syntax-highlighted code blocks, images and wikilinks. Footnotes and Obsidian callouts are not rendered.`,
+    answer: "GitHub-flavored markdown, Mermaid, math, HTML, YAML frontmatter and wikilinks.",
   },
 ];
 
@@ -167,11 +153,9 @@ function HomePage() {
             </h1>
 
             <p className="intro">
-              {PRODUCT_NAME} is a free and open-source markdown editor for macOS. It's{" "}
-              {DOWNLOAD_SIZE} to download, starts faster than Apple Notes and Obsidian, and opens
-              very large workspaces instantly. It's made for people who keep their writing in
-              plain-text folders: Obsidian vaults, docs repos and personal wikis. Your notes stay
-              ordinary markdown files on your disk.
+              {PRODUCT_NAME} is a free, open-source markdown editor for macOS. About {DOWNLOAD_SIZE}
+              , starts faster than Apple Notes and Obsidian, and opens the folders you already have
+              (Obsidian vaults, docs repos, wikis) as plain markdown.
             </p>
 
             <div className="cta">
@@ -215,14 +199,8 @@ function HomePage() {
           <section className="details-section" aria-labelledby="folders-heading">
             <h2 id="folders-heading">Works with the folders you already have</h2>
             <p>
-              Open any folder of markdown files as a workspace: an Obsidian vault, a docs repo, a
-              personal wiki. {PRODUCT_NAME} edits the files where they are, so they stay plain
-              markdown on your disk and keep working with Git, Obsidian and your other tools.
-            </p>
-            <p>
-              Files your .gitignore excludes and hidden folders such as .git and .obsidian stay out
-              of the sidebar and search. Each workspace can have its own window, so a work repo and
-              a personal vault can be open side by side.
+              Open an Obsidian vault, a docs repo or a wiki and edit the files where they are. Files
+              your .gitignore excludes and hidden folders stay out of the sidebar.
             </p>
           </section>
 

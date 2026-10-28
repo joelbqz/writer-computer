@@ -19,10 +19,12 @@ export const LATEST_RELEASE_URL = `${__WRITER_REPO_URL__}/releases/latest`;
  * Measured on v0.8.0: the DMG is 6.1 MB, `Writer.app.tar.gz` 5.7 MB, and the
  * installed `Writer.app` 9.2 MB. Re-measure when a release grows; the
  * installed figure has little headroom. `llms.txt` and the README repeat these.
- * The non-breaking spaces keep the number and unit on one line.
+ * The download size is approximate and the installed one an upper bound, so
+ * copy says "about" and "under" around them. The non-breaking spaces keep the
+ * number and unit on one line.
  */
-export const DOWNLOAD_SIZE = "about 6\u00a0MB";
-export const INSTALLED_SIZE = "under 10\u00a0MB";
+export const DOWNLOAD_SIZE = "6\u00a0MB";
+export const INSTALLED_SIZE_LIMIT = "10\u00a0MB";
 
 /**
  * A `head().scripts` entry carrying JSON-LD. `<` is escaped so no string in the
