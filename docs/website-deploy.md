@@ -67,14 +67,22 @@ set by `scripts/distribute.sh`, so renaming the DMG there means updating both.
 ## Search engines and AI crawlers
 
 The site is written to be read without JavaScript: everything it says is in the
-prerendered `index.html`. "Writer Computer" is the canonical name wherever the
+prerendered `index.html` and `faq/index.html`. The homepage's visible copy is
+the owner's and stays short; the definition, selling points and FAQ live on
+`/faq`, linked from the homepage nav. "Writer Computer" is the canonical name wherever the
 product is defined; "Writer" alone collides with other products. See
 `SPECs/website-ai-search-spec.md`.
 
 - `apps/website/src/site.ts` holds the facts stated in more than one place
   (name, URLs). The root route's head carries the
-  `SoftwareApplication` + `Person` JSON-LD; the homepage's head carries the
-  `FAQPage` JSON-LD, built from the same array as the visible FAQ.
+  `SoftwareApplication` + `Person` JSON-LD on every page; the `/faq` route's
+  head carries the `FAQPage` JSON-LD, built from the same array as the visible
+  FAQ. Structured data belongs on the page that shows the same text, so the
+  homepage has no `FAQPage`.
+- `/faq` is prerendered to `faq/index.html`, which Cloudflare serves at `/faq/`
+  (and redirects `/faq` there), so its canonical link, `og:url`, the sitemap and
+  `llms.txt` all name `https://writer.computer/faq/`. The prerenderer finds it
+  by crawling the homepage's FAQ link.
 - The download and installed sizes in `site.ts` were measured from the v0.8.0
   release (DMG 6.1 MB, installed app 9.2 MB). Re-measure when a release grows,
   and update `llms.txt` and the README with them; "under 10 MB installed" has
