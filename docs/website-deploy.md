@@ -68,18 +68,14 @@ set by `scripts/distribute.sh`, so renaming the DMG there means updating both.
 
 The site is written to be read without JavaScript: everything it says is in the
 prerendered `index.html` and `features/index.html`. The homepage's visible copy
-is the owner's and stays short; the definition, the full feature list and a few
-questions live on `/features`, linked from the header's **Features** pill. "Writer Computer" is the canonical name wherever the
+is the owner's and stays short; the definition and the full feature list live on
+`/features`, linked from the header's **Features** pill. "Writer Computer" is the canonical name wherever the
 product is defined; "Writer" alone collides with other products. See
 `SPECs/website-ai-search-spec.md`.
 
 - `apps/website/src/site.ts` holds the facts stated in more than one place
   (name, URLs). The root route's head carries the
-  `SoftwareApplication` + `Person` JSON-LD on every page; the `/features`
-  route's head carries the `FAQPage` JSON-LD, built from the same array as its
-  visible questions. Structured data belongs on the page that shows the same
-  text, so the homepage has no `FAQPage`. The answers sit in collapsed
-  `<details>`, which still puts their text in the prerendered HTML.
+  `SoftwareApplication` + `Person` JSON-LD on every page.
 - `/features` is prerendered to `features/index.html`, which Cloudflare serves
   at `/features/` (and redirects `/features` there), so its canonical link,
   `og:url`, the sitemap and `llms.txt` all name

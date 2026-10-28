@@ -324,70 +324,6 @@ a {
   line-height: 1.4;
 }
 
-.questions {
-  margin-top: 96px;
-}
-
-.questions h2 {
-  margin: 0 0 8px;
-  color: var(--ink-50);
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1;
-}
-
-.question {
-  border-bottom: 1px solid var(--stroke-ghost);
-}
-
-.question summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px 0;
-  color: var(--ink);
-  font-size: 16px;
-  line-height: 1.3;
-  list-style: none;
-  cursor: pointer;
-}
-
-.question summary::-webkit-details-marker {
-  display: none;
-}
-
-/* A small chevron drawn from two borders; points down closed, up open. */
-.question summary::after {
-  content: "";
-  flex-shrink: 0;
-  width: 6px;
-  height: 6px;
-  margin: 0 4px 4px 0;
-  border-right: 1.5px solid var(--ink-50);
-  border-bottom: 1.5px solid var(--ink-50);
-  transform: rotate(45deg);
-  transition: transform 0.15s ease;
-}
-
-.question[open] summary::after {
-  margin-bottom: -2px;
-  transform: rotate(-135deg);
-}
-
-.question summary:hover::after {
-  border-color: var(--ink-80);
-}
-
-.question p {
-  margin: 0;
-  padding: 0 0 18px;
-  max-width: 34em;
-  color: var(--ink-60);
-  font-size: 15px;
-  line-height: 1.5;
-}
-
 .pill[aria-current="page"] {
   background: rgba(255, 255, 255, 0.06);
 }
@@ -412,14 +348,6 @@ a {
 
   .features-column .features {
     margin-top: 48px;
-  }
-
-  .questions {
-    margin-top: 64px;
-  }
-
-  .question summary {
-    font-size: 15px;
   }
 }
 

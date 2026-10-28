@@ -6,7 +6,7 @@ AI search engines (ChatGPT, Perplexity, Claude, Google AI Overviews) answer
 "what is a good markdown editor for my Obsidian vault on a Mac" by quoting pages
 they can read. writer.computer gives them almost nothing: the prerendered
 homepage is ~6.6 KB with one `h1`, five feature labels and nine uncaptioned
-videos. There is no definition of the product, no privacy statement, no FAQ, no structured data, no `llms.txt` or `sitemap.xml`,
+videos. There is no definition of the product, no privacy statement, no structured data, no `llms.txt` or `sitemap.xml`,
 and `robots.txt` is Cloudflare's managed stub with no `Sitemap` line.
 
 The name is also ambiguous. "Writer" alone collides with writer.com (an
@@ -24,19 +24,14 @@ enterprise AI company), iA Writer (a direct competitor) and LibreOffice Writer.
   fixed). `/features` is a page for people in the homepage's style: the same
   header (a **Features** pill, marked current there) and download button as
   shared components, then one centered column with the h1 "Writer Computer", a
-  one-sentence definition, the download button, the full feature list (the
-  homepage's five plus the selling points, folders and wikilinks, each a label
-  and one short line), and a compact collapsed "Questions" section of native
-  `<details>`. Questions the feature list already answers (speed, size,
-  markdown) are left out. The `FAQPage` JSON-LD is generated from the same
-  array as the visible questions, so the two cannot drift, and lives only on
-  `/features` because structured data must match the page it is on.
+  one-sentence definition, the download button and the full feature list (the
+  homepage's five plus the selling points, free and open source, folders,
+  plain files and wikilinks, each a label and one short line).
 - **Invisible improvements stay on the homepage:** title, meta and OG
   description, canonical link, `SoftwareApplication` + `Person` JSON-LD, and
   visually hidden captions on the demo videos.
 - **Keep the tone.** On `/features` each feature is a short lowercase fragment
-  like the homepage's, and each answer is one or two short sentences, at the
-  owner's request.
+  like the homepage's, at the owner's request.
 - **Platform and license wording.** At the owner's request the copy, JSON-LD,
   `llms.txt` and README say "macOS" and "free and open source" and nothing more
   specific: no chip or architecture requirement, no license name or link.
@@ -83,9 +78,8 @@ enterprise AI company), iA Writer (a direct competitor) and LibreOffice Writer.
 
 1. Homepage: master's visible copy with the typo fixed, a "Features" nav pill,
    and hidden captions for the demo videos.
-2. `/features`: definition, download button, feature list, collapsed
-   questions; its own title, description, canonical and `FAQPage` JSON-LD
-   built from the visible questions' data.
+2. `/features`: definition, download button, feature list; its own title,
+   description and canonical.
 3. Head: title, description, og tags, canonical link on both pages;
    `SoftwareApplication` + `Person` JSON-LD in the root head.
 4. `llms.txt` (full fact sheet, `/features` listed first), `sitemap.xml` (both

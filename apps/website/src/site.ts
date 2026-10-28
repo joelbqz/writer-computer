@@ -28,7 +28,7 @@ export const INSTALLED_SIZE_LIMIT = "10\u00a0MB";
 
 /**
  * A `head().scripts` entry carrying JSON-LD. `<` is escaped so no string in the
- * data (the FAQ mentions `<details>`) can close the script element early.
+ * data can close the script element early.
  */
 export function jsonLdScript(data: object) {
   return {
