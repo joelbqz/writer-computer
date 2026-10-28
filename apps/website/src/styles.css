@@ -437,6 +437,18 @@ a {
   white-space: nowrap;
 }
 
+.doc tbody th {
+  /* Row labels of a comparison table. */
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.compare-sources {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-60);
+}
+
 .doc video {
   display: block;
   width: 100%;
@@ -472,6 +484,10 @@ a {
   font-size: 14px;
   line-height: 1.5;
   color: var(--ink-60);
+}
+
+.docs-footer p {
+  margin: 0 0 8px;
 }
 
 .docs-footer a {
@@ -547,6 +563,10 @@ a {
 
   .doc h1 {
     font-size: 28px;
+  }
+
+  .doc tbody th {
+    white-space: normal;
   }
 
   .doc h2 {

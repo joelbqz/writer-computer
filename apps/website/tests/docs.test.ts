@@ -2,19 +2,23 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
 
-import { buildLlmsTxt, buildSitemap, headingId, renderDoc } from "../docs-plugin";
-import { DOC_PAGES, type DocPage } from "../src/docs/pages";
+import { buildLlmsTxt, buildSitemap, headingId, renderPage } from "../docs-plugin";
+import { COMPARE } from "../src/compare/pages";
+import type { ContentPage, ContentSection } from "../src/content";
+import { SECTIONS } from "../src/sections";
 
-const PAGE: DocPage = {
+const PAGE: ContentPage = {
   slug: "example",
   title: "Example page",
   description: "An example.",
   source: "src/docs/example.md",
 };
 
-describe("renderDoc", () => {
+const SECTION: ContentSection = { key: "docs", name: "Docs", path: "/docs/", pages: [PAGE] };
+
+describe("renderPage", () => {
   test("renders the page and leaves contributor comments out", () => {
-    const html = renderDoc(
+    const html = renderPage(
       "# Example page\n\n<!-- For contributors only. -->\n\nText with `code`.\n\n## A section\n",
       PAGE,
     );
@@ -25,18 +29,49 @@ describe("renderDoc", () => {
   });
 
   test("a comment before the heading doesn't count as the first line", () => {
-    expect(renderDoc("<!-- note -->\n\n# Example page\n", PAGE)).toContain("<h1>");
+    expect(renderPage("<!-- note -->\n\n# Example page\n", PAGE)).toContain("<h1>");
   });
 
-  test("fails when the heading doesn't match the title in pages.ts", () => {
-    expect(() => renderDoc("# Something else\n", PAGE)).toThrow(/expected "# Example page"/);
-    expect(() => renderDoc("Text first.\n\n# Example page\n", PAGE)).toThrow(/found no heading/);
+  test("fails when the heading doesn't match the page's title", () => {
+    expect(() => renderPage("# Something else\n", PAGE)).toThrow(/expected "# Example page"/);
+    expect(() => renderPage("Text first.\n\n# Example page\n", PAGE)).toThrow(/found no heading/);
   });
 
-  test("every page in pages.ts renders", () => {
-    for (const page of DOC_PAGES) {
-      const source = readFileSync(resolve(import.meta.dirname, "..", page.source), "utf-8");
-      expect(renderDoc(source, page)).toContain(`<h1>${page.title}</h1>`);
+  test("a block line is replaced by the section's HTML, as is", () => {
+    const html = renderPage("# Example page\n\nBefore.\n{{table}}\nAfter.\n", PAGE, {
+      table: "<table><tr><td>*cell*</td></tr></table>",
+    });
+    expect(html).toContain("<p>Before.</p>\n<table><tr><td>*cell*</td></tr></table>");
+    expect(html).toContain("<p>After.</p>");
+  });
+
+  test("a block line without its block, or a block without its line, fails", () => {
+    expect(() => renderPage("# Example page\n\n{{table}}\n", PAGE)).toThrow(/no "table" block/);
+    expect(() => renderPage("# Example page\n", PAGE, { table: "<table></table>" })).toThrow(
+      /missing the \{\{table\}\} line/,
+    );
+  });
+
+  test("every page in every section renders", () => {
+    for (const section of SECTIONS) {
+      for (const page of section.pages) {
+        const source = readFileSync(resolve(import.meta.dirname, "..", page.source), "utf-8");
+        expect(renderPage(source, page, section.blocks?.(page))).toContain(
+          `<h1>${page.title}</h1>`,
+        );
+      }
+    }
+  });
+});
+
+describe("comparison pages", () => {
+  test("the table has a row per fact and the competitor's checked date and sources", () => {
+    for (const page of COMPARE.pages) {
+      const { comparison } = COMPARE.blocks!(page);
+      expect(comparison).toContain(`<th scope="col">${page.competitor}</th>`);
+      const [year, , day] = page.checked.split("-").map(Number);
+      expect(comparison).toMatch(new RegExp(`details as of \\w+ ${day}, ${year}`));
+      for (const { url } of page.sources) expect(comparison).toContain(`href="${url}"`);
     }
   });
 });
@@ -56,14 +91,14 @@ describe("generated files", () => {
     expect(sitemap).toContain("<loc>https://writer.computer/docs/</loc>");
   });
 
-  test("llms.txt gets one link per page in place of the marker", () => {
-    const text = buildLlmsTxt("## Docs\n\n{{docs}}\n", [PAGE]);
+  test("llms.txt gets one link per page in place of the section's marker", () => {
+    const text = buildLlmsTxt("## Docs\n\n{{docs}}\n", [SECTION]);
     expect(text).toBe(
       "## Docs\n\n- [Example page](https://writer.computer/docs/example/): An example.\n",
     );
   });
 
-  test("llms.txt without the marker fails instead of dropping the list", () => {
-    expect(() => buildLlmsTxt("## Docs\n", [PAGE])).toThrow(/missing the \{\{docs\}\} line/);
+  test("llms.txt without a section's marker fails instead of dropping the list", () => {
+    expect(() => buildLlmsTxt("## Docs\n", [SECTION])).toThrow(/missing the \{\{docs\}\} line/);
   });
 });

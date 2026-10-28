@@ -12,7 +12,7 @@ Add a small docs section to writer.computer at `/docs/`, so search engines and A
   - `apps/website/src/docs/pages.ts` is the page list: slug, title, description and markdown source. The nav, the index, `sitemap.xml` and the docs list in `llms.txt` are all built from it, so adding a page is one entry plus its file.
   - The shortcuts page is `docs/keyboard-shortcuts.md`, the app's canonical shortcut map, published as is. Its prose is now written for users; implementation notes moved into HTML comments, which the site drops.
   - The privacy page summarises `docs/telemetry.md` and links to it for the full event list, so adding an event doesn't touch the website.
-- **Rendered at build time.** `apps/website/docs-plugin.ts` turns each markdown file into HTML with `marked` (a dev dependency) and serves it through `virtual:writer-docs`, one lazy chunk per page. The client bundle carries HTML strings, not a parser. The build fails if a file's `# ` heading differs from its title in `pages.ts`.
+- **Rendered at build time.** `apps/website/docs-plugin.ts` turns each markdown file into HTML with `marked` (a dev dependency) and serves it through `virtual:writer-pages` (renamed from `virtual:writer-docs` when `/compare/` was added), one lazy chunk per page. The client bundle carries HTML strings, not a parser. The build fails if a file's `# ` heading differs from its title in `pages.ts`.
 - **Trailing-slash URLs.** Pages prerender to `<path>/index.html`, which Cloudflare serves at `<path>/`. The router uses `trailingSlash: "always"` so links and canonicals already carry the slash and crawlers never hit the redirect.
 - **Head per page:** title `<Page> — Writer Computer`, description, canonical, `og:*` overrides, and a `TechArticle` + `BreadcrumbList` JSON-LD graph pointing at the app (`#app`) and author (`#author`) declared in the root head.
 - **Shared header.** The homepage and docs render `components/SiteHeader.tsx`, which adds a **Docs** pill before Updates and GitHub. The pill sends no event; docs visits are counted by PostHog's own `$pageview`. The homepage's copy is unchanged.
@@ -20,7 +20,7 @@ Add a small docs section to writer.computer at `/docs/`, so search engines and A
 
 ## Out of scope
 
-- Comparison pages ("vs Obsidian"), a blog, search within the docs.
+- A blog, search within the docs. (Comparison pages came later: [`website-compare-spec.md`](./website-compare-spec.md).)
 - Rendering Mermaid or KaTeX output on the site; the Mermaid page shows the existing demo video instead.
 - A Markdown syntax reference page (tables, task lists, frontmatter); the Obsidian page covers the overlap.
 

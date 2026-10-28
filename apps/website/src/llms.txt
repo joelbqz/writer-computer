@@ -32,6 +32,11 @@ Key facts:
 - [Docs](https://writer.computer/docs/): all the pages below
 {{docs}}
 
+## Compare
+
+- [Compare](https://writer.computer/compare/): Writer Computer beside Obsidian, Typora, iA Writer and Apple Notes
+{{compare}}
+
 ## Optional
 
 - [Author on X](https://x.com/joelbqz): release announcements

@@ -16,7 +16,7 @@ export const SHORT_NAME = "Writer";
 export const AUTHOR_X_URL = "https://x.com/joelbqz";
 export const AUTHOR_GITHUB_URL = "https://github.com/joelbqz";
 
-/** JSON-LD `@id`s, so the docs pages can point at the app and its author. */
+/** JSON-LD `@id`s, so the docs and comparison pages can point at the app and its author. */
 export const APP_ID = `${SITE_URL}/#app`;
 export const AUTHOR_ID = `${SITE_URL}/#author`;
 

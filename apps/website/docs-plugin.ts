@@ -4,25 +4,26 @@ import { fileURLToPath } from "node:url";
 import { Marked, type Token } from "marked";
 import type { Plugin } from "vite";
 
-import { DOCS_PATH, DOC_PAGES, docPath, type DocPage } from "./src/docs/pages";
+import { type ContentPage, type ContentSection, pagePath } from "./src/content";
+import { SECTIONS } from "./src/sections";
 import { SITE_URL } from "./src/site";
 
 /**
- * Renders the docs pages from markdown at build time, so the site ships each
- * page as HTML and never the parser, and writes `sitemap.xml` and `llms.txt`
- * from the same page list (`src/docs/pages.ts`).
+ * Renders the markdown sections (`src/sections.ts`) at build time, so the site
+ * ships each page as HTML and never the parser, and writes `sitemap.xml` and
+ * `llms.txt` from the same page lists.
  *
- * - `virtual:writer-docs` exports `DOC_HTML`, one lazy import per page, so a
- *   page's HTML is only fetched by the page that shows it.
+ * - `virtual:writer-pages` exports `PAGE_HTML`, one lazy import per page keyed
+ *   by its path, so a page's HTML is only fetched by the page that shows it.
  * - In dev the two generated files are served by middleware; in the build
  *   they are emitted into the client output next to `public/`.
  */
 
-const INDEX_ID = "virtual:writer-docs";
-const PAGE_ID_PREFIX = "virtual:writer-doc/";
+const INDEX_ID = "virtual:writer-pages";
+const PAGE_ID_PREFIX = "virtual:writer-page";
 const WEBSITE_ROOT = fileURLToPath(new URL(".", import.meta.url));
 const LLMS_TEMPLATE = resolve(WEBSITE_ROOT, "src/llms.txt");
-const DOCS_MARKER = "{{docs}}";
+const BLOCK_LINE = /^\{\{(\w+)\}\}$/gm;
 
 /** GitHub-style heading id, so section links match the ones GitHub shows. */
 export function headingId(text: string): string {
@@ -60,16 +61,34 @@ function firstHeading(tokens: Token[]): Token | undefined {
 }
 
 /**
- * The page's HTML. Throws when the file's first heading isn't the `# ` heading
- * `pages.ts` expects, so the nav, `<title>` and page never disagree.
+ * The page's HTML. A line `{{name}}` is replaced by `blocks[name]`, HTML the
+ * section builds from data. Throws when the file's first heading isn't the
+ * page's title, or when a block line and the blocks given don't match up, so
+ * the nav, `<title>` and page never disagree and no block is silently dropped.
  */
-export function renderDoc(source: string, page: DocPage): string {
-  const tokens = markdown.lexer(source);
+export function renderPage(
+  source: string,
+  page: ContentPage,
+  blocks: Readonly<Record<string, string>> = {},
+): string {
+  const unused = new Set(Object.keys(blocks));
+  const withBlocks = source.replace(BLOCK_LINE, (_line, name: string) => {
+    const html = blocks[name];
+    if (html === undefined) throw new Error(`${page.source}: no "${name}" block for {{${name}}}`);
+    unused.delete(name);
+    // Blank lines around it so marked treats it as one raw HTML block.
+    return `\n${html}\n`;
+  });
+  if (unused.size > 0) {
+    throw new Error(`${page.source}: missing the {{${[...unused].join("}}, {{")}}} line`);
+  }
+
+  const tokens = markdown.lexer(withBlocks);
   const first = firstHeading(tokens);
   if (first?.type !== "heading" || first.depth !== 1 || first.text !== page.title) {
     const found = first?.type === "heading" ? `"${first.text}"` : "no heading";
     throw new Error(
-      `${page.source}: expected "# ${page.title}" (its title in src/docs/pages.ts) as the first line, found ${found}`,
+      `${page.source}: expected "# ${page.title}" (its title in the section's page list) as the first line, found ${found}`,
     );
   }
   return markdown.parser(tokens);
@@ -86,60 +105,84 @@ export function buildSitemap(paths: readonly string[]): string {
   ].join("\n");
 }
 
-/** `template` with its `{{docs}}` line replaced by one link per page. */
-export function buildLlmsTxt(template: string, pages: readonly DocPage[]): string {
-  if (!template.includes(DOCS_MARKER)) {
-    throw new Error(`src/llms.txt: missing the ${DOCS_MARKER} line the docs list replaces`);
+/** `template` with each section's `{{key}}` line replaced by one link per page. */
+export function buildLlmsTxt(template: string, sections: readonly ContentSection[]): string {
+  let text = template;
+  for (const section of sections) {
+    const marker = `{{${section.key}}}`;
+    if (!text.includes(marker)) {
+      throw new Error(`src/llms.txt: missing the ${marker} line the ${section.name} list replaces`);
+    }
+    const links = section.pages
+      .map(
+        (page) => `- [${page.title}](${SITE_URL}${pagePath(section, page)}): ${page.description}`,
+      )
+      .join("\n");
+    text = text.replace(marker, links);
   }
-  const links = pages
-    .map((page) => `- [${page.title}](${SITE_URL}${docPath(page)}): ${page.description}`)
-    .join("\n");
-  return template.replace(DOCS_MARKER, links);
+  return text;
 }
 
 function generatedFiles(): Record<string, { type: string; source: string }> {
+  const paths = SECTIONS.flatMap((section) => [
+    section.path,
+    ...section.pages.map((page) => pagePath(section, page)),
+  ]);
   return {
-    "sitemap.xml": {
-      type: "application/xml",
-      source: buildSitemap(["/", DOCS_PATH, ...DOC_PAGES.map(docPath)]),
-    },
+    "sitemap.xml": { type: "application/xml", source: buildSitemap(["/", ...paths]) },
     "llms.txt": {
       type: "text/plain; charset=utf-8",
-      source: buildLlmsTxt(readFileSync(LLMS_TEMPLATE, "utf-8"), DOC_PAGES),
+      source: buildLlmsTxt(readFileSync(LLMS_TEMPLATE, "utf-8"), SECTIONS),
     },
   };
 }
 
-function sourceFile(page: DocPage): string {
+function sourceFile(page: ContentPage): string {
   return resolve(WEBSITE_ROOT, page.source);
 }
 
+function pageAt(path: string): { section: ContentSection; page: ContentPage } | undefined {
+  for (const section of SECTIONS) {
+    for (const page of section.pages) {
+      if (pagePath(section, page) === path) return { section, page };
+    }
+  }
+  return undefined;
+}
+
 export function writerDocs(): Plugin {
-  const watched = new Set([LLMS_TEMPLATE, ...DOC_PAGES.map(sourceFile)]);
+  const watched = new Set([
+    LLMS_TEMPLATE,
+    ...SECTIONS.flatMap((section) => section.pages.map(sourceFile)),
+  ]);
 
   return {
     name: "writer-docs",
 
     resolveId(id) {
-      if (id === INDEX_ID || id.startsWith(PAGE_ID_PREFIX)) return `\0${id}`;
+      if (id === INDEX_ID || id.startsWith(`${PAGE_ID_PREFIX}/`)) return `\0${id}`;
       return undefined;
     },
 
     load(id) {
       if (id === `\0${INDEX_ID}`) {
-        const entries = DOC_PAGES.map(
-          (page) =>
-            `  ${JSON.stringify(page.slug)}: () => import(${JSON.stringify(PAGE_ID_PREFIX + page.slug)}),`,
+        const entries = SECTIONS.flatMap((section) =>
+          section.pages.map((page) => {
+            const path = pagePath(section, page);
+            return `  ${JSON.stringify(path)}: () => import(${JSON.stringify(PAGE_ID_PREFIX + path)}),`;
+          }),
         );
-        return `export const DOC_HTML = {\n${entries.join("\n")}\n};\n`;
+        return `export const PAGE_HTML = {\n${entries.join("\n")}\n};\n`;
       }
-      if (id.startsWith(`\0${PAGE_ID_PREFIX}`)) {
-        const slug = id.slice(PAGE_ID_PREFIX.length + 1);
-        const page = DOC_PAGES.find((candidate) => candidate.slug === slug);
-        if (!page) throw new Error(`No docs page "${slug}" in src/docs/pages.ts`);
+      if (id.startsWith(`\0${PAGE_ID_PREFIX}/`)) {
+        const path = id.slice(PAGE_ID_PREFIX.length + 1);
+        const found = pageAt(path);
+        if (!found) throw new Error(`No page at ${path} in src/sections.ts`);
+        const { section, page } = found;
         const file = sourceFile(page);
         this.addWatchFile(file);
-        return `export default ${JSON.stringify(renderDoc(readFileSync(file, "utf-8"), page))};\n`;
+        const html = renderPage(readFileSync(file, "utf-8"), page, section.blocks?.(page));
+        return `export default ${JSON.stringify(html)};\n`;
       }
       return undefined;
     },
