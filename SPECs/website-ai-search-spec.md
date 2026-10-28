@@ -22,7 +22,8 @@ enterprise AI company), iA Writer (a direct competitor) and LibreOffice Writer.
   stays as it was (original headline, feature lines, "Free and open source.
   Forever"), with three changes: the "cold starts takes" typo is fixed, a
   "Tiny" line gives the download size, and "Extended markdown" mentions LaTeX
-  math. The site stays a single page for now. The fuller facts live in
+  math. The site stays a single page for now (later joined by `/docs/`, see
+  [`website-docs-spec.md`](./website-docs-spec.md)). The fuller facts live in
   `llms.txt`.
 - **Invisible improvements on the homepage:** title, meta and OG description,
   canonical link, `SoftwareApplication` + `Person` JSON-LD, visually hidden

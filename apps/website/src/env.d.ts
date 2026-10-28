@@ -29,6 +29,11 @@ interface ImportMetaEnv {
   readonly VITE_POSTHOG_HOST?: string;
 }
 
+/** Each docs page's HTML, rendered from markdown at build time by `docs-plugin.ts`. */
+declare module "virtual:writer-docs" {
+  export const DOC_HTML: Record<string, () => Promise<{ default: string }>>;
+}
+
 declare module "*.css";
 declare module "*.css?url" {
   const href: string;

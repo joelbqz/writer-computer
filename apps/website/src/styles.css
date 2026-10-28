@@ -14,6 +14,7 @@
   --accent: #e17909;
 
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
 
   --radius: 12px;
   --gutter-x: 32px;
@@ -304,6 +305,182 @@ a {
   border: 0;
 }
 
+/* ---------- docs ---------- */
+.docs {
+  padding: var(--gutter-top) var(--gutter-x) 64px;
+}
+
+.docs-body {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 680px);
+  gap: 64px;
+}
+
+.docs-nav {
+  position: sticky;
+  top: var(--gutter-top);
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--ink-60);
+}
+
+.docs-nav a {
+  transition: color 0.15s ease;
+}
+
+.docs-nav a:hover,
+.docs-nav a[aria-current="page"] {
+  color: var(--ink);
+}
+
+.doc {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink-80);
+}
+
+.doc h1 {
+  margin: 0 0 24px;
+  font-size: 40px;
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.doc h2 {
+  margin: 48px 0 12px;
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--ink);
+}
+
+.doc p,
+.doc ul,
+.doc ol,
+.doc pre,
+.doc table {
+  margin: 0 0 16px;
+}
+
+.doc ul,
+.doc ol {
+  padding-left: 20px;
+}
+
+.doc li + li {
+  margin-top: 6px;
+}
+
+.doc strong {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.doc a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 3px;
+}
+
+.doc code {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--surface-subtle);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+
+.doc pre {
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--surface-subtle);
+  line-height: 1.5;
+  overflow-x: auto;
+}
+
+.doc pre code {
+  padding: 0;
+  background: none;
+}
+
+.doc table {
+  /* Block so a wide table scrolls inside the column instead of the page. */
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.doc th,
+.doc td {
+  padding: 8px 16px 8px 0;
+  border-bottom: 1px solid var(--stroke-ghost);
+  text-align: left;
+  vertical-align: top;
+}
+
+.doc th {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.doc td code {
+  white-space: nowrap;
+}
+
+.doc video {
+  display: block;
+  width: 100%;
+  margin: 8px 0 24px;
+  border-radius: var(--radius);
+  background: var(--surface-screenshot);
+}
+
+.doc .docs-index {
+  list-style: none;
+  padding: 0;
+}
+
+.doc .docs-index li + li {
+  margin-top: 20px;
+}
+
+.docs-index a {
+  font-size: 18px;
+}
+
+.docs-index span {
+  display: block;
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--ink-60);
+}
+
+.docs-footer {
+  margin: 64px 0 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--stroke-ghost);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-60);
+}
+
+.docs-footer a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 3px;
+}
+
 /* ---------- responsive ---------- */
 @media (max-width: 1279px) {
   .screenshots {
@@ -350,6 +527,31 @@ a {
 
   .features {
     gap: 8px;
+  }
+
+  .docs {
+    padding: 20px 20px 48px;
+  }
+
+  .docs-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+
+  .docs-nav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+  }
+
+  .doc h1 {
+    font-size: 28px;
+  }
+
+  .doc h2 {
+    margin-top: 36px;
+    font-size: 20px;
   }
 
   .feature {

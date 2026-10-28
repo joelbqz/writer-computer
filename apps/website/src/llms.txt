@@ -27,6 +27,11 @@ Key facts:
 - [Telemetry disclosure](https://github.com/joelbqz/writer-computer/blob/master/docs/telemetry.md): every event and property the app can send, and how to keep it off
 - [Changelog](https://github.com/joelbqz/writer-computer/blob/master/CHANGELOG.md): user-visible changes
 
+## Docs
+
+- [Docs](https://writer.computer/docs/): all the pages below
+{{docs}}
+
 ## Optional
 
 - [Author on X](https://x.com/joelbqz): release announcements
