@@ -67,20 +67,14 @@ set by `scripts/distribute.sh`, so renaming the DMG there means updating both.
 ## Search engines and AI crawlers
 
 The site is written to be read without JavaScript: everything it says is in the
-prerendered `index.html` and `features/index.html`. The homepage's visible copy
-is the owner's and stays short; the definition and the full feature list live on
-`/features`, linked from the header's **Features** pill. "Writer Computer" is the canonical name wherever the
-product is defined; "Writer" alone collides with other products. See
+prerendered `index.html`. The homepage's visible copy is the owner's and stays
+short; the full fact sheet is `llms.txt`. "Writer Computer" is the canonical
+name wherever the product is defined; "Writer" alone collides with other products. See
 `SPECs/website-ai-search-spec.md`.
 
 - `apps/website/src/site.ts` holds the facts stated in more than one place
   (name, URLs). The root route's head carries the
-  `SoftwareApplication` + `Person` JSON-LD on every page.
-- `/features` is prerendered to `features/index.html`, which Cloudflare serves
-  at `/features/` (and redirects `/features` there), so its canonical link,
-  `og:url`, the sitemap and `llms.txt` all name
-  `https://writer.computer/features/`. The prerenderer finds it by crawling the
-  header's Features link.
+  `SoftwareApplication` + `Person` JSON-LD.
 - The download and installed sizes in `site.ts` were measured from the v0.8.0
   release (DMG 6.1 MB, installed app 9.2 MB). Re-measure when a release grows,
   and update `llms.txt` and the README with them; "under 10 MB installed" has

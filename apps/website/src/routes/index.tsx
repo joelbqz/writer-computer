@@ -1,9 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 
-import { DownloadCta } from "../components/DownloadCta";
-import { FeatureList } from "../components/FeatureList";
-import { SiteHeader } from "../components/SiteHeader";
-import { SITE_URL } from "../site";
+import { useAnalytics } from "../analytics";
+import { AppleGlyph, WriterMark } from "../components/Mark";
+import { PRODUCT_NAME, SITE_URL } from "../site";
+import { useLatestRelease } from "../use-latest-release";
 
 const FEATURES = [
   { label: "Private", description: "all your documents live in your computer" },
@@ -63,18 +63,65 @@ export const Route = createFileRoute("/")({
 });
 
 function HomePage() {
+  const capture = useAnalytics();
+  const release = useLatestRelease();
+
   return (
     <div className="page">
       <main className="hero">
-        <SiteHeader />
+        <header className="site-header">
+          <Link className="brand" to="/" aria-label={PRODUCT_NAME}>
+            <WriterMark size={18} />
+            <span className="brand-rule" aria-hidden="true" />
+          </Link>
+          <nav className="site-nav">
+            <a
+              className="pill pill-ghost"
+              href="https://x.com/joelbqz"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => capture("updates_opened")}
+            >
+              Updates
+            </a>
+            <a
+              className="pill pill-outline"
+              href={__WRITER_REPO_URL__}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => capture("github_opened")}
+            >
+              GitHub
+            </a>
+          </nav>
+        </header>
 
         <h1 className="headline">Fast and lightweight app for your workspace's markdown files</h1>
 
-        <DownloadCta />
+        <div className="cta">
+          <a
+            className="download"
+            href={release.dmgUrl}
+            onClick={() => capture("download_started", { app_version: release.version })}
+          >
+            <AppleGlyph size={20} />
+            <span>Download for MacOS</span>
+          </a>
+          <span className="beta-pill">Beta</span>
+          <span className="version">v{release.version}</span>
+        </div>
 
         <p className="caption">Free and open source. Forever</p>
 
-        <FeatureList features={FEATURES} />
+        <ul className="features">
+          {FEATURES.map(({ label, description }) => (
+            <li className="feature" key={label}>
+              {/* The space keeps the line readable as text without CSS. */}
+              <span className="feature-label">{label}</span>{" "}
+              <span className="feature-desc">{description}</span>
+            </li>
+          ))}
+        </ul>
       </main>
 
       <aside className="screenshots" aria-label="Demo videos">

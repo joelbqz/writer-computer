@@ -18,26 +18,19 @@ enterprise AI company), iA Writer (a direct competitor) and LibreOffice Writer.
   `<title>`, JSON-LD `name`, meta description, the first mention on every page,
   the README's first line. "Writer" stays the short name in the app and in
   casual copy, and is the JSON-LD `alternateName`.
-- **The new text lives on `/features`, not the homepage.** Owner decision: the
-  homepage's visible copy stays as it was (original headline, five feature
-  lines, "Free and open source. Forever"; only the "cold starts takes" typo is
-  fixed). `/features` is a page for people in the homepage's style: the same
-  header (a **Features** pill, marked current there) and download button as
-  shared components, then one centered column with the h1 "Writer Computer", a
-  one-sentence definition, the download button and the full feature list (the
-  homepage's five plus the selling points, free and open source, folders,
-  plain files and wikilinks, each a label and one short line).
-- **Invisible improvements stay on the homepage:** title, meta and OG
-  description, canonical link, `SoftwareApplication` + `Person` JSON-LD, and
-  visually hidden captions on the demo videos.
-- **Keep the tone.** On `/features` each feature is a short lowercase fragment
-  like the homepage's, at the owner's request.
+- **One page, unchanged copy.** Owner decision: the homepage's visible copy
+  stays as it was (original headline, five feature lines, "Free and open
+  source. Forever"; only the "cold starts takes" typo is fixed), and the site
+  stays a single page for now. The fuller facts live in `llms.txt`.
+- **Invisible improvements on the homepage:** title, meta and OG description,
+  canonical link, `SoftwareApplication` + `Person` JSON-LD, visually hidden
+  captions on the demo videos, and a real space between each feature's label
+  and description so the line reads as text without CSS.
 - **Platform and license wording.** At the owner's request the copy, JSON-LD,
   `llms.txt` and README say "macOS" and "free and open source" and nothing more
   specific: no chip or architecture requirement, no license name or link.
-- **Selling points up front.** Three claims lead the `/features` definition
-  and feature list, the JSON-LD and meta descriptions, `llms.txt` and the
-  README: a small
+- **Selling points up front.** Three claims lead the JSON-LD and meta
+  descriptions, `llms.txt` and the README: a small
   download (about 6 MB, under 10 MB installed), faster startup than Apple Notes
   and Obsidian (the owner's claim; no benchmark numbers are published), and
   instant cold starts on very large workspaces.
@@ -76,15 +69,13 @@ enterprise AI company), iA Writer (a direct competitor) and LibreOffice Writer.
 
 ## Deliverables
 
-1. Homepage: master's visible copy with the typo fixed, a "Features" nav pill,
-   and hidden captions for the demo videos.
-2. `/features`: definition, download button, feature list; its own title,
-   description and canonical.
-3. Head: title, description, og tags, canonical link on both pages;
+1. Homepage: master's visible copy with the typo fixed, and hidden captions
+   for the demo videos.
+2. Head: title, description, og tags, canonical link;
    `SoftwareApplication` + `Person` JSON-LD in the root head.
-4. `llms.txt` (full fact sheet, `/features` listed first), `sitemap.xml` (both
-   pages), `robots.txt` in `public/`.
-5. README opens with the canonical definition.
+3. `llms.txt` (the full fact sheet), `sitemap.xml`, `robots.txt` in
+   `public/`.
+4. README opens with the canonical definition.
 
 ## Out of scope
 

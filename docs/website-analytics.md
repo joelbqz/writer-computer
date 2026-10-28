@@ -21,13 +21,6 @@ Four events. That is the whole list.
 | `github_opened`    | The **GitHub** link in the header is clicked        |
 | `download_started` | The **Download for MacOS** button is clicked        |
 
-The header and the download button are shared components
-(`components/SiteHeader.tsx`, `components/DownloadCta.tsx`) shown on both the
-homepage and `/features`, so each of these three can fire from either page. To
-split them by page, filter on PostHog's own `$pathname` property, which the SDK
-attaches to every event; the site adds no page property of its own. The
-**Features** link sends no event of its own beyond the `$pageview` it leads to.
-
 `download_started` carries one property, `app_version` — the version the
 button pointed at when it was clicked. That is GitHub's latest published release
 once the page has looked it up (see [website-deploy.md](./website-deploy.md),

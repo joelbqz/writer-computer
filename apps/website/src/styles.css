@@ -292,65 +292,6 @@ a {
   opacity: 1;
 }
 
-/* ---------- features page ---------- */
-.features-page {
-  min-height: 100vh;
-  padding: var(--gutter-top) var(--gutter-x) 120px;
-}
-
-.features-column {
-  max-width: 640px;
-  margin: 0 auto;
-  padding-top: clamp(40px, 10vh, 112px);
-}
-
-.lede {
-  margin: 20px 0 0;
-  max-width: 34em;
-  color: var(--ink-60);
-  font-size: 18px;
-  line-height: 1.45;
-}
-
-.features-column .cta {
-  margin-top: 32px;
-}
-
-.features-column .features {
-  margin: 72px 0 0;
-}
-
-.features-column .feature {
-  line-height: 1.4;
-}
-
-.pill[aria-current="page"] {
-  background: rgba(255, 255, 255, 0.06);
-}
-
-@media (max-width: 899px) {
-  .features-page {
-    padding: 20px 20px 72px;
-  }
-
-  .features-column {
-    padding-top: 32px;
-  }
-
-  .lede {
-    margin-top: 12px;
-    font-size: 15px;
-  }
-
-  .features-column .cta {
-    margin-top: 20px;
-  }
-
-  .features-column .features {
-    margin-top: 48px;
-  }
-}
-
 .sr-only {
   position: absolute;
   width: 1px;
