@@ -1,4 +1,5 @@
 import type { ContentPage, ContentSection } from "../content";
+import { DOCS } from "../docs/pages";
 
 /**
  * The comparison pages. Each page's markdown has a `{{comparison}}` line that
@@ -90,7 +91,8 @@ function comparisonHtml(page: ComparePage): string {
 export const COMPARE: ContentSection<ComparePage> = {
   key: "compare",
   name: "Compare",
-  path: "/compare/",
+  path: "/docs/compare/",
+  parent: DOCS,
   blocks: (page) => ({ comparison: comparisonHtml(page) }),
   pages: [
     {

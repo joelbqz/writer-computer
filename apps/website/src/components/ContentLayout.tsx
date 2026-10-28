@@ -1,35 +1,39 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 
 import { COMPARE } from "../compare/pages";
 import { type ContentSection, pagePath } from "../content";
+import { SECTIONS } from "../sections";
 import { PRODUCT_NAME } from "../site";
 import { SiteHeader } from "./SiteHeader";
 
 /**
- * The frame every markdown section shares: the site header, a nav of the
- * section's pages, the page, and a footer that defines the app and links to
- * the download and the comparisons.
+ * The frame of every docs page: the site header, a nav of every section's
+ * pages, the page, and a footer that defines the app and links to the download
+ * and the comparisons. The top section's index is "Overview"; a nested
+ * section's index heads its group of pages.
  */
-export function ContentLayout({
-  section,
-  overview,
-}: {
-  section: ContentSection;
-  overview: string;
-}) {
+export function ContentLayout() {
   return (
     <div className="docs">
       <SiteHeader />
       <div className="docs-body">
-        <nav className="docs-nav" aria-label={section.name}>
-          <Link to={section.path} activeOptions={{ exact: true }}>
-            {overview}
-          </Link>
-          {section.pages.map((page) => (
-            <Link key={page.slug} to={pagePath(section, page)}>
-              {page.title}
-            </Link>
+        <nav className="docs-nav" aria-label="Docs">
+          {SECTIONS.map((section) => (
+            <Fragment key={section.key}>
+              <Link
+                to={section.path}
+                className={section.parent ? "docs-nav-group" : undefined}
+                activeOptions={{ exact: true }}
+              >
+                {section.parent ? section.name : "Overview"}
+              </Link>
+              {section.pages.map((page) => (
+                <Link key={page.slug} to={pagePath(section, page)}>
+                  {page.title}
+                </Link>
+              ))}
+            </Fragment>
           ))}
         </nav>
         <main className="docs-main">

@@ -1,14 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { COMPARE } from "../../compare/pages";
-import { SectionIndex } from "../../components/ContentLayout";
-import { sectionIndexHead } from "../../content-route";
-import { PRODUCT_NAME } from "../../site";
+import { COMPARE } from "../../../compare/pages";
+import { SectionIndex } from "../../../components/ContentLayout";
+import { sectionIndexHead } from "../../../content-route";
+import { PRODUCT_NAME } from "../../../site";
 
 const TITLE = `${PRODUCT_NAME} compared with Obsidian, Typora, iA Writer and Apple Notes`;
 const DESCRIPTION = `How ${PRODUCT_NAME}, a free, open-source markdown editor for macOS, compares with Obsidian, Typora, iA Writer and Apple Notes, and who each one suits.`;
 
-export const Route = createFileRoute("/compare/")({
+export const Route = createFileRoute("/docs/compare/")({
   head: () => sectionIndexHead(COMPARE, TITLE, DESCRIPTION),
   component: CompareIndex,
 });

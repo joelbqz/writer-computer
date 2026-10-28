@@ -4,7 +4,7 @@ import { describe, expect, test } from "vite-plus/test";
 
 import { buildLlmsTxt, buildSitemap, headingId, renderPage } from "../docs-plugin";
 import { COMPARE } from "../src/compare/pages";
-import type { ContentPage, ContentSection } from "../src/content";
+import { type ContentPage, type ContentSection, sectionTrail } from "../src/content";
 import { SECTIONS } from "../src/sections";
 
 const PAGE: ContentPage = {
@@ -72,6 +72,21 @@ describe("comparison pages", () => {
       const [year, , day] = page.checked.split("-").map(Number);
       expect(comparison).toMatch(new RegExp(`details as of \\w+ ${day}, ${year}`));
       for (const { url } of page.sources) expect(comparison).toContain(`href="${url}"`);
+    }
+  });
+});
+
+describe("sections", () => {
+  test("comparisons sit under the docs, so they share its nav and breadcrumbs", () => {
+    expect(sectionTrail(COMPARE).map((section) => section.path)).toEqual([
+      "/docs/",
+      "/docs/compare/",
+    ]);
+  });
+
+  test("a nested section is served under its parent's path", () => {
+    for (const section of SECTIONS) {
+      if (section.parent) expect(section.path.startsWith(section.parent.path)).toBe(true);
     }
   });
 });

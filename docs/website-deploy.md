@@ -94,7 +94,7 @@ name wherever the product is defined; "Writer" alone collides with other product
 
 ## Docs and comparison pages
 
-`/docs/` and `/compare/` are markdown sections rendered at build time; see
+`/docs/` and `/docs/compare/` are markdown sections rendered at build time; see
 `SPECs/website-docs-spec.md` and `SPECs/website-compare-spec.md`.
 
 - Each section lists its pages (slug, title, description, source file) in
@@ -102,6 +102,11 @@ name wherever the product is defined; "Writer" alone collides with other product
   and `apps/website/src/sections.ts` lists the sections. The nav and index,
   `sitemap.xml` and the lists in `llms.txt` all come from these, so adding a
   page is one entry plus its markdown file.
+- Comparisons are part of the docs: the `COMPARE` section's `parent` is
+  `DOCS`, its pages live under `/docs/compare/` (routes in
+  `src/routes/docs/compare/`), and the docs sidebar lists them under a
+  "Compare" heading. Breadcrumbs run Docs › Compare › page. A nested section's
+  path must sit under its parent's; `tests/docs.test.ts` checks it.
 - A page's file must start with `# <title>`, the same title as in its page
   list; the build fails otherwise. HTML comments are left out of the published
   page, so notes for contributors can sit in the source.
@@ -112,8 +117,8 @@ name wherever the product is defined; "Writer" alone collides with other product
   update `checked`.
 - The shortcuts page is the repository's `docs/keyboard-shortcuts.md` itself,
   so a shortcut change reaches the site on the next deploy.
-- Pages are served at `/docs/<slug>/` with the trailing slash, which is also
-  their canonical URL.
+- Pages are served at `/docs/<slug>/` and `/docs/compare/<slug>/` with the
+  trailing slash, which is also their canonical URL.
 
 ## Notes
 

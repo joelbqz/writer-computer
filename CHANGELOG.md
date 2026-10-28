@@ -3,7 +3,7 @@
 ## 2026-10-28
 
 - writer.computer has docs: [writer.computer/docs](https://writer.computer/docs/) covers opening a folder or Obsidian vault, which Obsidian syntax works (and which doesn't), Mermaid diagrams, LaTeX math and every keyboard shortcut. A **Docs** link sits next to Updates and GitHub on the homepage.
-- writer.computer compares Writer Computer with Obsidian, Typora, iA Writer and Apple Notes at [writer.computer/compare](https://writer.computer/compare/): price, platforms, sync, Mermaid, math, wikilinks, search, export and download size side by side, with who each app suits better and how to move your notes over. Details about the other apps come from their own websites, dated and linked under each table.
+- writer.computer compares Writer Computer with Obsidian, Typora, iA Writer and Apple Notes in its docs, at [writer.computer/docs/compare](https://writer.computer/docs/compare/): price, platforms, sync, Mermaid, math, wikilinks, search, export and download size side by side, with who each app suits better and how to move your notes over. Details about the other apps come from their own websites, dated and linked under each table.
 
 ## 2026-10-27
 

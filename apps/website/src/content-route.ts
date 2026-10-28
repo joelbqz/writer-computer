@@ -1,7 +1,7 @@
 import { notFound } from "@tanstack/react-router";
 import { PAGE_HTML } from "virtual:writer-pages";
 
-import { type ContentPage, type ContentSection, findPage, pagePath } from "./content";
+import { type ContentPage, type ContentSection, findPage, pagePath, sectionTrail } from "./content";
 import { APP_ID, AUTHOR_ID, PRODUCT_NAME, SITE_URL, jsonLdScript } from "./site";
 
 /** Loader for a section's `$slug` route: the page and its prerendered HTML. */
@@ -33,7 +33,8 @@ export function sectionIndexHead(section: ContentSection, title: string, descrip
 /**
  * Head for one page: title, description, canonical, `og:*`, and an article +
  * breadcrumb JSON-LD graph that points at the app and author the root head
- * declares.
+ * declares. The breadcrumb runs through every section the page's section is
+ * nested in.
  */
 export function pageHead(
   section: ContentSection,
@@ -67,15 +68,13 @@ export function pageHead(
           {
             "@type": "BreadcrumbList",
             itemListElement: [
-              { "@type": "ListItem", position: 1, name: PRODUCT_NAME, item: `${SITE_URL}/` },
-              {
-                "@type": "ListItem",
-                position: 2,
-                name: section.name,
-                item: `${SITE_URL}${section.path}`,
-              },
-              { "@type": "ListItem", position: 3, name: page.title, item: url },
-            ],
+              { name: PRODUCT_NAME, item: `${SITE_URL}/` },
+              ...sectionTrail(section).map((each) => ({
+                name: each.name,
+                item: `${SITE_URL}${each.path}`,
+              })),
+              { name: page.title, item: url },
+            ].map((crumb, index) => ({ "@type": "ListItem", position: index + 1, ...crumb })),
           },
         ],
       }),

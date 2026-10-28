@@ -1,5 +1,5 @@
 /**
- * The site's markdown sections (`/docs/`, `/compare/`). Each section is a list
+ * The site's markdown sections (`/docs/`, `/docs/compare/`). Each section is a list
  * of pages, and each page is one markdown file that `docs-plugin.ts` renders
  * to HTML at build time and lists in `sitemap.xml` and `llms.txt`. A page's
  * file must start with `# <title>`; the build fails if it doesn't.
@@ -26,6 +26,11 @@ export interface ContentSection<Page extends ContentPage = ContentPage> {
   name: string;
   /** Where the section's index is served, with both slashes. */
   path: string;
+  /**
+   * The section this one is nested in, if any: its pages appear in the
+   * parent's nav, and their breadcrumbs go through the parent's index.
+   */
+  parent?: ContentSection;
   pages: readonly Page[];
   /**
    * HTML built from data for a page, by name: a line `{{name}}` in the page's
@@ -44,4 +49,9 @@ export function findPage<Page extends ContentPage>(
   slug: string,
 ): Page | undefined {
   return section.pages.find((page) => page.slug === slug);
+}
+
+/** The section and the sections it is nested in, outermost first. */
+export function sectionTrail(section: ContentSection): ContentSection[] {
+  return section.parent ? [...sectionTrail(section.parent), section] : [section];
 }

@@ -337,6 +337,12 @@ a {
   color: var(--ink);
 }
 
+.docs-nav .docs-nav-group {
+  margin-top: 12px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
 .doc {
   font-size: 16px;
   line-height: 1.6;
@@ -559,6 +565,11 @@ a {
     flex-direction: row;
     flex-wrap: wrap;
     gap: 8px 16px;
+  }
+
+  .docs-nav .docs-nav-group {
+    flex-basis: 100%;
+    margin-top: 4px;
   }
 
   .doc h1 {

@@ -34,7 +34,7 @@ Key facts:
 
 ## Compare
 
-- [Compare](https://writer.computer/compare/): Writer Computer beside Obsidian, Typora, iA Writer and Apple Notes
+- [Compare](https://writer.computer/docs/compare/): Writer Computer beside Obsidian, Typora, iA Writer and Apple Notes
 {{compare}}
 
 ## Optional
