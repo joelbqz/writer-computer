@@ -15,6 +15,13 @@
 
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --font-serif: ui-serif, "New York", Georgia, "Times New Roman", serif;
+
+  /* Docs typography, measured from Linear's Method pages. */
+  --doc-heading: #f7f8f8;
+  --doc-ink: #d0d6e0;
+  --doc-muted: #8a8f98;
+  --doc-link-line: #62666d;
 
   --radius: 12px;
   --gutter-x: 32px;
@@ -312,7 +319,7 @@ a {
 
 .docs-body {
   display: grid;
-  grid-template-columns: 220px minmax(0, 680px);
+  grid-template-columns: 220px minmax(0, 688px);
   gap: 64px;
 }
 
@@ -324,17 +331,18 @@ a {
   flex-direction: column;
   gap: 12px;
   font-size: 14px;
-  line-height: 1.3;
-  color: var(--ink-60);
+  line-height: 1.5;
+  letter-spacing: -0.013em;
+  color: var(--doc-muted);
 }
 
 .docs-nav a {
-  transition: color 0.15s ease;
+  transition: color 0.1s ease;
 }
 
 .docs-nav a:hover,
 .docs-nav a[aria-current="page"] {
-  color: var(--ink);
+  color: var(--doc-heading);
 }
 
 .docs-nav .docs-nav-group {
@@ -344,70 +352,117 @@ a {
 }
 
 .doc {
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1.6;
-  color: var(--ink-80);
+  color: var(--doc-ink);
+}
+
+/* Block-level spacing goes above each block, so a heading's larger gap
+   replaces the paragraph gap instead of adding to it. */
+.doc > * {
+  margin: 16px 0 0;
+}
+
+.doc > :first-child {
+  margin-top: 0;
 }
 
 .doc h1 {
-  margin: 0 0 24px;
-  font-size: 40px;
+  font-family: var(--font-serif);
+  font-size: 72px;
   font-weight: 400;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-  color: var(--ink);
+  line-height: 1;
+  letter-spacing: -0.022em;
+  color: var(--doc-heading);
 }
 
-.doc h2 {
-  margin: 48px 0 12px;
-  font-size: 22px;
-  font-weight: 500;
-  line-height: 1.3;
-  color: var(--ink);
+.doc h1 + * {
+  margin-top: 32px;
 }
 
-.doc p,
-.doc ul,
-.doc ol,
-.doc pre,
-.doc table {
-  margin: 0 0 16px;
+/* A faint field of markdown syntax behind the top of the page, fading out
+   toward the title. */
+.doc > h1:first-child {
+  position: relative;
+  padding-top: 120px;
+}
+
+.doc > h1:first-child::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 104px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='368' height='52' font-family='ui-monospace,SF Mono,Menlo,monospace' font-size='15'%3E%3Cg fill='%23ffffff' fill-opacity='0.14'%3E%3Ctext x='6' y='20'%3E%23%3C/text%3E%3Ctext x='44' y='20'%3E%2A%2A%3C/text%3E%3Ctext x='150' y='20'%3E%24%24%3C/text%3E%3Ctext x='212' y='20'%3E%23%23%3C/text%3E%3Ctext x='262' y='20'%3E~~%3C/text%3E%3Ctext x='330' y='20'%3E%60%3C/text%3E%3Ctext x='22' y='46'%3E%60%60%60%3C/text%3E%3Ctext x='76' y='46'%3E- %5B %5D%3C/text%3E%3Ctext x='150' y='46'%3E%26gt%3B%3C/text%3E%3Ctext x='186' y='46'%3E---%3C/text%3E%3Ctext x='244' y='46'%3E1.%3C/text%3E%3Ctext x='300' y='46'%3E_%3C/text%3E%3C/g%3E%3Ctext x='86' y='20' fill='%23e17909' fill-opacity='0.5'%3E%5B%5B %5D%5D%3C/text%3E%3C/svg%3E")
+    0 0 / 368px 52px repeat;
+  -webkit-mask-image: radial-gradient(130% 100% at 0% 0%, #000 25%, transparent 75%);
+  mask-image: radial-gradient(130% 100% at 0% 0%, #000 25%, transparent 75%);
+  pointer-events: none;
+}
+
+.doc h2,
+.doc h3 {
+  font-size: 24px;
+  font-weight: 590;
+  line-height: 1.33;
+  letter-spacing: -0.012em;
+  color: var(--doc-heading);
+}
+
+.doc > h2 {
+  margin-top: 56px;
+}
+
+.doc > h3 {
+  margin-top: 32px;
 }
 
 .doc ul,
 .doc ol {
-  padding-left: 20px;
+  padding-left: 22px;
 }
 
 .doc li + li {
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 .doc strong {
-  font-weight: 500;
-  color: var(--ink);
+  font-weight: 590;
+  color: var(--doc-heading);
 }
 
-.doc a {
-  color: var(--ink);
+.doc a,
+.docs-footer a {
+  color: var(--doc-heading);
   text-decoration: underline;
-  text-decoration-color: var(--accent);
-  text-underline-offset: 3px;
+  text-decoration-color: var(--doc-link-line);
+  text-decoration-thickness: from-font;
+  text-underline-offset: 0.175em;
+  transition:
+    color 0.25s,
+    text-decoration-color 0.25s;
+}
+
+.doc a:hover,
+.docs-footer a:hover {
+  text-decoration-color: var(--doc-heading);
 }
 
 .doc code {
   padding: 2px 5px;
   border-radius: 4px;
   background: var(--surface-subtle);
-  color: var(--ink);
+  color: var(--doc-heading);
   font-family: var(--font-mono);
-  font-size: 0.85em;
+  font-size: 0.82em;
 }
 
 .doc pre {
   padding: 16px;
   border-radius: var(--radius);
   background: var(--surface-subtle);
+  font-size: 15px;
   line-height: 1.5;
   overflow-x: auto;
 }
@@ -415,6 +470,7 @@ a {
 .doc pre code {
   padding: 0;
   background: none;
+  font-size: inherit;
 }
 
 .doc table {
@@ -422,21 +478,21 @@ a {
   display: block;
   overflow-x: auto;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.5;
 }
 
 .doc th,
 .doc td {
-  padding: 8px 16px 8px 0;
+  padding: 10px 16px 10px 0;
   border-bottom: 1px solid var(--stroke-ghost);
   text-align: left;
   vertical-align: top;
 }
 
 .doc th {
-  font-weight: 500;
-  color: var(--ink);
+  font-weight: 590;
+  color: var(--doc-heading);
 }
 
 .doc td code {
@@ -445,62 +501,85 @@ a {
 
 .doc tbody th {
   /* Row labels of a comparison table. */
-  font-weight: 500;
   white-space: nowrap;
 }
 
 .compare-sources {
   font-size: 13px;
   line-height: 1.5;
-  color: var(--ink-60);
+  color: var(--doc-muted);
 }
 
 .doc video {
   display: block;
   width: 100%;
-  margin: 8px 0 24px;
+  margin-bottom: 8px;
   border-radius: var(--radius);
   background: var(--surface-screenshot);
 }
 
+/* A section's index: a grid of cards, each one link with its description. */
 .doc .docs-index {
-  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 40px;
   padding: 0;
+  list-style: none;
 }
 
-.doc .docs-index li + li {
-  margin-top: 20px;
+.doc .docs-index li {
+  position: relative;
+  margin: 0;
+  padding: 20px;
+  border: 1px solid var(--stroke-ghost);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.02);
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
 }
 
-.docs-index a {
-  font-size: 18px;
+.doc .docs-index li:hover {
+  border-color: var(--stroke-hover);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.doc .docs-index a {
+  font-size: 17px;
+  font-weight: 590;
+  line-height: 1.4;
+  letter-spacing: -0.012em;
+  text-decoration: none;
+}
+
+/* The whole card is the link's hit area. */
+.doc .docs-index a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
 }
 
 .docs-index span {
   display: block;
-  margin-top: 4px;
+  margin-top: 6px;
   font-size: 14px;
-  color: var(--ink-60);
+  line-height: 1.5;
+  color: var(--doc-muted);
 }
 
 .docs-footer {
-  margin: 64px 0 0;
+  margin: 80px 0 0;
   padding-top: 24px;
   border-top: 1px solid var(--stroke-ghost);
   font-size: 14px;
   line-height: 1.5;
-  color: var(--ink-60);
+  color: var(--doc-muted);
 }
 
 .docs-footer p {
   margin: 0 0 8px;
-}
-
-.docs-footer a {
-  color: var(--ink);
-  text-decoration: underline;
-  text-decoration-color: var(--accent);
-  text-underline-offset: 3px;
 }
 
 /* ---------- responsive ---------- */
@@ -573,16 +652,32 @@ a {
   }
 
   .doc h1 {
-    font-size: 28px;
+    font-size: 40px;
+  }
+
+  .doc > h1:first-child {
+    padding-top: 84px;
+  }
+
+  .doc > h1:first-child::before {
+    height: 72px;
+  }
+
+  .doc .docs-index {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .doc tbody th {
     white-space: normal;
   }
 
-  .doc h2 {
-    margin-top: 36px;
+  .doc h2,
+  .doc h3 {
     font-size: 20px;
+  }
+
+  .doc > h2 {
+    margin-top: 40px;
   }
 
   .feature {
