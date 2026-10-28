@@ -2,7 +2,7 @@
 
 ## 2026-10-28
 
-- writer.computer has docs: [writer.computer/docs](https://writer.computer/docs/) covers opening a folder or Obsidian vault, which Obsidian syntax works (and which doesn't), Mermaid diagrams, LaTeX math, every keyboard shortcut, and what the app sends and never sends. A **Docs** link sits next to Updates and GitHub on the homepage.
+- writer.computer has docs: [writer.computer/docs](https://writer.computer/docs/) covers opening a folder or Obsidian vault, which Obsidian syntax works (and which doesn't), Mermaid diagrams, LaTeX math and every keyboard shortcut. A **Docs** link sits next to Updates and GitHub on the homepage.
 
 ## 2026-10-27
 

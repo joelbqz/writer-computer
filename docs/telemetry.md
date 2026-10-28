@@ -145,8 +145,3 @@ Adding an event means editing three things in the same commit: the `track` call
 site, the table in this file, and the `COLLECTED` list in
 `apps/desktop/src/components/telemetry-consent-dialog.tsx`. If a change would
 make any of those three disagree, it needs a different design.
-
-The website's privacy page (`apps/website/src/docs/privacy.md`) summarises this
-document without listing the events, so a new event doesn't touch it. A change
-to what is never collected, to the email field, or to the off-switches does:
-update that page in the same commit.
