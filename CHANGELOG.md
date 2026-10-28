@@ -2,7 +2,7 @@
 
 ## 2026-10-27
 
-- writer.computer is easier for search engines and AI assistants to read and quote: the page now has a proper title and description (a free, open-source markdown editor for macOS; about 6 MB; faster to start than Apple Notes and Obsidian; opens very large workspaces instantly), structured data describing the app, descriptions of each demo video for screen readers, a sitemap, a `robots.txt` that points to it, and an `llms.txt` fact sheet. The homepage looks the same as before, with a typo fixed ("cold starts take a fraction of a second"). "Writer Computer" is now the full name wherever the product is introduced, here and in the README, so it isn't confused with other apps called Writer; in the app it is still Writer.
+- writer.computer is easier for search engines and AI assistants to read and quote: the page now has a proper title and description (a free, open-source markdown editor for macOS; about 6 MB; faster to start than Apple Notes and Obsidian; opens very large workspaces instantly), structured data describing the app, descriptions of each demo video for screen readers, a sitemap, a `robots.txt` that points to it, and an `llms.txt` fact sheet. The homepage looks the same as before, with a typo fixed ("cold starts take a fraction of a second"), a new "Tiny" line (about a 6 MB download) and LaTeX math added to "Extended markdown". "Writer Computer" is now the full name wherever the product is introduced, here and in the README, so it isn't confused with other apps called Writer; in the app it is still Writer.
 
 ## 2026-10-17
 

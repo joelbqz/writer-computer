@@ -18,10 +18,12 @@ enterprise AI company), iA Writer (a direct competitor) and LibreOffice Writer.
   `<title>`, JSON-LD `name`, meta description, the first mention on every page,
   the README's first line. "Writer" stays the short name in the app and in
   casual copy, and is the JSON-LD `alternateName`.
-- **One page, unchanged copy.** Owner decision: the homepage's visible copy
-  stays as it was (original headline, five feature lines, "Free and open
-  source. Forever"; only the "cold starts takes" typo is fixed), and the site
-  stays a single page for now. The fuller facts live in `llms.txt`.
+- **One page, short copy.** Owner decision: the homepage's visible copy
+  stays as it was (original headline, feature lines, "Free and open source.
+  Forever"), with three changes: the "cold starts takes" typo is fixed, a
+  "Tiny" line gives the download size, and "Extended markdown" mentions LaTeX
+  math. The site stays a single page for now. The fuller facts live in
+  `llms.txt`.
 - **Invisible improvements on the homepage:** title, meta and OG description,
   canonical link, `SoftwareApplication` + `Person` JSON-LD, visually hidden
   captions on the demo videos, and a real space between each feature's label
@@ -69,8 +71,9 @@ enterprise AI company), iA Writer (a direct competitor) and LibreOffice Writer.
 
 ## Deliverables
 
-1. Homepage: master's visible copy with the typo fixed, and hidden captions
-   for the demo videos.
+1. Homepage: master's visible copy with the typo fixed, a "Tiny" feature
+   line, LaTeX math under "Extended markdown", and hidden captions for the
+   demo videos.
 2. Head: title, description, og tags, canonical link;
    `SoftwareApplication` + `Person` JSON-LD in the root head.
 3. `llms.txt` (the full fact sheet), `sitemap.xml`, `robots.txt` in

@@ -2,13 +2,14 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 
 import { useAnalytics } from "../analytics";
 import { AppleGlyph, WriterMark } from "../components/Mark";
-import { PRODUCT_NAME, SITE_URL } from "../site";
+import { DOWNLOAD_SIZE, PRODUCT_NAME, SITE_URL } from "../site";
 import { useLatestRelease } from "../use-latest-release";
 
 const FEATURES = [
   { label: "Private", description: "all your documents live in your computer" },
   { label: "Blazing fast", description: "cold starts take a fraction of a second" },
-  { label: "Extended markdown", description: "mermaid charts, tables and HTML" },
+  { label: "Tiny", description: `about a ${DOWNLOAD_SIZE} download` },
+  { label: "Extended markdown", description: "mermaid charts, LaTeX math, tables and HTML" },
   { label: "Multiwindow", description: "snappy switch between multiple workspaces" },
   { label: "Frontmatter", description: "YAML metadata support built-in" },
 ];
