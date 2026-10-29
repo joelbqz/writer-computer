@@ -334,6 +334,11 @@ a {
   position: relative;
 }
 
+/* A little more room under the header than on the homepage. */
+.docs > .site-header {
+  margin-bottom: 88px;
+}
+
 .docs-body {
   display: grid;
   grid-template-columns: 220px minmax(0, 688px);
@@ -668,6 +673,10 @@ a {
 
   .docs {
     padding: 20px 20px 48px;
+  }
+
+  .docs > .site-header {
+    margin-bottom: 48px;
   }
 
   .docs-body {
