@@ -6,7 +6,7 @@ Add a small docs section to writer.computer at `/docs/`, so search engines and A
 
 ## Decisions
 
-- **Five pages, each written around a question people search for**, not around the app's menus: open a folder or vault, Obsidian compatibility, Mermaid diagrams, math with LaTeX, keyboard shortcuts. Plus an index at `/docs/`. A privacy and telemetry page was dropped at the owner's request; `docs/telemetry.md` on GitHub remains the disclosure, linked from `llms.txt`.
+- **Nine pages, each written around a question people search for**, not around the app's menus: open a folder or vault, Obsidian compatibility, find your way around a note, tables, tasks and code, Mermaid diagrams, math with LaTeX, customize the look, the sidebar, keyboard shortcuts. Plus an index at `/docs/`, whose introduction also states the Tauri-sized download and the self-updating. The four pages after the first five were added later, each from a code-level check of the labels, ranges and defaults it states (for example the default line height is 1.875, Recents lists recently modified notes, Delete goes to the Trash without asking). A privacy and telemetry page was dropped at the owner's request; `docs/telemetry.md` on GitHub remains the disclosure, linked from `llms.txt`.
 - **Facts come from the code, not the specs.** Each claim was checked against `apps/desktop/` on master at v0.8.0 (which ships Pele). What the app doesn't do is stated as plainly as what it does (no callouts, no note embeds, `[[Note#Heading]]` doesn't jump to the heading, renames don't update links), because assistants repeat those limits and readers trust a page that names them.
 - **One source per fact.**
   - `apps/website/src/docs/pages.ts` is the page list: slug, title, description and markdown source. The nav, the index, `sitemap.xml` and the docs list in `llms.txt` are all built from it, so adding a page is one entry plus its file.
@@ -27,5 +27,5 @@ Add a small docs section to writer.computer at `/docs/`, so search engines and A
 ## Validation
 
 - `vp check`, `vp test` (`apps/website/tests/docs.test.ts` renders every registered page and covers the title check, comment stripping, heading ids, sitemap and `llms.txt` generation).
-- `vp run website#build` prerenders `/`, `/docs/` and the five pages; each has one title, description, canonical and `og:url`, and the docs pages carry the extra JSON-LD.
+- `vp run website#build` prerenders `/`, `/docs/` and the nine pages; each has one title, description, canonical and `og:url`, and the docs pages carry the extra JSON-LD.
 - Screenshots at 1440 px and 390 px; no page scrolls horizontally at 390 px. Client-side navigation between docs pages swaps the page and its head without a reload.

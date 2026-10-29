@@ -17,7 +17,7 @@ To open an Obsidian vault, open the vault's folder. Writer doesn't need anything
 
 ## Open a single note
 
-Open a `.md` or `.markdown` file with Writer, from Finder's **Open With** menu or with `writer note.md`, and it opens in a compact window with no sidebar or tabs. A menu at the top lists the other notes in the same folder, so you can move between them. If that folder is already open as a workspace, the note opens in the workspace's window instead.
+Open a `.md` or `.markdown` file with Writer, from Finder's **Open With** menu, by dragging it onto Writer, or with `writer note.md`, and it opens in a compact window of its own, with no sidebar, tabs or status bar. Click the note's title at the top to switch to one of your recent notes. From a workspace, **Open File in Compact Window** in the command palette does the same for the note you're on.
 
 ## What Writer does with your files
 

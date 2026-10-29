@@ -2,6 +2,7 @@
 
 ## 2026-10-28
 
+- The docs cover more of the app: [finding your way around a note](https://writer.computer/docs/navigate-a-note/) (the heading outline at the edge of a note, links to headings, find and replace, word counts), [tables, tasks and code](https://writer.computer/docs/tables-tasks-and-code/), [customizing the look](https://writer.computer/docs/customize-the-look/) and [the sidebar](https://writer.computer/docs/sidebar/). The keyboard shortcuts page no longer lists ⌘H, which isn't bound, and says that ⌘O is the same as ⌘P.
 - writer.computer has docs: [writer.computer/docs](https://writer.computer/docs/) covers opening a folder or Obsidian vault, which Obsidian syntax works (and which doesn't), Mermaid diagrams, LaTeX math and every keyboard shortcut. A **Docs** link sits next to Updates and GitHub on the homepage.
 - writer.computer compares Writer Computer with Obsidian, Typora, iA Writer and Apple Notes in its docs, at [writer.computer/docs/compare](https://writer.computer/docs/compare/): price, platforms, sync, Mermaid, math, wikilinks, search, export and download size side by side, with who each app suits better and how to move your notes over. Details about the other apps come from their own websites, dated and linked under each table.
 

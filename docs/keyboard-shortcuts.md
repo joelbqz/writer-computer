@@ -12,8 +12,9 @@ These work anywhere in the window, whether or not you are typing in a note.
 
 | Shortcut        | Action                                                                 |
 | --------------- | ---------------------------------------------------------------------- |
-| Cmd+P           | File search (command palette)                                          |
-| Cmd+O           | Go to file                                                             |
+| Cmd+P           | Command palette: search notes by name, and run commands                |
+| Cmd+O           | Same as Cmd+P                                                          |
+| Cmd+Shift+P     | Command palette, also when no workspace is open                        |
 | Cmd+N           | Create new note                                                        |
 | Cmd+T           | New tab                                                                |
 | Cmd+W           | Close current tab; hides the window when only an empty new tab is left |
@@ -24,8 +25,8 @@ These work anywhere in the window, whether or not you are typing in a note.
 | Cmd+= / Cmd++   | Zoom editor text in (numpad + works too)                               |
 | Cmd+-           | Zoom editor text out (Cmd+Shift+- and numpad − work too)               |
 | Cmd+0           | Actual size (zoom back to 100%)                                        |
-| Alt+ArrowLeft   | Navigate back                                                          |
-| Alt+ArrowRight  | Navigate forward                                                       |
+| Alt+ArrowLeft   | Navigate back (outside the note; inside it, moves by word)             |
+| Alt+ArrowRight  | Navigate forward (outside the note; inside it, moves by word)          |
 
 Zoom scales the note text only, in preset stops (50–300%); the sidebar, tab
 strip, and status bar keep their size. The current zoom is also in
@@ -72,26 +73,26 @@ These also apply while you are typing in a note.
 
 <!-- Inherited from CodeMirror's basic setup. -->
 
-| Shortcut             | Action                         |
-| -------------------- | ------------------------------ |
-| Cmd+Z                | Undo                           |
-| Cmd+Shift+Z          | Redo                           |
-| Cmd+A                | Select all                     |
-| Cmd+D                | Select next occurrence         |
-| Alt+ArrowUp          | Move line up                   |
-| Alt+ArrowDown        | Move line down                 |
-| Alt+Shift+ArrowUp    | Copy line up                   |
-| Alt+Shift+ArrowDown  | Copy line down                 |
-| Cmd+Shift+K          | Delete line                    |
-| Cmd+Enter            | Insert line below              |
-| Tab                  | Indent / accept completion     |
-| Shift+Tab            | Dedent                         |
-| Cmd+]                | Indent more                    |
-| Cmd+[                | Indent less                    |
-| Cmd+F                | Find                           |
-| Cmd+H                | Find and replace               |
-| Cmd+G                | Find next                      |
-| Cmd+Shift+G          | Find previous                  |
-| Escape               | Close find                     |
-| Alt+Shift+ArrowLeft  | Extend selection by word left  |
-| Alt+Shift+ArrowRight | Extend selection by word right |
+| Shortcut             | Action                               |
+| -------------------- | ------------------------------------ |
+| Cmd+Z                | Undo                                 |
+| Cmd+Shift+Z          | Redo                                 |
+| Cmd+A                | Select all                           |
+| Cmd+D                | Select next occurrence               |
+| Cmd+Shift+L          | Select all occurrences               |
+| Alt+ArrowUp          | Move line up                         |
+| Alt+ArrowDown        | Move line down                       |
+| Alt+Shift+ArrowUp    | Copy line up                         |
+| Alt+Shift+ArrowDown  | Copy line down                       |
+| Cmd+Shift+K          | Delete line                          |
+| Cmd+Enter            | Insert line below                    |
+| Tab                  | Indent / accept completion           |
+| Shift+Tab            | Dedent                               |
+| Cmd+]                | Indent more                          |
+| Cmd+[                | Indent less                          |
+| Cmd+F                | Find, with Replace in the find panel |
+| Cmd+G                | Find next                            |
+| Cmd+Shift+G          | Find previous                        |
+| Escape               | Close find                           |
+| Alt+Shift+ArrowLeft  | Extend selection by word left        |
+| Alt+Shift+ArrowRight | Extend selection by word right       |
