@@ -6,10 +6,11 @@ import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-r
 import { Analytics } from "../analytics";
 import styles from "../styles.css?url";
 import {
+  APP_ID,
   AUTHOR_GITHUB_URL,
+  AUTHOR_ID,
   AUTHOR_X_URL,
   DOWNLOAD_SIZE,
-  LATEST_RELEASE_URL,
   PRODUCT_NAME,
   SHORT_NAME,
   SITE_URL,
@@ -20,15 +21,14 @@ const TITLE = `${PRODUCT_NAME} — free, open-source markdown editor for macOS`;
 const DESCRIPTION = `${PRODUCT_NAME} is a free, open-source markdown editor for macOS. About ${DOWNLOAD_SIZE}, starts faster than Apple Notes and Obsidian, and opens the folders you already have as plain markdown.`;
 const OG_DESCRIPTION = `A free, open-source markdown editor for macOS. About ${DOWNLOAD_SIZE} and faster to start than Apple Notes and Obsidian.`;
 
-const AUTHOR_ID = `${SITE_URL}/#author`;
-
-// One graph so the app can point at its author by `@id`. Facts here must match
-// the visible page; see `src/site.ts`.
+// One graph so the app can point at its author by `@id`, and the docs pages at
+// both. Facts here must match the visible page; see `src/site.ts`.
 const STRUCTURED_DATA = {
   "@context": "https://schema.org",
   "@graph": [
     {
       "@type": "SoftwareApplication",
+      "@id": APP_ID,
       name: PRODUCT_NAME,
       alternateName: SHORT_NAME,
       description: DESCRIPTION,
@@ -37,7 +37,7 @@ const STRUCTURED_DATA = {
       applicationSubCategory: "Markdown editor",
       operatingSystem: "macOS",
       softwareVersion: __WRITER_VERSION__,
-      downloadUrl: LATEST_RELEASE_URL,
+      downloadUrl: `${__WRITER_REPO_URL__}/releases/latest`,
       isAccessibleForFree: true,
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
       image: `${SITE_URL}/og.jpg`,

@@ -14,6 +14,14 @@
   --accent: #e17909;
 
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --font-serif: ui-serif, "New York", Georgia, "Times New Roman", serif;
+
+  /* Docs typography, measured from Linear's Method pages. */
+  --doc-heading: #f7f8f8;
+  --doc-ink: #d0d6e0;
+  --doc-muted: #8a8f98;
+  --doc-link-line: #62666d;
 
   --radius: 12px;
   --gutter-x: 32px;
@@ -304,6 +312,317 @@ a {
   border: 0;
 }
 
+/* ---------- docs ---------- */
+/* Departure Mono by Helena Zhang, SIL Open Font License 1.1; see
+   public/fonts/DepartureMono-LICENSE.txt. Only the docs glyph band uses it. */
+@font-face {
+  font-family: "Departure Mono";
+  src: url("/fonts/DepartureMono-Regular.woff2") format("woff2");
+  font-display: swap;
+}
+
+.docs {
+  /* Containing block for the glyph band. */
+  position: relative;
+  padding: var(--gutter-top) var(--gutter-x) 64px;
+}
+
+/* Above the glyph band, which is positioned and would otherwise paint over
+   them. */
+.docs > .site-header,
+.docs-body {
+  position: relative;
+}
+
+/* A little more room under the header than on the homepage. */
+.docs > .site-header {
+  margin-bottom: 88px;
+}
+
+.docs-body {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 688px);
+  gap: 64px;
+}
+
+.docs-nav {
+  position: sticky;
+  top: var(--gutter-top);
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: -0.013em;
+  color: var(--doc-muted);
+}
+
+.docs-nav a {
+  transition: color 0.1s ease;
+}
+
+.docs-nav a:hover,
+.docs-nav a[aria-current="page"] {
+  color: var(--doc-heading);
+}
+
+.docs-nav .docs-nav-group {
+  margin-top: 12px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.docs-main {
+  min-width: 0;
+}
+
+/* The faint field of markdown syntax across the top of each page, behind
+   the header, fading out toward the title. Built by
+   components/GlyphBand.tsx: 10 lines of 12px at line height 1.25. Values
+   from the owner's tuning; the fade is sized in pixels so a wide window
+   doesn't stretch it. */
+.doc-glyphs {
+  position: absolute;
+  top: 5px;
+  left: -38px;
+  right: 38px;
+  height: 400px;
+  overflow: hidden;
+  font-family: "Departure Mono", ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.25;
+  letter-spacing: 0.07em;
+  white-space: pre;
+  color: rgba(255, 255, 255, 0.2);
+  -webkit-mask-image: radial-gradient(980px 295px at 43% -4px, #000 26%, transparent 62%);
+  mask-image: radial-gradient(980px 295px at 43% -4px, #000 26%, transparent 62%);
+  pointer-events: none;
+  user-select: none;
+}
+
+.doc-glyphs-row {
+  display: block;
+}
+
+.doc-glyph-accent {
+  color: rgba(225, 121, 9, 0.4);
+}
+
+/* A token GlyphBand is scrambling, for a few frames before it settles. */
+.doc-glyph.is-decoding {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.doc-glyph-accent.is-decoding {
+  color: rgb(225, 121, 9);
+}
+
+.doc {
+  /* Above the glyph band. */
+  position: relative;
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--doc-ink);
+}
+
+/* Block-level spacing goes above each block, so a heading's larger gap
+   replaces the paragraph gap instead of adding to it. */
+.doc > * {
+  margin: 16px 0 0;
+}
+
+.doc > :first-child {
+  margin-top: 0;
+}
+
+.doc h1 {
+  font-family: var(--font-serif);
+  font-size: 48px;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--doc-heading);
+}
+
+.doc h1 + * {
+  margin-top: 32px;
+}
+
+.doc h2,
+.doc h3 {
+  font-size: 24px;
+  font-weight: 590;
+  line-height: 1.33;
+  letter-spacing: -0.012em;
+  color: var(--doc-heading);
+}
+
+.doc > h2 {
+  margin-top: 56px;
+}
+
+.doc > h3 {
+  margin-top: 32px;
+}
+
+.doc ul,
+.doc ol {
+  padding-left: 22px;
+}
+
+.doc li + li {
+  margin-top: 8px;
+}
+
+.doc strong {
+  font-weight: 590;
+  color: var(--doc-heading);
+}
+
+.doc a,
+.docs-footer a {
+  color: var(--doc-heading);
+  text-decoration: underline;
+  text-decoration-color: var(--doc-link-line);
+  text-decoration-thickness: from-font;
+  text-underline-offset: 0.175em;
+  transition:
+    color 0.25s,
+    text-decoration-color 0.25s;
+}
+
+.doc a:hover,
+.docs-footer a:hover {
+  text-decoration-color: var(--doc-heading);
+}
+
+.doc code {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--surface-subtle);
+  color: var(--doc-heading);
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+}
+
+.doc pre {
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--surface-subtle);
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-x: auto;
+}
+
+.doc pre code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+
+.doc table {
+  /* Block so a wide table scrolls inside the column instead of the page. */
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.doc th,
+.doc td {
+  padding: 10px 16px 10px 0;
+  border-bottom: 1px solid var(--stroke-ghost);
+  text-align: left;
+  vertical-align: top;
+}
+
+.doc th {
+  font-weight: 590;
+  color: var(--doc-heading);
+}
+
+.doc td code {
+  white-space: nowrap;
+}
+
+.doc tbody th {
+  /* Row labels of a comparison table. */
+  white-space: nowrap;
+}
+
+.compare-sources {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--doc-muted);
+}
+
+.doc video {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  border-radius: var(--radius);
+  background: var(--surface-screenshot);
+}
+
+/* A section's index: a grid of cards, each one link with its description. */
+.doc .docs-index {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 40px;
+  padding: 0;
+  list-style: none;
+}
+
+.doc .docs-index li {
+  position: relative;
+  margin: 0;
+  padding: 20px;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.03);
+  transition: background 0.15s ease;
+}
+
+.doc .docs-index li:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.doc .docs-index a {
+  font-size: 17px;
+  font-weight: 590;
+  line-height: 1.4;
+  letter-spacing: -0.012em;
+  text-decoration: none;
+}
+
+/* The whole card is the link's hit area. */
+.doc .docs-index a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.docs-index span {
+  display: block;
+  margin-top: 6px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--doc-muted);
+}
+
+.docs-footer {
+  margin: 80px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--doc-muted);
+}
+
+.docs-footer p {
+  margin: 0 0 8px;
+}
+
 /* ---------- responsive ---------- */
 @media (max-width: 1279px) {
   .screenshots {
@@ -350,6 +669,52 @@ a {
 
   .features {
     gap: 8px;
+  }
+
+  .docs {
+    padding: 20px 20px 48px;
+  }
+
+  .docs > .site-header {
+    margin-bottom: 48px;
+  }
+
+  .docs-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+
+  .docs-nav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+  }
+
+  .docs-nav .docs-nav-group {
+    flex-basis: 100%;
+    margin-top: 4px;
+  }
+
+  .doc h1 {
+    font-size: 40px;
+  }
+
+  .doc .docs-index {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .doc tbody th {
+    white-space: normal;
+  }
+
+  .doc h2,
+  .doc h3 {
+    font-size: 20px;
+  }
+
+  .doc > h2 {
+    margin-top: 40px;
   }
 
   .feature {

@@ -5,6 +5,8 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { devtools } from "@tanstack/devtools-vite";
 
+import { writerDocs } from "./docs-plugin";
+
 const tauriConfPath = fileURLToPath(
   new URL("../desktop/src-tauri/tauri.conf.json", import.meta.url),
 );
@@ -28,6 +30,7 @@ export default defineConfig({
       },
     }),
     react(),
+    writerDocs(),
   ],
   server: {
     port: 5173,

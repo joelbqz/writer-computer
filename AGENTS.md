@@ -40,13 +40,13 @@ All docs except CLAUDE.md, AGENTS.md, TODOS.md, and CHANGELOG.md live in `./docs
 - [docs/zustand.md](./docs/zustand.md) — side effect timing, selectors, bail-out patterns
 - [docs/editor.md](./docs/editor.md) — CodeMirror layout-model APIs, scroll-handler ownership, block-widget patterns (decoration shape, range-select to enter edit mode, posAtDOM boundary handling, button focus race, scrollSnapshot for heightmap shifts)
 - [docs/vite-plus.md](./docs/vite-plus.md) — `vp` CLI usage and common pitfalls
-- [docs/keyboard-shortcuts.md](./docs/keyboard-shortcuts.md) — canonical shortcut map
+- [docs/keyboard-shortcuts.md](./docs/keyboard-shortcuts.md) — canonical shortcut map, also published as the website's shortcuts page (user-facing prose; implementation notes go in HTML comments)
 
 **Infra**
 
 - [docs/releasing.md](./docs/releasing.md) — how to cut a signed, notarized macOS release
 - [docs/telemetry.md](./docs/telemetry.md) — opt-in usage telemetry: the full event/property disclosure, the three off-switches, and the rule that adding an event touches the call site, the doc, and the consent dialog together
-- [docs/website-deploy.md](./docs/website-deploy.md) — how to deploy the marketing website to Cloudflare Workers, plus its search/AI-crawler surface (JSON-LD, `robots.txt`, `sitemap.xml`, `llms.txt`)
+- [docs/website-deploy.md](./docs/website-deploy.md) — how to deploy the marketing website to Cloudflare Workers, plus its search/AI-crawler surface (JSON-LD, `robots.txt`, `sitemap.xml`, `llms.txt`) and the `/docs/` pages (comparisons under `/docs/compare/`) built from markdown
 - [docs/website-analytics.md](./docs/website-analytics.md) — the marketing website's PostHog events, the two build-time env vars, and the rule that a missing key makes the site inert
 - [apps/playground/README.md](./apps/playground/README.md) — browser playground that mounts the editor core with the app theme next to a live markdown source view; use it to reproduce, QA and record editor behaviour without building the Tauri app
 

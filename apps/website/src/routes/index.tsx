@@ -1,8 +1,9 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 
 import { useAnalytics } from "../analytics";
-import { AppleGlyph, WriterMark } from "../components/Mark";
-import { DOWNLOAD_SIZE, PRODUCT_NAME, SITE_URL } from "../site";
+import { AppleGlyph } from "../components/Mark";
+import { SiteHeader } from "../components/SiteHeader";
+import { DOWNLOAD_SIZE, SITE_URL } from "../site";
 import { useLatestRelease } from "../use-latest-release";
 
 const FEATURES = [
@@ -70,32 +71,7 @@ function HomePage() {
   return (
     <div className="page">
       <main className="hero">
-        <header className="site-header">
-          <Link className="brand" to="/" aria-label={PRODUCT_NAME}>
-            <WriterMark size={18} />
-            <span className="brand-rule" aria-hidden="true" />
-          </Link>
-          <nav className="site-nav">
-            <a
-              className="pill pill-ghost"
-              href="https://x.com/joelbqz"
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => capture("updates_opened")}
-            >
-              Updates
-            </a>
-            <a
-              className="pill pill-outline"
-              href={__WRITER_REPO_URL__}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => capture("github_opened")}
-            >
-              GitHub
-            </a>
-          </nav>
-        </header>
+        <SiteHeader />
 
         <h1 className="headline">Fast and lightweight app for your workspace's markdown files</h1>
 

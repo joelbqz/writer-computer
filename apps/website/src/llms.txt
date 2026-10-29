@@ -17,6 +17,7 @@ Key facts:
 - Obsidian: follows `[[wikilinks]]` with autocomplete and shows `![[image]]` embeds. Note embeds, Obsidian plugins and callouts are not supported.
 - Markdown: CommonMark with GitHub-flavored tables, task lists and strikethrough; Mermaid diagrams; KaTeX math with `$` and `$$`; HTML blocks such as `<details>`; YAML frontmatter shown as editable properties; syntax-highlighted code blocks. Footnotes are not rendered.
 - Privacy: usage telemetry is opt-in and off by default. It never includes document contents, file names or paths. Declining sends a single event recording that choice.
+- Updates: checks GitHub for a new version at launch and once a day, and installs it after you confirm ("Install and Restart").
 - Built with Tauri v2, React, CodeMirror and Rust.
 
 ## Links
@@ -26,6 +27,16 @@ Key facts:
 - [Releases](https://github.com/joelbqz/writer-computer/releases): downloads and release notes
 - [Telemetry disclosure](https://github.com/joelbqz/writer-computer/blob/master/docs/telemetry.md): every event and property the app can send, and how to keep it off
 - [Changelog](https://github.com/joelbqz/writer-computer/blob/master/CHANGELOG.md): user-visible changes
+
+## Docs
+
+- [Docs](https://writer.computer/docs/): all the pages below
+{{docs}}
+
+## Compare
+
+- [Compare](https://writer.computer/docs/compare/): Writer Computer beside Obsidian, Typora, iA Writer and Apple Notes
+{{compare}}
 
 ## Optional
 

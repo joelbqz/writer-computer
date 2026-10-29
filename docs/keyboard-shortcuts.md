@@ -1,49 +1,57 @@
-# Keyboard Shortcuts
+# Keyboard shortcuts
 
-Canonical shortcut reference for Writer.
+<!-- The canonical shortcut map. It is also published as is at writer.computer/docs/keyboard-shortcuts/, so keep the prose readable for users and put implementation notes in HTML comments like this one, which the site leaves out. The first line must stay "# Keyboard shortcuts" (see apps/website/src/docs/pages.ts). -->
+
+Every keyboard shortcut in Writer Computer. On macOS, Cmd is ⌘, Alt is ⌥ (Option) and Ctrl is ⌃.
 
 ## Global
 
-These shortcuts are handled by the global `useKeyboardShortcuts` hook and work regardless of editor focus.
+These work anywhere in the window, whether or not you are typing in a note.
 
-| Shortcut        | Action                                                             |
-| --------------- | ------------------------------------------------------------------ |
-| Cmd+P           | File search (command palette)                                      |
-| Cmd+O           | Go to file                                                         |
-| Cmd+N           | Create new note                                                    |
-| Cmd+T           | New tab                                                            |
-| Cmd+W           | Close current tab; hides the window when only the launcher is left |
-| Cmd+\\          | Toggle sidebar                                                     |
-| Ctrl+Tab        | Next tab                                                           |
-| Ctrl+Shift+Tab  | Previous tab                                                       |
-| Cmd+1 ... Cmd+9 | Jump to Nth tab                                                    |
-| Cmd+= / Cmd++   | Zoom editor text in (numpad + works too)                           |
-| Cmd+-           | Zoom editor text out (Cmd+Shift+- and numpad − work too)           |
-| Cmd+0           | Actual size (zoom back to 100%)                                    |
-| Alt+ArrowLeft   | Navigate back                                                      |
-| Alt+ArrowRight  | Navigate forward                                                   |
+<!-- Handled by the global `useKeyboardShortcuts` hook. -->
+
+| Shortcut        | Action                                                                 |
+| --------------- | ---------------------------------------------------------------------- |
+| Cmd+P           | Command palette: search notes by name, and run commands                |
+| Cmd+O           | Same as Cmd+P                                                          |
+| Cmd+Shift+P     | Command palette, also when no workspace is open                        |
+| Cmd+N           | Create new note                                                        |
+| Cmd+T           | New tab                                                                |
+| Cmd+W           | Close current tab; hides the window when only an empty new tab is left |
+| Cmd+\\          | Toggle sidebar                                                         |
+| Ctrl+Tab        | Next tab                                                               |
+| Ctrl+Shift+Tab  | Previous tab                                                           |
+| Cmd+1 ... Cmd+9 | Jump to Nth tab                                                        |
+| Cmd+= / Cmd++   | Zoom editor text in (numpad + works too)                               |
+| Cmd+-           | Zoom editor text out (Cmd+Shift+- and numpad − work too)               |
+| Cmd+0           | Actual size (zoom back to 100%)                                        |
+| Alt+ArrowLeft   | Navigate back (outside the note; inside it, moves by word)             |
+| Alt+ArrowRight  | Navigate forward (outside the note; inside it, moves by word)          |
 
 Zoom scales the note text only, in preset stops (50–300%); the sidebar, tab
-strip, and status bar keep their size. The current percent is the global
-`editor.zoom` setting (Preferences → Editor → Zoom), restored on launch, and
-is multiplied on top of `editor.font-size`, which it never changes.
+strip, and status bar keep their size. The current zoom is also in
+Preferences → Editor → Zoom, is kept between launches, and applies on top of
+the editor font size, which it never changes.
 
-In compact single-file windows, sidebar and tab-management shortcuts do not
-create hidden UI state: Cmd+\\, Cmd+T, Ctrl+Tab, Ctrl+Shift+Tab, and Cmd+1 ...
-Cmd+9 are ignored. Cmd+P, Cmd+O, Cmd+N, zoom, and history navigation still
+<!-- The zoom is the global `editor.zoom` setting, multiplied on top of `editor.font-size`. -->
+
+In the compact window a single note opens in, which has no sidebar or tabs,
+Cmd+\\, Cmd+T, Ctrl+Tab, Ctrl+Shift+Tab, and Cmd+1 ... Cmd+9 do nothing. Cmd+P, Cmd+O, Cmd+N, zoom, and history navigation still
 work.
 
-## Menu Accelerators
+## App menu
 
-These shortcuts are bound to the native app menu (Tauri menu accelerators) rather than the global JS handler.
+<!-- Bound to the native app menu (Tauri menu accelerators) rather than the global JS handler. -->
 
 | Shortcut | Action                                                |
 | -------- | ----------------------------------------------------- |
 | Cmd+,    | Open Preferences (Settings tab) in the focused window |
 
-## Editor Formatting
+## Formatting
 
-These shortcuts are handled by the `markdownFormatting` CodeMirror extension and only apply when the editor is focused.
+These apply while you are typing in a note.
+
+<!-- Handled by the `markdownFormatting` CodeMirror extension. -->
 
 | Shortcut                | Action                    |
 | ----------------------- | ------------------------- |
@@ -59,30 +67,32 @@ These shortcuts are handled by the `markdownFormatting` CodeMirror extension and
 | Cmd+Alt+1 ... Cmd+Alt+6 | Heading 1-6               |
 | Cmd+Alt+0               | Paragraph (strip heading) |
 
-## Editor (inherited from CodeMirror)
+## Editing
 
-Standard editing shortcuts provided by CodeMirror's basic setup.
+These also apply while you are typing in a note.
 
-| Shortcut             | Action                         |
-| -------------------- | ------------------------------ |
-| Cmd+Z                | Undo                           |
-| Cmd+Shift+Z          | Redo                           |
-| Cmd+A                | Select all                     |
-| Cmd+D                | Select next occurrence         |
-| Alt+ArrowUp          | Move line up                   |
-| Alt+ArrowDown        | Move line down                 |
-| Alt+Shift+ArrowUp    | Copy line up                   |
-| Alt+Shift+ArrowDown  | Copy line down                 |
-| Cmd+Shift+K          | Delete line                    |
-| Cmd+Enter            | Insert line below              |
-| Tab                  | Indent / accept completion     |
-| Shift+Tab            | Dedent                         |
-| Cmd+]                | Indent more                    |
-| Cmd+[                | Indent less                    |
-| Cmd+F                | Find                           |
-| Cmd+H                | Find and replace               |
-| Cmd+G                | Find next                      |
-| Cmd+Shift+G          | Find previous                  |
-| Escape               | Close find                     |
-| Alt+Shift+ArrowLeft  | Extend selection by word left  |
-| Alt+Shift+ArrowRight | Extend selection by word right |
+<!-- Inherited from CodeMirror's basic setup. -->
+
+| Shortcut             | Action                               |
+| -------------------- | ------------------------------------ |
+| Cmd+Z                | Undo                                 |
+| Cmd+Shift+Z          | Redo                                 |
+| Cmd+A                | Select all                           |
+| Cmd+D                | Select next occurrence               |
+| Cmd+Shift+L          | Select all occurrences               |
+| Alt+ArrowUp          | Move line up                         |
+| Alt+ArrowDown        | Move line down                       |
+| Alt+Shift+ArrowUp    | Copy line up                         |
+| Alt+Shift+ArrowDown  | Copy line down                       |
+| Cmd+Shift+K          | Delete line                          |
+| Cmd+Enter            | Insert line below                    |
+| Tab                  | Indent / accept completion           |
+| Shift+Tab            | Dedent                               |
+| Cmd+]                | Indent more                          |
+| Cmd+[                | Indent less                          |
+| Cmd+F                | Find, with Replace in the find panel |
+| Cmd+G                | Find next                            |
+| Cmd+Shift+G          | Find previous                        |
+| Escape               | Close find                           |
+| Alt+Shift+ArrowLeft  | Extend selection by word left        |
+| Alt+Shift+ArrowRight | Extend selection by word right       |

@@ -33,6 +33,7 @@ catalog:
   dompurify: ^3.4.7
   jsdom: ^30.1.2
   katex: ^0.16.25
+  marked: ^18.1.2
   motion: ^12.39.0
   node-emoji: ^2.2.0
   pele: ^1.6.0
