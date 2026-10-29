@@ -322,7 +322,16 @@ a {
 }
 
 .docs {
+  /* Containing block for the glyph band. */
+  position: relative;
   padding: var(--gutter-top) var(--gutter-x) 64px;
+}
+
+/* Above the glyph band, which is positioned and would otherwise paint over
+   them. */
+.docs > .site-header,
+.docs-body {
+  position: relative;
 }
 
 .docs-body {
@@ -360,15 +369,14 @@ a {
 }
 
 .docs-main {
-  /* Containing block for the glyph band; the page starts partway down it. */
-  position: relative;
   min-width: 0;
-  padding-top: 82px;
 }
 
-/* The faint field of markdown syntax behind the top of each page, fading
-   out toward the title. Built by components/GlyphBand.tsx: 10 lines of 13px
-   at line height 1.25. */
+/* The faint field of markdown syntax across the top of each page, behind
+   the header, fading out toward the title. Built by
+   components/GlyphBand.tsx: 10 lines of 13px at line height 1.25. The fade
+   is centered on the window and sized in pixels, as tuned on the 688px
+   column, so a wide window doesn't stretch it. */
 .doc-glyphs {
   position: absolute;
   top: 0;
@@ -382,8 +390,8 @@ a {
   letter-spacing: -0.1em;
   white-space: pre;
   color: rgba(255, 255, 255, 0.22);
-  -webkit-mask-image: radial-gradient(130% 140% at 6% 3%, #000 20%, transparent 68%);
-  mask-image: radial-gradient(130% 140% at 6% 3%, #000 20%, transparent 68%);
+  -webkit-mask-image: radial-gradient(894px 227px at 50% 5px, #000 20%, transparent 68%);
+  mask-image: radial-gradient(894px 227px at 50% 5px, #000 20%, transparent 68%);
   pointer-events: none;
   user-select: none;
 }

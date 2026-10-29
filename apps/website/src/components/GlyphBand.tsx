@@ -1,5 +1,6 @@
 /**
- * The faint field of markdown syntax behind the top of every docs page. The
+ * The faint field of markdown syntax across the top of every docs page,
+ * behind the header. The
  * settings were tuned by the owner in a throwaway preview; the generator below
  * reproduces that preview exactly (same seeded shuffle, same accent count), so
  * change the numbers together with `.doc-glyphs` in `styles.css`.
@@ -36,8 +37,8 @@ const STAGGER = 3;
 const ACCENT_EVERY = 3;
 /** Tokens generated per line before trimming; part of the accent count. */
 const TOKENS_PER_ROW = TOKENS.length * 12;
-/** Characters kept per line: wider than the 688px column at 13px. */
-const VISIBLE_CHARS = 140;
+/** Characters kept per line: enough to cross a 2560px-wide window at 13px. */
+const VISIBLE_CHARS = 420;
 
 type Run = { text: string; accent: boolean };
 

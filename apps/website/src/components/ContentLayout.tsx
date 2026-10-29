@@ -15,6 +15,7 @@ import { SiteHeader } from "./SiteHeader";
 export function ContentLayout() {
   return (
     <div className="docs">
+      <GlyphBand />
       <SiteHeader />
       <div className="docs-body">
         <nav className="docs-nav" aria-label="Docs">
@@ -36,7 +37,6 @@ export function ContentLayout() {
           ))}
         </nav>
         <main className="docs-main">
-          <GlyphBand />
           <Outlet />
           <footer className="docs-footer">
             <p>{PRODUCT_NAME} is a free, open-source markdown editor for macOS.</p>
