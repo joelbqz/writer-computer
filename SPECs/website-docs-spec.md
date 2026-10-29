@@ -16,7 +16,7 @@ Add a small docs section to writer.computer at `/docs/`, so search engines and A
 - **Head per page:** title `<Page> — Writer Computer`, description, canonical, `og:*` overrides, and a `TechArticle` + `BreadcrumbList` JSON-LD graph pointing at the app (`#app`) and author (`#author`) declared in the root head.
 - **Shared header.** The homepage and docs render `components/SiteHeader.tsx`, which adds a **Docs** pill before Updates and GitHub. The pill sends no event; docs visits are counted by PostHog's own `$pageview`. The homepage's copy is unchanged.
 - **Design, from the owner's picks:** Linear's Method pages for type and spacing (serif 72px title, 24px section headings, 17px/1.6 body on a 688px column, near-white links with a grey underline that brightens on hover; values measured from linear.app), a faint field of markdown syntax behind the top of each page in the spirit of Mailchimp Developer's title pattern, and Twingate-style cards for the section indexes. All CSS in `apps/website/src/styles.css`; the markup is unchanged.
-- **Every docs page ends with the definition** ("Writer Computer is a free, open-source markdown editor for macOS") and a link home, so a reader arriving from search can get to the download.
+- **Every docs page ends with the definition** ("Writer Computer is a free, open-source markdown editor for macOS"), so every page says what the app is. The header's logo links home to the download.
 
 ## Out of scope
 

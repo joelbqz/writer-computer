@@ -8,7 +8,7 @@ import { SiteHeader } from "./SiteHeader";
 
 /**
  * The frame of every docs page: the site header, a nav of every section's
- * pages, the page, and a footer that defines the app and links to the download. The top section's index is "Overview"; a nested
+ * pages, the page, and a footer that defines the app. The top section's index is "Overview"; a nested
  * section's index heads its group of pages.
  */
 export function ContentLayout() {
@@ -37,10 +37,7 @@ export function ContentLayout() {
         <main className="docs-main">
           <Outlet />
           <footer className="docs-footer">
-            <p>
-              {PRODUCT_NAME} is a free, open-source markdown editor for macOS.{" "}
-              <Link to="/">Download it from the homepage</Link>.
-            </p>
+            <p>{PRODUCT_NAME} is a free, open-source markdown editor for macOS.</p>
           </footer>
         </main>
       </div>
