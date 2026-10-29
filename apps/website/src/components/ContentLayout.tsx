@@ -1,7 +1,6 @@
 import { Link, Outlet } from "@tanstack/react-router";
 import { Fragment, type ReactNode } from "react";
 
-import { COMPARE } from "../compare/pages";
 import { type ContentSection, pagePath } from "../content";
 import { SECTIONS } from "../sections";
 import { PRODUCT_NAME } from "../site";
@@ -9,8 +8,7 @@ import { SiteHeader } from "./SiteHeader";
 
 /**
  * The frame of every docs page: the site header, a nav of every section's
- * pages, the page, and a footer that defines the app and links to the download
- * and the comparisons. The top section's index is "Overview"; a nested
+ * pages, the page, and a footer that defines the app and links to the download. The top section's index is "Overview"; a nested
  * section's index heads its group of pages.
  */
 export function ContentLayout() {
@@ -42,16 +40,6 @@ export function ContentLayout() {
             <p>
               {PRODUCT_NAME} is a free, open-source markdown editor for macOS.{" "}
               <Link to="/">Download it from the homepage</Link>.
-            </p>
-            <p>
-              Compared with{" "}
-              {COMPARE.pages.map((page, index) => (
-                <span key={page.slug}>
-                  {index > 0 && (index === COMPARE.pages.length - 1 ? " and " : ", ")}
-                  <Link to={pagePath(COMPARE, page)}>{page.competitor}</Link>
-                </span>
-              ))}
-              .
             </p>
           </footer>
         </main>

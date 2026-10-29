@@ -13,7 +13,7 @@ Add comparison pages to writer.computer's docs, at `/docs/compare/`: one "Writer
 - **One source per fact.** `apps/website/src/compare/pages.ts` holds the table rows with Writer Computer's column written once, and each competitor's values, date and sources. Each page's markdown has a `{{comparison}}` line that `docs-plugin.ts` replaces with the table, so the prose and the data stay separate and the build fails if either is missing.
 - **Shared section machinery.** Docs and comparisons are both `ContentSection`s (`src/content.ts`, listed in `src/sections.ts`): one renderer, one layout (`components/ContentLayout.tsx`), one head builder (`src/content-route.ts`), and the sitemap and `llms.txt` lists built from the same lists. Comparison pages use `Article` JSON-LD; docs keep `TechArticle`.
 - **Part of the docs** (owner's call, after first shipping them as a separate `/compare/` section): `COMPARE` is nested in `DOCS` (`parent`), served under `/docs/compare/`, listed in the docs sidebar under a "Compare" heading, with Docs › Compare › page breadcrumbs. Nothing had been deployed at `/compare/`, so there are no redirects.
-- **Linked from every docs and comparison page** through the shared footer ("Compared with Obsidian, Typora, iA Writer and Apple Notes"), not from the homepage header.
+- **Linked from every docs and comparison page** through the docs sidebar, not from the homepage header.
 
 ## Out of scope
 

@@ -532,17 +532,13 @@ a {
   position: relative;
   margin: 0;
   padding: 20px;
-  border: 1px solid var(--stroke-ghost);
   border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.02);
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
+  background: rgba(255, 255, 255, 0.03);
+  transition: background 0.15s ease;
 }
 
 .doc .docs-index li:hover {
-  border-color: var(--stroke-hover);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .doc .docs-index a {
@@ -571,8 +567,6 @@ a {
 
 .docs-footer {
   margin: 80px 0 0;
-  padding-top: 24px;
-  border-top: 1px solid var(--stroke-ghost);
   font-size: 14px;
   line-height: 1.5;
   color: var(--doc-muted);
