@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 /**
  * The faint field of markdown syntax across the top of every docs page,
  * behind the header. The
@@ -37,8 +39,24 @@ const STAGGER = 3;
 const ACCENT_EVERY = 3;
 /** Tokens generated per line before trimming; part of the accent count. */
 const TOKENS_PER_ROW = TOKENS.length * 12;
-/** Characters kept per line: enough to cross a 2560px-wide window at 12px. */
+/**
+ * Characters kept per line: enough to cross a 2560px-wide window at 12px
+ * plus one period, which the drift animation shifts each line by.
+ */
 const VISIBLE_CHARS = 420;
+
+/**
+ * After its first token a line repeats every `TOKENS.length` tokens, a run of
+ * `PERIOD_CHARS` characters, accents included as long as the token count is
+ * a multiple of `ACCENT_EVERY`. The drift moves each line by exactly one
+ * period, so the loop is seamless.
+ */
+const PERIOD_CHARS = TOKENS.reduce((chars, token) => chars + token.length + 1, 0);
+if (TOKENS.length % ACCENT_EVERY !== 0) {
+  throw new Error(
+    "GlyphBand: TOKENS.length must be a multiple of ACCENT_EVERY for a seamless loop",
+  );
+}
 
 type Run = { text: string; accent: boolean };
 
@@ -86,9 +104,13 @@ const ROW_RUNS = buildRows();
 
 export function GlyphBand() {
   return (
-    <div className="doc-glyphs" aria-hidden="true">
+    <div
+      className="doc-glyphs"
+      aria-hidden="true"
+      style={{ "--period": PERIOD_CHARS } as CSSProperties}
+    >
       {ROW_RUNS.map((runs, row) => (
-        <span key={row} className="doc-glyphs-row">
+        <span key={row} className="doc-glyphs-row" style={{ "--row": row } as CSSProperties}>
           {runs.map((run, index) => (run.accent ? <span key={index}>{run.text}</span> : run.text))}
         </span>
       ))}
