@@ -387,8 +387,7 @@ a {
   font-family: "Departure Mono", ui-monospace, monospace;
   font-size: 12px;
   line-height: 1.25;
-  --tracking: 0.07em;
-  letter-spacing: var(--tracking);
+  letter-spacing: 0.07em;
   white-space: pre;
   color: rgba(255, 255, 255, 0.2);
   -webkit-mask-image: radial-gradient(980px 295px at 43% -4px, #000 26%, transparent 62%);
@@ -397,34 +396,21 @@ a {
   user-select: none;
 }
 
-/* Each line drifts sideways by one period of its pattern (`--period`
-   characters, set by GlyphBand) and loops; alternate lines go the other way,
-   and lower lines a little slower. The fade stays put. */
 .doc-glyphs-row {
   display: block;
-  width: max-content;
-  animation: doc-glyphs-drift calc(48s + var(--row) * 5s) linear infinite;
-  will-change: transform;
 }
 
-.doc-glyphs-row:nth-child(even) {
-  animation-direction: reverse;
-}
-
-@keyframes doc-glyphs-drift {
-  to {
-    transform: translateX(calc(var(--period) * -1 * (1ch + var(--tracking))));
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .doc-glyphs-row {
-    animation: none;
-  }
-}
-
-.doc-glyphs span span {
+.doc-glyph-accent {
   color: rgba(225, 121, 9, 0.4);
+}
+
+/* A token GlyphBand is scrambling, for a few frames before it settles. */
+.doc-glyph.is-decoding {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.doc-glyph-accent.is-decoding {
+  color: rgb(225, 121, 9);
 }
 
 .doc {
