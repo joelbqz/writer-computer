@@ -374,24 +374,24 @@ a {
 
 /* The faint field of markdown syntax across the top of each page, behind
    the header, fading out toward the title. Built by
-   components/GlyphBand.tsx: 10 lines of 13px at line height 1.25. The fade
-   is centered on the window and sized in pixels, as tuned on the 688px
-   column, so a wide window doesn't stretch it. */
+   components/GlyphBand.tsx: 10 lines of 12px at line height 1.25. Values
+   from the owner's tuning; the fade is sized in pixels so a wide window
+   doesn't stretch it. */
 .doc-glyphs {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 162.5px;
+  top: 5px;
+  left: -38px;
+  right: 38px;
+  height: 400px;
   overflow: hidden;
   font-family: "Departure Mono", ui-monospace, monospace;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.25;
-  letter-spacing: -0.1em;
+  letter-spacing: 0.07em;
   white-space: pre;
-  color: rgba(255, 255, 255, 0.22);
-  -webkit-mask-image: radial-gradient(894px 227px at 50% 5px, #000 20%, transparent 68%);
-  mask-image: radial-gradient(894px 227px at 50% 5px, #000 20%, transparent 68%);
+  color: rgba(255, 255, 255, 0.2);
+  -webkit-mask-image: radial-gradient(980px 295px at 43% -4px, #000 26%, transparent 62%);
+  mask-image: radial-gradient(980px 295px at 43% -4px, #000 26%, transparent 62%);
   pointer-events: none;
   user-select: none;
 }
@@ -401,7 +401,7 @@ a {
 }
 
 .doc-glyphs span span {
-  color: rgba(225, 121, 9, 0.92);
+  color: rgba(225, 121, 9, 0.4);
 }
 
 .doc {
@@ -424,10 +424,9 @@ a {
 
 .doc h1 {
   font-family: var(--font-serif);
-  font-size: 72px;
+  font-size: 48px;
   font-weight: 400;
   line-height: 1;
-  letter-spacing: -0.022em;
   color: var(--doc-heading);
 }
 

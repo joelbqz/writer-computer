@@ -37,7 +37,7 @@ const STAGGER = 3;
 const ACCENT_EVERY = 3;
 /** Tokens generated per line before trimming; part of the accent count. */
 const TOKENS_PER_ROW = TOKENS.length * 12;
-/** Characters kept per line: enough to cross a 2560px-wide window at 13px. */
+/** Characters kept per line: enough to cross a 2560px-wide window at 12px. */
 const VISIBLE_CHARS = 420;
 
 type Run = { text: string; accent: boolean };
