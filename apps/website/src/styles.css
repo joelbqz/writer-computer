@@ -313,6 +313,14 @@ a {
 }
 
 /* ---------- docs ---------- */
+/* Departure Mono by Helena Zhang, SIL Open Font License 1.1; see
+   public/fonts/DepartureMono-LICENSE.txt. Only the docs glyph band uses it. */
+@font-face {
+  font-family: "Departure Mono";
+  src: url("/fonts/DepartureMono-Regular.woff2") format("woff2");
+  font-display: swap;
+}
+
 .docs {
   padding: var(--gutter-top) var(--gutter-x) 64px;
 }
@@ -351,7 +359,46 @@ a {
   color: var(--ink);
 }
 
+.docs-main {
+  /* Containing block for the glyph band; the page starts partway down it. */
+  position: relative;
+  min-width: 0;
+  padding-top: 82px;
+}
+
+/* The faint field of markdown syntax behind the top of each page, fading
+   out toward the title. Built by components/GlyphBand.tsx: 10 lines of 13px
+   at line height 1.25. */
+.doc-glyphs {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 162.5px;
+  overflow: hidden;
+  font-family: "Departure Mono", ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.25;
+  letter-spacing: -0.1em;
+  white-space: pre;
+  color: rgba(255, 255, 255, 0.22);
+  -webkit-mask-image: radial-gradient(130% 140% at 6% 3%, #000 20%, transparent 68%);
+  mask-image: radial-gradient(130% 140% at 6% 3%, #000 20%, transparent 68%);
+  pointer-events: none;
+  user-select: none;
+}
+
+.doc-glyphs-row {
+  display: block;
+}
+
+.doc-glyphs span span {
+  color: rgba(225, 121, 9, 0.92);
+}
+
 .doc {
+  /* Above the glyph band. */
+  position: relative;
   font-size: 17px;
   line-height: 1.6;
   color: var(--doc-ink);
@@ -378,27 +425,6 @@ a {
 
 .doc h1 + * {
   margin-top: 32px;
-}
-
-/* A faint field of markdown syntax behind the top of the page, fading out
-   toward the title. */
-.doc > h1:first-child {
-  position: relative;
-  padding-top: 120px;
-}
-
-.doc > h1:first-child::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 104px;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='368' height='52' font-family='ui-monospace,SF Mono,Menlo,monospace' font-size='15'%3E%3Cg fill='%23ffffff' fill-opacity='0.14'%3E%3Ctext x='6' y='20'%3E%23%3C/text%3E%3Ctext x='44' y='20'%3E%2A%2A%3C/text%3E%3Ctext x='150' y='20'%3E%24%24%3C/text%3E%3Ctext x='212' y='20'%3E%23%23%3C/text%3E%3Ctext x='262' y='20'%3E~~%3C/text%3E%3Ctext x='330' y='20'%3E%60%3C/text%3E%3Ctext x='22' y='46'%3E%60%60%60%3C/text%3E%3Ctext x='76' y='46'%3E- %5B %5D%3C/text%3E%3Ctext x='150' y='46'%3E%26gt%3B%3C/text%3E%3Ctext x='186' y='46'%3E---%3C/text%3E%3Ctext x='244' y='46'%3E1.%3C/text%3E%3Ctext x='300' y='46'%3E_%3C/text%3E%3C/g%3E%3Ctext x='86' y='20' fill='%23e17909' fill-opacity='0.5'%3E%5B%5B %5D%5D%3C/text%3E%3C/svg%3E")
-    0 0 / 368px 52px repeat;
-  -webkit-mask-image: radial-gradient(130% 100% at 0% 0%, #000 25%, transparent 75%);
-  mask-image: radial-gradient(130% 100% at 0% 0%, #000 25%, transparent 75%);
-  pointer-events: none;
 }
 
 .doc h2,
@@ -647,14 +673,6 @@ a {
 
   .doc h1 {
     font-size: 40px;
-  }
-
-  .doc > h1:first-child {
-    padding-top: 84px;
-  }
-
-  .doc > h1:first-child::before {
-    height: 72px;
   }
 
   .doc .docs-index {

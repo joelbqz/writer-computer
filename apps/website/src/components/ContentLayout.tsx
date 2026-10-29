@@ -4,6 +4,7 @@ import { Fragment, type ReactNode } from "react";
 import { type ContentSection, pagePath } from "../content";
 import { SECTIONS } from "../sections";
 import { PRODUCT_NAME } from "../site";
+import { GlyphBand } from "./GlyphBand";
 import { SiteHeader } from "./SiteHeader";
 
 /**
@@ -35,6 +36,7 @@ export function ContentLayout() {
           ))}
         </nav>
         <main className="docs-main">
+          <GlyphBand />
           <Outlet />
           <footer className="docs-footer">
             <p>{PRODUCT_NAME} is a free, open-source markdown editor for macOS.</p>
