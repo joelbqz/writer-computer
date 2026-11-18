@@ -25,40 +25,25 @@ pub struct IndexStats {
     pub duration_ms: u64,
 }
 
+/// Rebuild the hidden-path matcher and the file index for the calling
+/// window's workspace, through the same generation-gated path as every other
+/// rebuild.
 #[tauri::command]
 pub fn index_workspace(
     webview: tauri::Webview,
     app: tauri::AppHandle,
 ) -> Result<IndexStats, AppError> {
     let state = app.state::<AppState>().get_or_create(webview.label());
-    let (root, epoch) = state.workspace_snapshot().ok_or(AppError::NoWorkspace)?;
-    let cancel = Arc::clone(&state.cancel_index.read());
-    let ignore = workspace_ignore_for(&state, &root);
-
+    if state.workspace_snapshot().is_none() {
+        return Err(AppError::NoWorkspace);
+    }
     let start = std::time::Instant::now();
-    let (indexed, dirs) = index_workspace_impl(&root, &ignore, cancel);
-    let file_count = indexed.len();
-    let duration_ms = start.elapsed().as_millis() as u64;
-
-    let displaced = state.with_workspace_snapshot(&root, epoch, || {
-        let old_index = std::mem::replace(&mut *state.file_index.write(), indexed);
-        let old_cache = state.recent_files_cache.write().take();
-        let old_dirs = std::mem::replace(&mut *state.dirs_with_markdown.write(), dirs);
-        state.file_index_revision.fetch_add(1, Ordering::SeqCst);
-        state.index_ready.store(true, Ordering::Relaxed);
-        (old_index, old_cache, old_dirs)
-    });
-    let Some(displaced) = displaced else {
-        return Ok(IndexStats {
-            file_count: 0,
-            duration_ms,
-        });
-    };
-    drop(displaced);
-
+    let file_count =
+        crate::commands::workspace::rebuild_workspace_filter_now(&app, webview.label(), &state)
+            .unwrap_or(0);
     Ok(IndexStats {
         file_count,
-        duration_ms,
+        duration_ms: start.elapsed().as_millis() as u64,
     })
 }
 
@@ -144,17 +129,19 @@ fn fuzzy_search_from(
     Ok(results)
 }
 
-/// The window's hidden-path matcher when it belongs to `root`, otherwise a
-/// bootstrap matcher (exclusion list only) for `root`. Every walk below goes
-/// through a matcher so it hides exactly what the sidebar hides.
+/// The window's hidden-path matcher when it belongs to `root` and its
+/// `.gitignore` rules are loaded. Otherwise (no workspace, another root, or
+/// the background load hasn't finished) a full matcher is loaded for this
+/// walk, so a lookup right after opening a repository never descends into
+/// gitignored build output.
 fn workspace_ignore_for(state: &WorkspaceState, root: &Path) -> Arc<WorkspaceIgnore> {
     state
         .workspace_ignore
         .read()
         .as_ref()
-        .filter(|ignore| ignore.root() == root)
+        .filter(|ignore| ignore.root() == root && ignore.gitignores_loaded())
         .map(Arc::clone)
-        .unwrap_or_else(|| Arc::new(WorkspaceIgnore::bootstrap(root, state.file_excludes())))
+        .unwrap_or_else(|| Arc::new(WorkspaceIgnore::load(root, state.file_excludes())))
 }
 
 /// Parallel walk of `root` that visits only what `ignore` leaves visible.

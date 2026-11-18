@@ -44,17 +44,12 @@ pub struct WorkspaceIdentity {
     pub epoch: u64,
 }
 
-/// Check if a path is a config file that should trigger settings reload.
-fn is_config_file(path: &Path) -> bool {
-    // Workspace config: .writer/config
-    if path.file_name().and_then(|n| n.to_str()) == Some("config") {
-        if let Some(parent) = path.parent() {
-            if parent.file_name().and_then(|n| n.to_str()) == Some(".writer") {
-                return true;
-            }
-        }
-    }
-    false
+/// True if `path` is the workspace's own `.writer/config`. Only the root's
+/// file is the workspace settings layer; a `.writer/config` deeper down (a
+/// nested repository, a worktree copy) is just another file.
+fn is_workspace_config(path: &Path, workspace_root: &Path) -> bool {
+    path.strip_prefix(workspace_root)
+        .is_ok_and(|relative| relative == Path::new(".writer/config"))
 }
 
 /// Re-read `.writer/config` into the window's settings, tell the frontend,
@@ -465,6 +460,10 @@ pub fn start_watcher(
             // (the bootstrap matcher is installed before the watcher starts);
             // the fallback only guards against that invariant breaking.
             let ignore = state.workspace_ignore.read().clone().unwrap_or_else(|| {
+                eprintln!(
+                    "[watcher] no hidden-path matcher for {}; using the exclusion list only",
+                    watched_root.display()
+                );
                 Arc::new(WorkspaceIgnore::bootstrap(
                     &watched_root,
                     state.file_excludes(),
@@ -475,7 +474,9 @@ pub fn start_watcher(
                 for path in &event.paths {
                     // `.writer/config` reloads settings before any filtering,
                     // so it keeps working when `.writer/` is gitignored.
-                    if is_config_file(path) && event_kind_str(&event.kind).is_some() {
+                    if is_workspace_config(path, &watched_root)
+                        && event_kind_str(&event.kind).is_some()
+                    {
                         wlog!("emit settings:changed {}", path.display());
                         reload_workspace_settings(
                             &handle,
@@ -484,6 +485,12 @@ pub fn start_watcher(
                             &watched_root,
                             captured_epoch,
                         );
+                        continue;
+                    }
+
+                    // Writer's own atomic-save temp file. The save's real
+                    // event is on the target path (a recorded self-write).
+                    if crate::commands::fs::is_atomic_write_temp(path) {
                         continue;
                     }
 
@@ -792,6 +799,27 @@ pub fn drop_watcher_off_thread(watcher: Option<RecommendedWatcher>) {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    #[test]
+    fn only_the_root_writer_config_is_the_workspace_config() {
+        let root = Path::new("/workspace");
+        assert!(is_workspace_config(
+            Path::new("/workspace/.writer/config"),
+            root
+        ));
+        assert!(!is_workspace_config(
+            Path::new("/workspace/.claude/worktrees/x/.writer/config"),
+            root
+        ));
+        assert!(!is_workspace_config(
+            Path::new("/workspace/.writer/other"),
+            root
+        ));
+        assert!(!is_workspace_config(
+            Path::new("/elsewhere/.writer/config"),
+            root
+        ));
+    }
 
     #[test]
     fn test_self_write_detection() {

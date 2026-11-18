@@ -1,5 +1,6 @@
 use crate::config::{default_settings, ConfigValue, Settings};
 use ignore::gitignore::Gitignore;
+use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 
 /// Settings key for the always-hidden list. See [`FileExcludes`].
@@ -39,8 +40,7 @@ impl FileExcludes {
     }
 
     /// The `files.exclude` value from the merged settings, or the schema
-    /// default when no settings layer is loaded. A single string (one
-    /// `files.exclude = x` line written by hand) counts as a one-entry list.
+    /// default when no settings layer is loaded.
     pub fn from_settings(settings: Option<&Settings>) -> Self {
         let value = match settings {
             Some(settings) => settings.get(FILES_EXCLUDE_KEY).cloned(),
@@ -48,7 +48,8 @@ impl FileExcludes {
         };
         match value {
             Some(ConfigValue::List(entries)) => Self::new(entries),
-            Some(ConfigValue::String(entry)) => Self::new(vec![entry]),
+            // The config parser always reads this key as a list, so this
+            // only happens if an IPC write stored another type.
             other => {
                 eprintln!("{FILES_EXCLUDE_KEY} must be a list, got {other:?}; using the default");
                 Self::from_settings(None)
@@ -73,13 +74,6 @@ impl FileExcludes {
     }
 }
 
-/// A single `.gitignore` file paired with its scope (the directory it lives in).
-/// Rules only apply to paths inside the scope.
-struct ScopedGitignore {
-    scope: PathBuf,
-    matcher: Gitignore,
-}
-
 /// The single decision of which workspace paths Writer hides: the sidebar,
 /// file watcher, quick open index and wiki-embed lookup all ask this matcher
 /// and nothing else. Dotfiles and dot folders are not special; a path is
@@ -91,7 +85,7 @@ struct ScopedGitignore {
 ///   gitignore and `.git/info/exclude` are not read.
 ///
 /// Each discovered `.gitignore` is kept as an independent `Gitignore` matcher
-/// rooted at its own containing directory. This is critical: a nested file
+/// rooted at its own containing directory (its scope). This is critical: a nested file
 /// like `.vite-hooks/_/.gitignore` containing just `*` must only hide files
 /// inside `.vite-hooks/_/`, not every file in the workspace. (The previous
 /// implementation added every file to a single builder rooted at the workspace
@@ -106,9 +100,14 @@ struct ScopedGitignore {
 pub struct WorkspaceIgnore {
     root: PathBuf,
     excludes: FileExcludes,
-    /// Collected gitignores, sorted deepest-scope first so that nested rules
-    /// take precedence over shallower ones (matching git's own behavior).
-    gitignores: Vec<ScopedGitignore>,
+    /// Collected gitignores keyed by scope. A path consults the matchers of
+    /// its ancestors deepest first, so nested rules take precedence over
+    /// shallower ones (matching git's own behavior), at one hash lookup per
+    /// ancestor however many `.gitignore` files the workspace has.
+    gitignores: HashMap<PathBuf, Gitignore>,
+    /// False for the bootstrap matcher, whose `.gitignore` rules aren't
+    /// loaded yet.
+    gitignores_loaded: bool,
 }
 
 impl WorkspaceIgnore {
@@ -120,7 +119,8 @@ impl WorkspaceIgnore {
         Self {
             root: root.to_path_buf(),
             excludes,
-            gitignores: Vec::new(),
+            gitignores: HashMap::new(),
+            gitignores_loaded: false,
         }
     }
 
@@ -155,7 +155,7 @@ impl WorkspaceIgnore {
             })
             .build();
 
-        let mut gitignores: Vec<ScopedGitignore> = Vec::new();
+        let mut gitignores = HashMap::new();
         for result in walker {
             let Ok(entry) = result else { continue };
             if !entry.file_type().is_some_and(|ft| ft.is_dir()) {
@@ -170,25 +170,25 @@ impl WorkspaceIgnore {
             // errors from a single file so one malformed `.gitignore` doesn't
             // break the whole matcher.
             let (matcher, _err) = Gitignore::new(&candidate);
-            gitignores.push(ScopedGitignore {
-                scope: dir.to_path_buf(),
-                matcher,
-            });
+            gitignores.insert(dir.to_path_buf(), matcher);
         }
-
-        // Deepest scope first — a nested `.gitignore` gets to decide before
-        // anything shallower does, including whitelist rules.
-        gitignores.sort_by_key(|s| std::cmp::Reverse(s.scope.components().count()));
 
         Self {
             root: root.to_path_buf(),
             excludes,
             gitignores,
+            gitignores_loaded: true,
         }
     }
 
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    /// False for a [`Self::bootstrap`] matcher. Walks that can't wait for
+    /// the background load use this to load their own full matcher.
+    pub fn gitignores_loaded(&self) -> bool {
+        self.gitignores_loaded
     }
 
     /// True if `path` is hidden by the exclusion list alone. Needs no stat,
@@ -218,14 +218,23 @@ impl WorkspaceIgnore {
     }
 
     fn gitignored(&self, path: &Path, is_dir: bool, check_parents: bool) -> bool {
-        for scoped in &self.gitignores {
-            if !path.starts_with(&scoped.scope) {
+        if self.gitignores.is_empty() {
+            return false;
+        }
+        // A folder's own `.gitignore` never matches the folder itself, so
+        // scopes start at the parent. Ancestors come deepest first.
+        let scopes = path
+            .ancestors()
+            .skip(1)
+            .take_while(|scope| scope.starts_with(&self.root));
+        for scope in scopes {
+            let Some(matcher) = self.gitignores.get(scope) else {
                 continue;
-            }
+            };
             let matched = if check_parents {
-                scoped.matcher.matched_path_or_any_parents(path, is_dir)
+                matcher.matched_path_or_any_parents(path, is_dir)
             } else {
-                scoped.matcher.matched(path, is_dir)
+                matcher.matched(path, is_dir)
             };
             match matched {
                 ignore::Match::Ignore(_) => return true,
@@ -277,6 +286,8 @@ mod tests {
         let dir = TempDir::new().unwrap();
         touch(&dir.path().join(".gitignore"), "drafts/\n");
         let ignore = WorkspaceIgnore::bootstrap(dir.path(), defaults());
+        assert!(!ignore.gitignores_loaded());
+        assert!(WorkspaceIgnore::load(dir.path(), defaults()).gitignores_loaded());
 
         assert!(ignore.is_ignored(&dir.path().join("node_modules"), true));
         assert!(ignore.is_ignored(&dir.path().join(".git").join("HEAD"), false));
@@ -355,6 +366,20 @@ mod tests {
             false
         ));
         assert!(!ignore.is_ignored(&dir.path().join("docs").join("final.md"), false));
+    }
+
+    #[test]
+    fn deeper_gitignore_whitelist_beats_a_shallower_rule() {
+        let dir = TempDir::new().unwrap();
+        touch(&dir.path().join(".gitignore"), "*.draft.md\n");
+        touch(&dir.path().join("docs/.gitignore"), "!keep.draft.md\n");
+
+        let ignore = WorkspaceIgnore::load(dir.path(), defaults());
+        let docs = dir.path().join("docs");
+        assert!(!ignore.is_ignored(&docs.join("keep.draft.md"), false));
+        assert!(!ignore.is_ignored_in_walk(&docs.join("keep.draft.md"), false));
+        assert!(ignore.is_ignored(&docs.join("other.draft.md"), false));
+        assert!(ignore.is_ignored(&dir.path().join("top.draft.md"), false));
     }
 
     #[test]
@@ -495,7 +520,7 @@ mod tests {
     }
 
     #[test]
-    fn from_settings_reads_a_single_string_entry_as_a_list() {
+    fn from_settings_reads_a_single_config_line_as_a_list() {
         let config_dir = TempDir::new().unwrap();
         fs::write(config_dir.path().join("config"), "files.exclude = drafts\n").unwrap();
         let settings = Settings::new(config_dir.path().to_path_buf()).unwrap();

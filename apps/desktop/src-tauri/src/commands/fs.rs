@@ -337,6 +337,18 @@ pub async fn read_file(path: String) -> Result<FileContent, AppError> {
     blocking(move || read_file_impl(&path)).await
 }
 
+/// Name prefix of the temp file [`write_file_impl`] writes next to a note
+/// before renaming it into place.
+const ATOMIC_WRITE_TEMP_PREFIX: &str = ".~writer-";
+
+/// True for [`write_file_impl`]'s temp file. The watcher drops these: with
+/// dotfiles visible, every autosave would otherwise refresh the folder, the
+/// recent-files list and the index.
+pub(crate) fn is_atomic_write_temp(path: &Path) -> bool {
+    path.file_name()
+        .is_some_and(|name| name.to_string_lossy().starts_with(ATOMIC_WRITE_TEMP_PREFIX))
+}
+
 pub fn write_file_impl(path: &str, content: &str) -> Result<WriteResult, AppError> {
     let file_path = PathBuf::from(path);
 
@@ -344,7 +356,10 @@ pub fn write_file_impl(path: &str, content: &str) -> Result<WriteResult, AppErro
     let dir = file_path
         .parent()
         .ok_or_else(|| AppError::Io("No parent directory".into()))?;
-    let temp_path = dir.join(format!(".~{}", uuid::Uuid::new_v4()));
+    let temp_path = dir.join(format!(
+        "{ATOMIC_WRITE_TEMP_PREFIX}{}",
+        uuid::Uuid::new_v4()
+    ));
     fs::write(&temp_path, content)?;
     fs::rename(&temp_path, &file_path)?;
 
@@ -936,6 +951,24 @@ mod tests {
         state.transition_to_workspace(root.clone());
 
         assert_eq!(names(&root, &state), vec![".trash", "note.md"]);
+    }
+
+    #[test]
+    fn test_write_file_temp_is_recognised_and_removed() {
+        let dir = TempDir::new().unwrap();
+        let note = dir.path().join("note.md");
+        write_file_impl(&note.to_string_lossy(), "# Note").unwrap();
+        // Only the note is left behind, and the prefix the watcher drops
+        // is the one the write path uses.
+        let names: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(names, vec![std::ffi::OsString::from("note.md")]);
+        let temp = dir.path().join(format!("{ATOMIC_WRITE_TEMP_PREFIX}1234"));
+        assert!(is_atomic_write_temp(&temp));
+        assert!(!is_atomic_write_temp(&note));
+        assert!(!is_atomic_write_temp(&dir.path().join(".~lock.note.md#")));
     }
 
     #[test]
