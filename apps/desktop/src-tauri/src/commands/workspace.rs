@@ -471,7 +471,7 @@ fn prepare_workspace_state(
 }
 
 /// Background bootstrap for a freshly-opened workspace: starts the file
-/// watcher, loads the full gitignore matcher, and walks the tree to build
+/// watcher, loads the full hidden-path matcher, and walks the tree to build
 /// the file index — each step guarded by `epoch`. The guard collapses any
 /// work started for a workspace the user has already moved on from.
 fn run_workspace_bootstrap(
@@ -509,47 +509,108 @@ fn run_workspace_bootstrap(
         }
     }
 
-    // Load the full gitignore matcher. Walks every directory looking for
-    // `.gitignore` files; bounded but not trivial on large repos.
-    let new_ignore = Arc::new(WorkspaceIgnore::load(&root));
-    if state
-        .with_workspace_snapshot(&root, epoch, || {
-            *state.workspace_ignore.write() = Some(new_ignore);
-        })
-        .is_none()
-    {
+    // Load the full matcher and walk the tree. The `cancel` flag lets a
+    // concurrent workspace switch stop the walk at the next directory
+    // boundary.
+    let generation = state.ignore_generation.fetch_add(1, Ordering::SeqCst) + 1;
+    refresh_workspace_filter(&handle, &label, &state, &root, epoch, generation, &cancel);
+}
+
+/// How long a requested matcher rebuild waits for more requests. The
+/// Hidden Files list control saves on every keystroke; each save asks for a
+/// rebuild, and only the last one in a burst should walk the tree.
+const FILTER_REFRESH_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(300);
+
+/// Rebuild the window's hidden-path matcher and file index in the
+/// background, after a `.gitignore` file or the `files.exclude` setting
+/// changed. Requests within [`FILTER_REFRESH_DEBOUNCE`] of each other
+/// collapse into one rebuild.
+pub(crate) fn spawn_workspace_filter_refresh(handle: &tauri::AppHandle, label: &str) {
+    let Some(state) = handle.state::<AppState>().get(label) else {
+        return;
+    };
+    let Some((root, epoch)) = state.workspace_snapshot() else {
+        return;
+    };
+    let generation = state.ignore_generation.fetch_add(1, Ordering::SeqCst) + 1;
+    let handle = handle.clone();
+    let label = label.to_string();
+    std::thread::spawn(move || {
+        std::thread::sleep(FILTER_REFRESH_DEBOUNCE);
+        if state.ignore_generation.load(Ordering::SeqCst) != generation {
+            return;
+        }
+        let cancel = Arc::clone(&state.cancel_index.read());
+        refresh_workspace_filter(&handle, &label, &state, &root, epoch, generation, &cancel);
+    });
+}
+
+/// Build the hidden-path matcher (`.gitignore` files + `files.exclude`) for
+/// `root`, publish it, nudge the sidebar to re-read the root, then re-walk
+/// the file index through the same matcher and publish that. The one path
+/// for workspace open, `.gitignore` changes and `files.exclude` changes, so
+/// the sidebar, watcher and quick open always share one matcher.
+///
+/// `generation` comes from `state.ignore_generation`. The matcher and the
+/// index publish only while it is still the latest (checked under the slot's
+/// write lock), so overlapping rebuilds settle on the newest request no
+/// matter which walk finishes first.
+fn refresh_workspace_filter(
+    handle: &tauri::AppHandle,
+    label: &str,
+    state: &WorkspaceState,
+    root: &Path,
+    epoch: u64,
+    generation: u64,
+    cancel: &Arc<AtomicBool>,
+) {
+    let is_latest = || state.ignore_generation.load(Ordering::SeqCst) == generation;
+    let ignore = Arc::new(WorkspaceIgnore::load(root, state.file_excludes()));
+    let published = state.with_workspace_snapshot(root, epoch, || {
+        let mut slot = state.workspace_ignore.write();
+        if !is_latest() {
+            return false;
+        }
+        *slot = Some(Arc::clone(&ignore));
+        true
+    });
+    if published != Some(true) {
         return;
     }
-    let root_string = root.to_string_lossy().into_owned();
+    let identity = || crate::watcher::WorkspaceIdentity {
+        root: root.to_string_lossy().into_owned(),
+        epoch,
+    };
     let _ = handle.emit_to(
-        label.clone(),
+        label,
         "fs:directory-changed",
         crate::watcher::FileChangeEvent {
-            path: root_string.clone(),
+            path: root.to_string_lossy().into_owned(),
             kind: "modified".to_string(),
-            workspace: Some(crate::watcher::WorkspaceIdentity {
-                root: root_string.clone(),
-                epoch,
-            }),
+            workspace: Some(identity()),
         },
     );
 
-    // Walk the tree. The `cancel` flag lets a concurrent workspace switch
-    // stop this walk at the next directory boundary.
-    let (indexed, dirs) = index_workspace_impl(&root, Arc::clone(&cancel));
+    let (indexed, dirs) = index_workspace_impl(root, &ignore, Arc::clone(cancel));
     if cancel.load(Ordering::Relaxed) {
         return;
     }
     let file_count = indexed.len();
 
-    let displaced = state.with_workspace_snapshot(&root, epoch, || {
-        let old_index = std::mem::replace(&mut *state.file_index.write(), indexed);
-        let old_cache = state.recent_files_cache.write().take();
-        let old_dirs = std::mem::replace(&mut *state.dirs_with_markdown.write(), dirs);
-        state.file_index_revision.fetch_add(1, Ordering::SeqCst);
-        state.index_ready.store(true, Ordering::Relaxed);
-        (old_index, old_cache, old_dirs)
-    });
+    let displaced = state
+        .with_workspace_snapshot(root, epoch, || {
+            let mut index = state.file_index.write();
+            if !is_latest() {
+                return None;
+            }
+            let old_index = std::mem::replace(&mut *index, indexed);
+            let old_dirs = std::mem::replace(&mut *state.dirs_with_markdown.write(), dirs);
+            let old_cache = state.recent_files_cache.write().take();
+            state.file_index_revision.fetch_add(1, Ordering::SeqCst);
+            state.index_ready.store(true, Ordering::Relaxed);
+            Some((old_index, old_cache, old_dirs))
+        })
+        .flatten();
     let Some(displaced) = displaced else {
         return;
     };
@@ -558,10 +619,7 @@ fn run_workspace_bootstrap(
         label,
         "index:complete",
         IndexCompleteEvent {
-            workspace: crate::watcher::WorkspaceIdentity {
-                root: root_string,
-                epoch,
-            },
+            workspace: identity(),
             file_count,
         },
     );

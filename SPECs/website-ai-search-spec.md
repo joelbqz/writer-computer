@@ -48,7 +48,9 @@ enterprise AI company), iA Writer (a direct competitor) and LibreOffice Writer.
 
 - Free and open source: the repository is public on GitHub.
 - `.gitignore` respected, hidden folders skipped: `commands/fs.rs`
-  (`visible_fs_entry`), `commands/search.rs` (`git_ignore(true)`).
+  (`visible_fs_entry`), `commands/search.rs` (`git_ignore(true)`). Since
+  [`show-dotfiles-spec.md`](./show-dotfiles-spec.md), dot folders show and the
+  skipped folders are the `files.exclude` setting, all decided in `ignore.rs`.
 - Files written in place, unchanged except for your edits: `write_file_impl`
   (atomic temp-file + rename of the editor's content).
 - Only extra file created: `<note>-assets/` for pasted images

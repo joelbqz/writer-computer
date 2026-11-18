@@ -1,5 +1,6 @@
 use crate::error::AppError;
-use crate::state::{self, AppState, IndexedFile};
+use crate::ignore::WorkspaceIgnore;
+use crate::state::{self, AppState, IndexedFile, WorkspaceState};
 use ignore::WalkBuilder;
 use parking_lot::Mutex;
 use serde::Serialize;
@@ -32,9 +33,10 @@ pub fn index_workspace(
     let state = app.state::<AppState>().get_or_create(webview.label());
     let (root, epoch) = state.workspace_snapshot().ok_or(AppError::NoWorkspace)?;
     let cancel = Arc::clone(&state.cancel_index.read());
+    let ignore = workspace_ignore_for(&state, &root);
 
     let start = std::time::Instant::now();
-    let (indexed, dirs) = index_workspace_impl(&root, cancel);
+    let (indexed, dirs) = index_workspace_impl(&root, &ignore, cancel);
     let file_count = indexed.len();
     let duration_ms = start.elapsed().as_millis() as u64;
 
@@ -142,8 +144,46 @@ fn fuzzy_search_from(
     Ok(results)
 }
 
+/// The window's hidden-path matcher when it belongs to `root`, otherwise a
+/// bootstrap matcher (exclusion list only) for `root`. Every walk below goes
+/// through a matcher so it hides exactly what the sidebar hides.
+fn workspace_ignore_for(state: &WorkspaceState, root: &Path) -> Arc<WorkspaceIgnore> {
+    state
+        .workspace_ignore
+        .read()
+        .as_ref()
+        .filter(|ignore| ignore.root() == root)
+        .map(Arc::clone)
+        .unwrap_or_else(|| Arc::new(WorkspaceIgnore::bootstrap(root, state.file_excludes())))
+}
+
+/// Parallel walk of `root` that visits only what `ignore` leaves visible.
+///
+/// The `ignore` crate's own filters (hidden files, `.gitignore`, global
+/// gitignore, `.ignore`) are all off: `WorkspaceIgnore` is the one decision,
+/// so the index, the sidebar and the watcher can't disagree (the crate's
+/// defaults skip every dotfile and only honor `.gitignore` inside a git
+/// repository). Hidden folders are pruned, never descended into.
+fn walk_visible(root: &Path, ignore: &Arc<WorkspaceIgnore>) -> ignore::WalkParallel {
+    let threads = std::thread::available_parallelism()
+        .map(|n| n.get().min(8))
+        .unwrap_or(4);
+    let ignore = Arc::clone(ignore);
+    WalkBuilder::new(root)
+        .standard_filters(false)
+        .filter_entry(move |entry| {
+            let is_dir = entry.file_type().is_some_and(|ft| ft.is_dir());
+            !ignore.is_ignored_in_walk(entry.path(), is_dir)
+        })
+        .threads(threads)
+        .build_parallel()
+}
+
 /// Parallel file indexing using the `ignore` crate's walker.
 /// Returns the indexed files and a set of directories containing markdown.
+///
+/// `root` is the workspace root or, for the watcher, a folder inside it that
+/// just appeared; `ignore` is always the workspace's matcher.
 ///
 /// The `cancel` flag lets a concurrent workspace switch stop this walk early:
 /// each walker thread checks the flag at every directory entry and returns
@@ -152,63 +192,46 @@ fn fuzzy_search_from(
 /// epoch against expectations before acting on them.
 pub fn index_workspace_impl(
     root: &Path,
+    ignore: &Arc<WorkspaceIgnore>,
     cancel: Arc<AtomicBool>,
 ) -> (Vec<IndexedFile>, HashSet<PathBuf>) {
     let root = root.to_path_buf();
     let results: Arc<Mutex<Vec<IndexedFile>>> = Arc::new(Mutex::new(Vec::new()));
 
-    let threads = std::thread::available_parallelism()
-        .map(|n| n.get().min(8))
-        .unwrap_or(4);
-
     let results_ref = Arc::clone(&results);
     let root_ref = root.clone();
 
-    WalkBuilder::new(&root)
-        .hidden(true)
-        .git_ignore(true)
-        .git_global(true)
-        .git_exclude(true)
-        .threads(threads)
-        .build_parallel()
-        .run(move || {
-            let results = Arc::clone(&results_ref);
-            let root = root_ref.clone();
-            let cancel = Arc::clone(&cancel);
-            Box::new(move |entry| {
-                if cancel.load(Ordering::Relaxed) {
-                    return ignore::WalkState::Quit;
-                }
-                let entry = match entry {
-                    Ok(e) => e,
-                    Err(_) => return ignore::WalkState::Continue,
-                };
-                // Safety net: skip node_modules even without .gitignore
-                if entry.file_type().is_some_and(|ft| ft.is_dir()) {
-                    if entry.file_name() == "node_modules" {
-                        return ignore::WalkState::Skip;
-                    }
-                    return ignore::WalkState::Continue;
-                }
-                if entry.file_type().is_some_and(|ft| ft.is_file())
-                    && entry.path().extension().and_then(|e| e.to_str()) == Some("md")
-                {
-                    let rel = entry
-                        .path()
-                        .strip_prefix(&root)
-                        .unwrap_or(entry.path())
-                        .to_string_lossy()
-                        .to_string();
-                    results.lock().push(IndexedFile {
-                        path: entry.path().to_path_buf(),
-                        relative_path: rel,
-                        name: entry.file_name().to_string_lossy().to_string(),
-                        modified_at: crate::commands::fs::modified_time(entry.path()),
-                    });
-                }
-                ignore::WalkState::Continue
-            })
-        });
+    walk_visible(&root, ignore).run(move || {
+        let results = Arc::clone(&results_ref);
+        let root = root_ref.clone();
+        let cancel = Arc::clone(&cancel);
+        Box::new(move |entry| {
+            if cancel.load(Ordering::Relaxed) {
+                return ignore::WalkState::Quit;
+            }
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => return ignore::WalkState::Continue,
+            };
+            if entry.file_type().is_some_and(|ft| ft.is_file())
+                && entry.path().extension().and_then(|e| e.to_str()) == Some("md")
+            {
+                let rel = entry
+                    .path()
+                    .strip_prefix(&root)
+                    .unwrap_or(entry.path())
+                    .to_string_lossy()
+                    .to_string();
+                results.lock().push(IndexedFile {
+                    path: entry.path().to_path_buf(),
+                    relative_path: rel,
+                    name: entry.file_name().to_string_lossy().to_string(),
+                    modified_at: crate::commands::fs::modified_time(entry.path()),
+                });
+            }
+            ignore::WalkState::Continue
+        })
+    });
 
     let indexed = Arc::try_unwrap(results).unwrap().into_inner();
     let dirs = state::rebuild_dirs_from_index(&indexed, &root);
@@ -218,7 +241,11 @@ pub fn index_workspace_impl(
 /// Test-only convenience: run an uncancellable index.
 #[cfg(test)]
 fn index_workspace_test(root: &Path) -> (Vec<IndexedFile>, HashSet<PathBuf>) {
-    index_workspace_impl(root, Arc::new(AtomicBool::new(false)))
+    let ignore = Arc::new(WorkspaceIgnore::load(
+        root,
+        crate::ignore::FileExcludes::from_settings(None),
+    ));
+    index_workspace_impl(root, &ignore, Arc::new(AtomicBool::new(false)))
 }
 
 pub fn fuzzy_search_impl(query: &str, index: &[IndexedFile], limit: usize) -> Vec<SearchResult> {
@@ -228,49 +255,36 @@ pub fn fuzzy_search_impl(query: &str, index: &[IndexedFile], limit: usize) -> Ve
 /// Find a file under `root` by case-insensitive basename. Used by Obsidian
 /// wiki image embeds (`![[image.png]]`), which reference attachments by bare
 /// filename regardless of where they live in the vault. The workspace file
-/// index only covers markdown, so this walks on demand (gitignore-aware,
-/// parallel) instead of maintaining a second media index plus watcher
-/// plumbing; callers cache positive results.
+/// index only covers markdown, so this walks on demand (through the
+/// workspace's hidden-path matcher, parallel) instead of maintaining a second
+/// media index plus watcher plumbing; callers cache positive results.
 ///
 /// Deterministic on duplicates: the match with the fewest path components
 /// wins, ties broken lexicographically — "shortest path" like Obsidian.
-pub fn find_file_by_name_impl(root: &Path, file_name: &str) -> Option<PathBuf> {
+pub fn find_file_by_name_impl(
+    root: &Path,
+    file_name: &str,
+    ignore: &Arc<WorkspaceIgnore>,
+) -> Option<PathBuf> {
     let matches: Arc<Mutex<Vec<PathBuf>>> = Arc::new(Mutex::new(Vec::new()));
     let target = file_name.to_lowercase();
 
-    let threads = std::thread::available_parallelism()
-        .map(|n| n.get().min(8))
-        .unwrap_or(4);
-
     let matches_ref = Arc::clone(&matches);
-    WalkBuilder::new(root)
-        .hidden(true)
-        .git_ignore(true)
-        .git_global(true)
-        .git_exclude(true)
-        .threads(threads)
-        .build_parallel()
-        .run(move || {
-            let matches = Arc::clone(&matches_ref);
-            let target = target.clone();
-            Box::new(move |entry| {
-                let Ok(entry) = entry else {
-                    return ignore::WalkState::Continue;
-                };
-                if entry.file_type().is_some_and(|ft| ft.is_dir()) {
-                    if entry.file_name() == "node_modules" {
-                        return ignore::WalkState::Skip;
-                    }
-                    return ignore::WalkState::Continue;
-                }
-                if entry.file_type().is_some_and(|ft| ft.is_file())
-                    && entry.file_name().to_string_lossy().to_lowercase() == target
-                {
-                    matches.lock().push(entry.path().to_path_buf());
-                }
-                ignore::WalkState::Continue
-            })
-        });
+    walk_visible(root, ignore).run(move || {
+        let matches = Arc::clone(&matches_ref);
+        let target = target.clone();
+        Box::new(move |entry| {
+            let Ok(entry) = entry else {
+                return ignore::WalkState::Continue;
+            };
+            if entry.file_type().is_some_and(|ft| ft.is_file())
+                && entry.file_name().to_string_lossy().to_lowercase() == target
+            {
+                matches.lock().push(entry.path().to_path_buf());
+            }
+            ignore::WalkState::Continue
+        })
+    });
 
     let mut matches = Arc::try_unwrap(matches).unwrap().into_inner();
     matches.sort_by(|a, b| {
@@ -285,9 +299,14 @@ pub fn find_file_by_name_impl(root: &Path, file_name: &str) -> Option<PathBuf> {
 pub async fn find_file_by_name(
     root: String,
     file_name: String,
+    webview: tauri::Webview,
+    app: tauri::AppHandle,
 ) -> Result<Option<String>, AppError> {
+    let state = app.state::<AppState>().get_or_create(webview.label());
     tauri::async_runtime::spawn_blocking(move || {
-        Ok(find_file_by_name_impl(Path::new(&root), &file_name)
+        let root = Path::new(&root);
+        let ignore = workspace_ignore_for(&state, root);
+        Ok(find_file_by_name_impl(root, &file_name, &ignore)
             .map(|path| path.to_string_lossy().to_string()))
     })
     .await
@@ -307,7 +326,7 @@ mod tests {
         fs::write(dir.path().join("data.txt"), "not indexed").unwrap();
         fs::create_dir(dir.path().join("docs")).unwrap();
         fs::write(dir.path().join("docs").join("guide.md"), "# Guide").unwrap();
-        // Hidden directory should be ignored
+        // Excluded by default (`files.exclude`)
         fs::create_dir(dir.path().join(".git")).unwrap();
         fs::write(dir.path().join(".git").join("config.md"), "git").unwrap();
         dir
@@ -321,11 +340,59 @@ mod tests {
     }
 
     #[test]
-    fn test_index_workspace_ignores_hidden() {
+    fn test_index_workspace_skips_excluded_folders() {
         let dir = setup_workspace();
         let (index, _dirs) = index_workspace_test(dir.path());
         // Should not include .git/config.md
         assert!(!index.iter().any(|f| f.relative_path.contains(".git")));
+    }
+
+    fn write(path: &Path, content: &str) {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, content).unwrap();
+    }
+
+    fn indexed_paths(root: &Path) -> Vec<String> {
+        let (index, _dirs) = index_workspace_test(root);
+        let mut paths: Vec<String> = index.into_iter().map(|f| f.relative_path).collect();
+        paths.sort();
+        paths
+    }
+
+    #[test]
+    fn test_index_workspace_includes_dot_folders_but_not_excluded_ones() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        write(&root.join(".claude/skills/demo/SKILL.md"), "# Skill");
+        write(&root.join(".agents/skills/x/SKILL.md"), "# Skill");
+        write(&root.join(".trash/old.md"), "# Old");
+        write(&root.join(".claude/worktrees/feature/README.md"), "# Copy");
+        write(&root.join("node_modules/pkg/README.md"), "# Pkg");
+        write(&root.join("note.md"), "# Note");
+
+        assert_eq!(
+            indexed_paths(root),
+            vec![
+                ".agents/skills/x/SKILL.md",
+                ".claude/skills/demo/SKILL.md",
+                "note.md"
+            ]
+        );
+    }
+
+    #[test]
+    fn test_index_workspace_honors_gitignore_outside_a_git_repo() {
+        // Regression: the walker used the `ignore` crate defaults, which only
+        // read `.gitignore` inside a git repository, while the sidebar reads
+        // it everywhere. Both go through `WorkspaceIgnore` now.
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        write(&root.join(".gitignore"), ".cache/\ndrafts/\n");
+        write(&root.join(".cache/notes.md"), "# Cached");
+        write(&root.join("drafts/wip.md"), "# WIP");
+        write(&root.join("note.md"), "# Note");
+
+        assert_eq!(indexed_paths(root), vec!["note.md"]);
     }
 
     #[test]
@@ -345,7 +412,11 @@ mod tests {
         // Pre-cancelled walker should return before visiting any file.
         let dir = setup_workspace();
         let cancel = Arc::new(AtomicBool::new(true));
-        let (index, dirs) = index_workspace_impl(dir.path(), cancel);
+        let ignore = Arc::new(WorkspaceIgnore::bootstrap(
+            dir.path(),
+            crate::ignore::FileExcludes::from_settings(None),
+        ));
+        let (index, dirs) = index_workspace_impl(dir.path(), &ignore, cancel);
         assert!(index.is_empty());
         assert!(dirs.is_empty());
     }
@@ -408,13 +479,21 @@ mod tests {
         assert!(results.len() <= 1);
     }
 
+    fn find_test(root: &Path, file_name: &str) -> Option<PathBuf> {
+        let ignore = Arc::new(WorkspaceIgnore::load(
+            root,
+            crate::ignore::FileExcludes::from_settings(None),
+        ));
+        find_file_by_name_impl(root, file_name, &ignore)
+    }
+
     #[test]
     fn test_find_file_by_name_case_insensitive() {
         let dir = TempDir::new().unwrap();
         fs::create_dir(dir.path().join("assets")).unwrap();
         fs::write(dir.path().join("assets").join("Diagram.PNG"), [0u8]).unwrap();
 
-        let found = find_file_by_name_impl(dir.path(), "diagram.png").unwrap();
+        let found = find_test(dir.path(), "diagram.png").unwrap();
         assert_eq!(found, dir.path().join("assets").join("Diagram.PNG"));
     }
 
@@ -425,7 +504,7 @@ mod tests {
         fs::write(dir.path().join("a").join("b").join("pic.png"), [0u8]).unwrap();
         fs::write(dir.path().join("pic.png"), [0u8]).unwrap();
 
-        let found = find_file_by_name_impl(dir.path(), "pic.png").unwrap();
+        let found = find_test(dir.path(), "pic.png").unwrap();
         assert_eq!(found, dir.path().join("pic.png"));
     }
 
@@ -434,8 +513,24 @@ mod tests {
         let dir = TempDir::new().unwrap();
         fs::create_dir(dir.path().join(".git")).unwrap();
         fs::write(dir.path().join(".git").join("hidden.png"), [0u8]).unwrap();
+        write(&dir.path().join(".gitignore"), "build/\n");
+        fs::create_dir(dir.path().join("build")).unwrap();
+        fs::write(dir.path().join("build").join("ignored.png"), [0u8]).unwrap();
 
-        assert!(find_file_by_name_impl(dir.path(), "nope.png").is_none());
-        assert!(find_file_by_name_impl(dir.path(), "hidden.png").is_none());
+        assert!(find_test(dir.path(), "nope.png").is_none());
+        assert!(find_test(dir.path(), "hidden.png").is_none());
+        assert!(find_test(dir.path(), "ignored.png").is_none());
+    }
+
+    #[test]
+    fn test_find_file_by_name_looks_inside_dot_folders() {
+        let dir = TempDir::new().unwrap();
+        fs::create_dir(dir.path().join(".attachments")).unwrap();
+        fs::write(dir.path().join(".attachments").join("pic.png"), [0u8]).unwrap();
+
+        assert_eq!(
+            find_test(dir.path(), "pic.png"),
+            Some(dir.path().join(".attachments").join("pic.png"))
+        );
     }
 }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-18
+
+- Show folders and files whose names start with a dot. `.claude`, `.agents`, `.github` and other dot folders now appear in the sidebar, quick open (⌘P) and image embeds like any other folder when they contain notes, so you can read and edit agent skills such as `.claude/skills/…/SKILL.md`. Folders without notes, like `.obsidian`, still don't appear.
+- New **Files → Hidden Files** setting: names and paths that are always left out of the sidebar and search. The default is `.git`, `.hg`, `.svn`, `.jj`, `node_modules`, `.DS_Store`, Obsidian's `.trash` folder (deleted notes) and Claude Code's `.claude/worktrees`. An entry is a name, which hides everything with that name at any depth, or a path of names such as `.claude/worktrees`; there are no wildcards. Your list replaces the default, and a workspace can set its own with `files.exclude` lines in `.writer/config`.
+- Fix quick open showing files your `.gitignore` excludes when the folder isn't a git repository. The sidebar already left them out; now both follow every `.gitignore` in the folder, and quick open updates when a `.gitignore` changes instead of after reopening the folder.
+- Fix settings in `.writer/config` not reloading when edited outside Writer if `.writer/` is listed in a `.gitignore`.
+
 ## 2026-10-28
 
 - The docs cover more of the app: [finding your way around a note](https://writer.computer/docs/navigate-a-note/) (the heading outline at the edge of a note, links to headings, find and replace, word counts), [tables, tasks and code](https://writer.computer/docs/tables-tasks-and-code/), [customizing the look](https://writer.computer/docs/customize-the-look/) and [the sidebar](https://writer.computer/docs/sidebar/). The keyboard shortcuts page no longer lists ⌘H, which isn't bound, and says that ⌘O is the same as ⌘P.

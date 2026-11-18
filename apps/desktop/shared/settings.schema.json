@@ -304,6 +304,23 @@
       "default": ["*.md", "*.mdx", "*.markdown"]
     },
     {
+      "key": "files.exclude",
+      "label": "Hidden Files",
+      "description": "Always left out of the sidebar, quick open and search, along with anything .gitignore excludes. An entry is a name (node_modules hides every node_modules folder) or a path of names (.claude/worktrees hides worktrees folders inside .claude), at any depth. No wildcards.",
+      "category": "Files",
+      "type": "list",
+      "default": [
+        ".git",
+        ".hg",
+        ".svn",
+        ".jj",
+        "node_modules",
+        ".DS_Store",
+        ".trash",
+        ".claude/worktrees"
+      ]
+    },
+    {
       "key": "files.default-encoding",
       "label": "Default Encoding",
       "description": "Default text encoding for files",

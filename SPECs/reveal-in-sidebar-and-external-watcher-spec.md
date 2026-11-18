@@ -32,7 +32,7 @@ Three related issues, all anchored on the seam between the editor's notion of "a
 
 From [`external-file-watcher-spec.md`](./external-file-watcher-spec.md) and `CHANGELOG.md` (2026-05-03, 2026-05-07):
 
-- `should_ignore` is workspace-root-aware; dotdir workspaces (`~/.notes/`) fire events.
+- `should_ignore` is workspace-root-aware; dotdir workspaces (`~/.notes/`) fire events. (Since [`show-dotfiles-spec.md`](./show-dotfiles-spec.md), `should_ignore` is gone: the watcher filters through `WorkspaceIgnore`, whose exclusion list is relative to the workspace root.)
 - `prepare_workspace_state` canonicalizes the root; `/var → /private/var` aliasing no longer desyncs the cache key.
 - `is_self_write` is a TTL window, not consume-on-first-match — fan-out of `Create + Modify(Metadata) + Modify(Data)` from one save is all suppressed.
 - `Modify(Name(_))` (Finder "Move to Trash", `mv`) is treated as a membership change; the index uses `path.exists()` as ground truth.

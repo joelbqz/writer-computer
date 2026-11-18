@@ -13,7 +13,7 @@ Key facts:
 - Speed: starts faster than Apple Notes and Obsidian.
 - Cold starts: instant even on very large workspaces. The window opens with the top level of the folder and the last open note; the file watcher and search index are built in the background.
 - Files: opens any folder of markdown files as a workspace and edits the files in place. It does not move, rename or convert files. Pasting an image into `note.md` saves it in a `note-assets` folder next to the note.
-- Folders: files excluded by `.gitignore` and hidden folders (such as `.git` and `.obsidian`) are left out of the sidebar and search. Each workspace can have its own window.
+- Folders: files excluded by `.gitignore` (in any folder, git repository or not) and the folders in the Hidden Files setting (by default `.git`, `.hg`, `.svn`, `.jj`, `node_modules`, `.DS_Store`, `.trash` and `.claude/worktrees`) are left out of the sidebar and search. Other dot folders such as `.claude` and `.github` show up when they contain markdown. Each workspace can have its own window.
 - Obsidian: follows `[[wikilinks]]` with autocomplete and shows `![[image]]` embeds. Note embeds, Obsidian plugins and callouts are not supported.
 - Markdown: CommonMark with GitHub-flavored tables, task lists and strikethrough; Mermaid diagrams; KaTeX math with `$` and `$$`; HTML blocks such as `<details>`; YAML frontmatter shown as editable properties; syntax-highlighted code blocks. Footnotes are not rendered.
 - Privacy: usage telemetry is opt-in and off by default. It never includes document contents, file names or paths. Declining sends a single event recording that choice.

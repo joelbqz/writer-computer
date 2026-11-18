@@ -55,6 +55,23 @@ fn with_global_settings_mut<T>(
     Ok(result)
 }
 
+/// Run a settings write, then rebuild the hidden-path matcher if it changed
+/// the merged `files.exclude` list. Both IPC write paths (set and reset, any
+/// scope) go through here.
+fn write_settings<T>(
+    app: &tauri::AppHandle,
+    label: &str,
+    state: &WorkspaceState,
+    write: impl FnOnce() -> Result<T, AppError>,
+) -> Result<T, AppError> {
+    let excludes_before = state.file_excludes();
+    let result = write()?;
+    if state.file_excludes() != excludes_before {
+        crate::commands::workspace::spawn_workspace_filter_refresh(app, label);
+    }
+    Ok(result)
+}
+
 fn init_window_settings_at(
     app_state: &AppState,
     state: &WorkspaceState,
@@ -177,11 +194,13 @@ pub fn set_setting(
             .cloned()
             .ok_or_else(|| AppError::Io(format!("Missing setting after write: {key}")))
     };
-    let persisted = if scope == "workspace" {
-        with_settings_mut(&app, webview.label(), persist)??
-    } else {
-        with_global_settings_mut(app.state::<AppState>().inner(), &state, persist)?
-    };
+    let persisted = write_settings(&app, webview.label(), &state, || {
+        if scope == "workspace" {
+            with_settings_mut(&app, webview.label(), persist)?
+        } else {
+            with_global_settings_mut(app.state::<AppState>().inner(), &state, persist)
+        }
+    })?;
     Ok(config_value_to_json(&persisted))
 }
 
@@ -200,11 +219,13 @@ pub fn reset_setting(
         };
         result.map_err(|e| AppError::Io(e.to_string()))
     };
-    if scope == "workspace" {
-        with_settings_mut(&app, webview.label(), reset)?
-    } else {
-        with_global_settings_mut(app.state::<AppState>().inner(), &state, reset)
-    }
+    write_settings(&app, webview.label(), &state, || {
+        if scope == "workspace" {
+            with_settings_mut(&app, webview.label(), reset)?
+        } else {
+            with_global_settings_mut(app.state::<AppState>().inner(), &state, reset)
+        }
+    })
 }
 
 #[cfg(test)]
