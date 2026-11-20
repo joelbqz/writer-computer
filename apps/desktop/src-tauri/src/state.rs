@@ -1,5 +1,5 @@
 use crate::config::Settings;
-use crate::ignore::WorkspaceIgnore;
+use crate::ignore::{FileExcludes, WorkspaceIgnore};
 use crate::open_target::PendingOpenPayload;
 use notify::RecommendedWatcher;
 use parking_lot::{Mutex, RwLock};
@@ -28,9 +28,14 @@ pub struct WorkspaceState {
     /// Tracks recently written paths to avoid echo from file watcher.
     /// Maps path -> time of write. Entries older than 2s are stale.
     pub recent_writes: RwLock<HashMap<PathBuf, Instant>>,
-    /// Gitignore matcher for the current workspace. Rebuilt when any
-    /// `.gitignore` file changes. `None` until the first workspace is opened.
+    /// Hidden-path matcher (`.gitignore` + `files.exclude`) for the current
+    /// workspace. Rebuilt when any `.gitignore` file or the `files.exclude`
+    /// setting changes. `None` until the first workspace is opened.
     pub workspace_ignore: RwLock<Option<Arc<WorkspaceIgnore>>>,
+    /// Bumped by every matcher rebuild. A rebuild publishes its matcher and
+    /// index only while its generation is still the latest, so an older
+    /// rebuild that finishes last can't overwrite a newer one.
+    pub ignore_generation: AtomicU64,
     /// Monotonic counter incremented on every workspace switch inside this
     /// window. Background tasks capture it at launch and re-check before
     /// writing; stale results are dropped. Watcher closures capture it too
@@ -96,6 +101,7 @@ impl Default for WorkspaceState {
             watcher_handle: RwLock::new(None),
             recent_writes: RwLock::new(HashMap::new()),
             workspace_ignore: RwLock::new(None),
+            ignore_generation: AtomicU64::new(0),
             workspace_epoch: AtomicU64::new(0),
             cancel_index: RwLock::new(Arc::new(AtomicBool::new(false))),
             settings: RwLock::new(None),
@@ -151,13 +157,23 @@ impl WorkspaceState {
 
         let cancel = Arc::new(AtomicBool::new(false));
         *self.cancel_index.write() = Arc::clone(&cancel);
-        *self.workspace_ignore.write() = Some(Arc::new(WorkspaceIgnore::bootstrap()));
         if let (Some(settings), Some(layer)) = (self.settings.write().as_mut(), workspace_settings)
         {
             settings.install_workspace_layer(layer);
         }
+        // After the workspace layer, so a workspace `files.exclude` applies
+        // from the very first sidebar read.
+        *self.workspace_ignore.write() = Some(Arc::new(WorkspaceIgnore::bootstrap(
+            &root,
+            self.file_excludes(),
+        )));
 
         (epoch, cancel, old_watcher)
+    }
+
+    /// The `files.exclude` list from this window's merged settings.
+    pub fn file_excludes(&self) -> FileExcludes {
+        FileExcludes::from_settings(self.settings.read().as_ref())
     }
 
     /// Atomically publish a workspace root together with its new epoch.

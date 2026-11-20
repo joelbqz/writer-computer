@@ -471,7 +471,7 @@ fn prepare_workspace_state(
 }
 
 /// Background bootstrap for a freshly-opened workspace: starts the file
-/// watcher, loads the full gitignore matcher, and walks the tree to build
+/// watcher, loads the full hidden-path matcher, and walks the tree to build
 /// the file index — each step guarded by `epoch`. The guard collapses any
 /// work started for a workspace the user has already moved on from.
 fn run_workspace_bootstrap(
@@ -509,60 +509,165 @@ fn run_workspace_bootstrap(
         }
     }
 
-    // Load the full gitignore matcher. Walks every directory looking for
-    // `.gitignore` files; bounded but not trivial on large repos.
-    let new_ignore = Arc::new(WorkspaceIgnore::load(&root));
-    if state
-        .with_workspace_snapshot(&root, epoch, || {
-            *state.workspace_ignore.write() = Some(new_ignore);
-        })
-        .is_none()
-    {
-        return;
-    }
-    let root_string = root.to_string_lossy().into_owned();
-    let _ = handle.emit_to(
-        label.clone(),
-        "fs:directory-changed",
-        crate::watcher::FileChangeEvent {
-            path: root_string.clone(),
-            kind: "modified".to_string(),
-            workspace: Some(crate::watcher::WorkspaceIdentity {
-                root: root_string.clone(),
-                epoch,
-            }),
-        },
-    );
+    // Load the full matcher and walk the tree. `cancel` is the flag the
+    // workspace transition installed: a workspace switch or a newer rebuild
+    // flips it and the walk stops at its next entry.
+    let generation = state.ignore_generation.fetch_add(1, Ordering::SeqCst) + 1;
+    refresh_workspace_filter(&handle, &label, &state, &root, epoch, generation, &cancel);
+}
 
-    // Walk the tree. The `cancel` flag lets a concurrent workspace switch
-    // stop this walk at the next directory boundary.
-    let (indexed, dirs) = index_workspace_impl(&root, Arc::clone(&cancel));
-    if cancel.load(Ordering::Relaxed) {
+/// How long a requested matcher rebuild waits for more requests. The
+/// Hidden Files list control saves on every keystroke; each save asks for a
+/// rebuild, and only the last one in a burst should walk the tree.
+const FILTER_REFRESH_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(300);
+
+/// Rebuild the window's hidden-path matcher and file index in the
+/// background, after a `.gitignore` file or the `files.exclude` setting
+/// changed. Requests within [`FILTER_REFRESH_DEBOUNCE`] of each other
+/// collapse into one rebuild, and a rebuild that starts stops any older one
+/// still walking.
+pub(crate) fn spawn_workspace_filter_refresh(handle: &tauri::AppHandle, label: &str) {
+    let Some(state) = handle.state::<AppState>().get(label) else {
         return;
+    };
+    let Some((root, epoch)) = state.workspace_snapshot() else {
+        return;
+    };
+    let generation = state.ignore_generation.fetch_add(1, Ordering::SeqCst) + 1;
+    let handle = handle.clone();
+    let label = label.to_string();
+    std::thread::spawn(move || {
+        std::thread::sleep(FILTER_REFRESH_DEBOUNCE);
+        if state.ignore_generation.load(Ordering::SeqCst) != generation {
+            return;
+        }
+        let Some(cancel) = claim_index_cancel(&state, &root, epoch) else {
+            return;
+        };
+        refresh_workspace_filter(&handle, &label, &state, &root, epoch, generation, &cancel);
+    });
+}
+
+/// Rebuild the matcher and the file index on the calling thread. Backs the
+/// `index_workspace` IPC, so a manual re-index takes the same path (and the
+/// same generation gate) as every other rebuild. Returns the indexed file
+/// count, or `None` if a newer rebuild or a workspace switch won.
+pub(crate) fn rebuild_workspace_filter_now(
+    handle: &tauri::AppHandle,
+    label: &str,
+    state: &WorkspaceState,
+) -> Option<usize> {
+    let (root, epoch) = state.workspace_snapshot()?;
+    let generation = state.ignore_generation.fetch_add(1, Ordering::SeqCst) + 1;
+    let cancel = claim_index_cancel(state, &root, epoch)?;
+    refresh_workspace_filter(handle, label, state, &root, epoch, generation, &cancel)
+}
+
+/// Install a fresh cancel flag for a new index walk and flip the previous
+/// one, so the walk this one supersedes stops at its next entry. `None` if
+/// the workspace has moved on.
+fn claim_index_cancel(state: &WorkspaceState, root: &Path, epoch: u64) -> Option<Arc<AtomicBool>> {
+    state.with_workspace_snapshot(root, epoch, || {
+        let cancel = Arc::new(AtomicBool::new(false));
+        let previous = std::mem::replace(&mut *state.cancel_index.write(), Arc::clone(&cancel));
+        previous.store(true, Ordering::SeqCst);
+        cancel
+    })
+}
+
+/// Build the hidden-path matcher (`.gitignore` files + `files.exclude`) for
+/// `root`, publish it, nudge the sidebar to re-read the root, then re-walk
+/// the file index through the same matcher and publish that. The one path
+/// for workspace open, `.gitignore` changes, `files.exclude` changes and the
+/// `index_workspace` IPC, so the sidebar, watcher and quick open always
+/// share one matcher.
+///
+/// `generation` comes from `state.ignore_generation`. The matcher and the
+/// index publish only while it is still the latest (checked under each
+/// slot's write lock), so overlapping rebuilds settle on the newest request
+/// no matter which walk finishes first. Returns the indexed file count when
+/// the index was published.
+fn refresh_workspace_filter(
+    handle: &tauri::AppHandle,
+    label: &str,
+    state: &WorkspaceState,
+    root: &Path,
+    epoch: u64,
+    generation: u64,
+    cancel: &Arc<AtomicBool>,
+) -> Option<usize> {
+    let is_latest = || state.ignore_generation.load(Ordering::SeqCst) == generation;
+    let ignore = Arc::new(WorkspaceIgnore::load(root, state.file_excludes()));
+    let index_was_ready = state.index_ready.load(Ordering::Relaxed);
+    let published = state.with_workspace_snapshot(root, epoch, || {
+        let mut slot = state.workspace_ignore.write();
+        if !is_latest() {
+            return false;
+        }
+        *slot = Some(Arc::clone(&ignore));
+        true
+    });
+    if published != Some(true) {
+        return None;
+    }
+    // Re-read the root now so newly hidden entries disappear right away.
+    emit_root_changed(handle, label, root, epoch);
+
+    let (indexed, dirs) = index_workspace_impl(root, &ignore, Arc::clone(cancel));
+    if cancel.load(Ordering::Relaxed) {
+        return None;
     }
     let file_count = indexed.len();
 
-    let displaced = state.with_workspace_snapshot(&root, epoch, || {
-        let old_index = std::mem::replace(&mut *state.file_index.write(), indexed);
-        let old_cache = state.recent_files_cache.write().take();
-        let old_dirs = std::mem::replace(&mut *state.dirs_with_markdown.write(), dirs);
-        state.file_index_revision.fetch_add(1, Ordering::SeqCst);
-        state.index_ready.store(true, Ordering::Relaxed);
-        (old_index, old_cache, old_dirs)
-    });
-    let Some(displaced) = displaced else {
-        return;
-    };
+    let displaced = state
+        .with_workspace_snapshot(root, epoch, || {
+            let mut index = state.file_index.write();
+            if !is_latest() {
+                return None;
+            }
+            let old_index = std::mem::replace(&mut *index, indexed);
+            let old_dirs = std::mem::replace(&mut *state.dirs_with_markdown.write(), dirs);
+            let old_cache = state.recent_files_cache.write().take();
+            state.file_index_revision.fetch_add(1, Ordering::SeqCst);
+            state.index_ready.store(true, Ordering::Relaxed);
+            Some((old_index, old_cache, old_dirs))
+        })
+        .flatten()?;
     drop(displaced);
+    // With an index ready, the sidebar decides which folders have markdown
+    // from `dirs_with_markdown`, so the first re-read still used the old
+    // set and a folder that just became visible was left out. Re-read once
+    // more against the new set. (Before the first index the sidebar walks
+    // folders itself, so a fresh workspace doesn't need this.)
+    if index_was_ready {
+        emit_root_changed(handle, label, root, epoch);
+    }
     let _ = handle.emit_to(
         label,
         "index:complete",
         IndexCompleteEvent {
-            workspace: crate::watcher::WorkspaceIdentity {
-                root: root_string,
-                epoch,
-            },
+            workspace: workspace_identity(root, epoch),
             file_count,
+        },
+    );
+    Some(file_count)
+}
+
+fn workspace_identity(root: &Path, epoch: u64) -> crate::watcher::WorkspaceIdentity {
+    crate::watcher::WorkspaceIdentity {
+        root: root.to_string_lossy().into_owned(),
+        epoch,
+    }
+}
+
+fn emit_root_changed(handle: &tauri::AppHandle, label: &str, root: &Path, epoch: u64) {
+    let _ = handle.emit_to(
+        label,
+        "fs:directory-changed",
+        crate::watcher::FileChangeEvent {
+            path: root.to_string_lossy().into_owned(),
+            kind: "modified".to_string(),
+            workspace: Some(workspace_identity(root, epoch)),
         },
     );
 }

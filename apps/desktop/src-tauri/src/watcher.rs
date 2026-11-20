@@ -44,56 +44,49 @@ pub struct WorkspaceIdentity {
     pub epoch: u64,
 }
 
-/// True if `path` should be dropped before any further processing.
-///
-/// Only the *relative* path (inside the workspace root) is inspected — a
-/// workspace at `~/.notes/` must keep firing events even though `.notes` is a
-/// dotdir. Paths outside the root are kept; the recursive watch already
-/// scopes things, and bailing out here would silently drop legitimate events
-/// that happen to share a prefix with the canonical root via macOS aliasing.
-fn should_ignore(path: &Path, workspace_root: &Path) -> bool {
-    let Ok(relative) = path.strip_prefix(workspace_root) else {
-        return false;
-    };
-    for component in relative.components() {
-        let name = component.as_os_str().to_string_lossy();
-        if name == ".git" || name == "node_modules" || name == ".DS_Store" {
-            return true;
-        }
-        // Allow .writer directory (workspace config) and .gitignore files —
-        // both must be watchable: settings reload on the former, matcher
-        // rebuild on the latter.
-        if name == ".writer" || name == ".gitignore" {
-            continue;
-        }
-        if name.starts_with('.') && name.len() > 1 {
-            return true;
-        }
-    }
-    false
+/// True if `path` is the workspace's own `.writer/config`. Only the root's
+/// file is the workspace settings layer; a `.writer/config` deeper down (a
+/// nested repository, a worktree copy) is just another file.
+fn is_workspace_config(path: &Path, workspace_root: &Path) -> bool {
+    path.strip_prefix(workspace_root)
+        .is_ok_and(|relative| relative == Path::new(".writer/config"))
 }
 
-/// Check the workspace ignore matcher, if any. Returns `false` when no
-/// matcher is loaded yet so events are never silently dropped.
-fn is_workspace_ignored(state: &WorkspaceState, path: &Path, is_dir: bool) -> bool {
-    let guard = state.workspace_ignore.read();
-    guard
+/// Re-read `.writer/config` into the window's settings, tell the frontend,
+/// and rebuild the hidden-path matcher if `files.exclude` changed.
+fn reload_workspace_settings(
+    handle: &AppHandle,
+    label: &str,
+    state: &WorkspaceState,
+    root: &Path,
+    epoch: u64,
+) {
+    let loader = state
+        .settings
+        .read()
         .as_ref()
-        .map(|ignore| ignore.is_ignored(path, is_dir))
-        .unwrap_or(false)
-}
-
-/// Check if a path is a config file that should trigger settings reload.
-fn is_config_file(path: &Path) -> bool {
-    // Workspace config: .writer/config
-    if path.file_name().and_then(|n| n.to_str()) == Some("config") {
-        if let Some(parent) = path.parent() {
-            if parent.file_name().and_then(|n| n.to_str()) == Some(".writer") {
-                return true;
-            }
+        .map(|settings| settings.workspace_loader());
+    let layer = loader.map(|loader| loader.read(root));
+    let excludes_before = state.file_excludes();
+    let installed = state.with_workspace_snapshot(root, epoch, || {
+        if let (Some(settings), Some(layer)) = (state.settings.write().as_mut(), layer) {
+            settings.install_workspace_layer(layer);
         }
+    });
+    if installed.is_none() {
+        return;
     }
-    false
+    if state.file_excludes() != excludes_before {
+        crate::commands::workspace::spawn_workspace_filter_refresh(handle, label);
+    }
+    let _ = handle.emit_to(
+        label,
+        "settings:changed",
+        WorkspaceIdentity {
+            root: root.to_string_lossy().into_owned(),
+            epoch,
+        },
+    );
 }
 
 /// True if `path` was written by Writer itself within the TTL window.
@@ -208,9 +201,9 @@ fn remove_subtree_from_index(state: &WorkspaceState, dir: &Path, root: &Path) {
 /// not re-emit per-child Create events for a renamed inode, so without
 /// this walk every file under the new directory would silently disappear
 /// from search results until the workspace is reopened.
-fn discover_subtree(dir: &Path) -> Vec<crate::state::IndexedFile> {
+fn discover_subtree(dir: &Path, ignore: &Arc<WorkspaceIgnore>) -> Vec<crate::state::IndexedFile> {
     let cancel = Arc::new(AtomicBool::new(false));
-    let (found, _) = crate::commands::search::index_workspace_impl(dir, cancel);
+    let (found, _) = crate::commands::search::index_workspace_impl(dir, ignore, cancel);
     found
 }
 
@@ -372,7 +365,8 @@ fn publish_prepared_index_for_snapshot(
 
 #[cfg(test)]
 fn add_subtree_to_index(state: &WorkspaceState, dir: &Path, root: &Path) {
-    let prepared = prepare_subtree_merge(state, discover_subtree(dir), root);
+    let ignore = Arc::new(WorkspaceIgnore::bootstrap(root, state.file_excludes()));
+    let prepared = prepare_subtree_merge(state, discover_subtree(dir, &ignore), root);
     assert!(publish_index_update(state, prepared).is_ok());
 }
 
@@ -462,11 +456,48 @@ pub fn start_watcher(
             }
 
             let mut rebuild_ignore = false;
+            // One matcher snapshot per batch. A workspace always has one
+            // (the bootstrap matcher is installed before the watcher starts);
+            // the fallback only guards against that invariant breaking.
+            let ignore = state.workspace_ignore.read().clone().unwrap_or_else(|| {
+                eprintln!(
+                    "[watcher] no hidden-path matcher for {}; using the exclusion list only",
+                    watched_root.display()
+                );
+                Arc::new(WorkspaceIgnore::bootstrap(
+                    &watched_root,
+                    state.file_excludes(),
+                ))
+            });
 
             for event in pending.drain(..) {
                 for path in &event.paths {
-                    if should_ignore(path, &watched_root) {
-                        wlog!("filter[should_ignore]: {}", path.display());
+                    // `.writer/config` reloads settings before any filtering,
+                    // so it keeps working when `.writer/` is gitignored.
+                    if is_workspace_config(path, &watched_root)
+                        && event_kind_str(&event.kind).is_some()
+                    {
+                        wlog!("emit settings:changed {}", path.display());
+                        reload_workspace_settings(
+                            &handle,
+                            &label,
+                            &state,
+                            &watched_root,
+                            captured_epoch,
+                        );
+                        continue;
+                    }
+
+                    // Writer's own atomic-save temp file. The save's real
+                    // event is on the target path (a recorded self-write).
+                    if crate::commands::fs::is_atomic_write_temp(path) {
+                        continue;
+                    }
+
+                    // Excluded paths (`.git`, `node_modules`, …) need no stat;
+                    // drop them before anything else.
+                    if ignore.is_excluded(path) {
+                        wlog!("filter[files.exclude]: {}", path.display());
                         continue;
                     }
 
@@ -481,7 +512,7 @@ pub fn start_watcher(
                     // the time we read it the file may already be gone, so
                     // `path.is_dir()` is unreliable. Trust the event kind
                     // first, fall back to the live stat. Computed up here
-                    // because `is_workspace_ignored` needs an accurate
+                    // because `is_ignored` needs an accurate
                     // is_dir to match dir-only gitignore rules (e.g. `dist/`)
                     // against deleted directories.
                     let is_folder_event = matches!(
@@ -493,7 +524,7 @@ pub fn start_watcher(
                     );
                     let is_dir = is_folder_event || path.is_dir();
 
-                    if is_workspace_ignored(&state, path, is_dir) {
+                    if ignore.is_ignored(path, is_dir) {
                         wlog!("filter[workspace_ignore]: {}", path.display());
                         continue;
                     }
@@ -539,37 +570,6 @@ pub fn start_watcher(
                         );
                         let _ = handle.emit_to(label.clone(), "fs:directory-changed", &payload);
                     } else {
-                        // `.writer/config` changes reload settings instead.
-                        if is_config_file(path) {
-                            wlog!("emit settings:changed {}", path.display());
-                            let loader = state
-                                .settings
-                                .read()
-                                .as_ref()
-                                .map(|settings| settings.workspace_loader());
-                            let layer = loader.map(|loader| loader.read(&watched_root));
-                            let _ = state.with_workspace_snapshot(
-                                &watched_root,
-                                captured_epoch,
-                                || {
-                                    if let (Some(settings), Some(layer)) =
-                                        (state.settings.write().as_mut(), layer)
-                                    {
-                                        settings.install_workspace_layer(layer);
-                                    }
-                                },
-                            );
-                            let _ = handle.emit_to(
-                                label.clone(),
-                                "settings:changed",
-                                WorkspaceIdentity {
-                                    root: watched_root.to_string_lossy().into_owned(),
-                                    epoch: captured_epoch,
-                                },
-                            );
-                            continue;
-                        }
-
                         wlog!("emit fs:file-changed kind={kind_str} {}", path.display());
                         let _ = handle.emit_to(label.clone(), "fs:file-changed", &payload);
                     }
@@ -623,7 +623,7 @@ pub fn start_watcher(
                         // rename-in). FSEvents won't re-emit Create events
                         // for descendants, so walk now to keep the index
                         // in sync.
-                        let found = discover_subtree(path);
+                        let found = discover_subtree(path, &ignore);
                         publish_prepared_index_for_snapshot(
                             &state,
                             &watched_root,
@@ -673,12 +673,7 @@ pub fn start_watcher(
             }
 
             if rebuild_ignore {
-                spawn_ignore_rebuild(
-                    handle.clone(),
-                    label.clone(),
-                    watched_root.clone(),
-                    captured_epoch,
-                );
+                crate::commands::workspace::spawn_workspace_filter_refresh(&handle, &label);
             }
 
             last_emit = Instant::now();
@@ -789,44 +784,6 @@ pub fn start_file_watcher(
     Ok(watcher)
 }
 
-/// Rebuild the workspace gitignore matcher on a one-shot background thread,
-/// then swap it in and nudge the sidebar to re-read. Keeps the watcher's
-/// event loop free while the tree walk runs.
-fn spawn_ignore_rebuild(
-    handle: AppHandle,
-    window_label: String,
-    root: std::path::PathBuf,
-    captured_epoch: u64,
-) {
-    std::thread::spawn(move || {
-        let new_matcher = Arc::new(WorkspaceIgnore::load(&root));
-        let Some(state) = handle.state::<AppState>().get(&window_label) else {
-            return;
-        };
-
-        if state
-            .with_workspace_snapshot(&root, captured_epoch, || {
-                *state.workspace_ignore.write() = Some(new_matcher);
-            })
-            .is_none()
-        {
-            return;
-        }
-        let _ = handle.emit_to(
-            window_label,
-            "fs:directory-changed",
-            FileChangeEvent {
-                path: root.to_string_lossy().to_string(),
-                kind: "modified".to_string(),
-                workspace: Some(WorkspaceIdentity {
-                    root: root.to_string_lossy().into_owned(),
-                    epoch: captured_epoch,
-                }),
-            },
-        );
-    });
-}
-
 /// Drop a `RecommendedWatcher` on a detached thread. `notify`'s `Drop` impl
 /// can briefly block on FSEvents unregistration (macOS) or inotify watch
 /// removal (Linux); off-loading keeps the IPC thread responsive when the
@@ -843,50 +800,25 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    const ROOT: &str = "/workspace";
-
     #[test]
-    fn test_ignores_git_directory() {
-        let root = Path::new(ROOT);
-        assert!(should_ignore(Path::new("/workspace/.git/config"), root));
-        assert!(should_ignore(
-            Path::new("/workspace/.git/refs/heads/main"),
+    fn only_the_root_writer_config_is_the_workspace_config() {
+        let root = Path::new("/workspace");
+        assert!(is_workspace_config(
+            Path::new("/workspace/.writer/config"),
             root
         ));
-    }
-
-    #[test]
-    fn test_ignores_hidden_files() {
-        let root = Path::new(ROOT);
-        assert!(should_ignore(Path::new("/workspace/.DS_Store"), root));
-        assert!(should_ignore(Path::new("/workspace/.hidden/file.md"), root));
-    }
-
-    #[test]
-    fn test_does_not_ignore_normal_files() {
-        let root = Path::new(ROOT);
-        assert!(!should_ignore(Path::new("/workspace/notes/hello.md"), root));
-        assert!(!should_ignore(Path::new("/workspace/readme.md"), root));
-    }
-
-    #[test]
-    fn dotdir_workspace_root_does_not_filter_its_own_paths() {
-        // Regression: a workspace at `~/.notes/` must keep firing events even
-        // though `.notes` is a dotdir.
-        let root = Path::new("/Users/joel/.notes");
-        assert!(!should_ignore(&root.join("foo.md"), root));
-        assert!(!should_ignore(&root.join("docs/bar.md"), root));
-        // Hidden subdirs inside the dotdir root are still filtered.
-        assert!(should_ignore(&root.join(".cache/x"), root));
-        assert!(should_ignore(&root.join(".git/HEAD"), root));
-    }
-
-    #[test]
-    fn paths_outside_root_are_not_filtered_here() {
-        // `should_ignore` only applies to paths inside the root; the recursive
-        // watch and `is_workspace_ignored` handle anything else.
-        let root = Path::new("/workspace");
-        assert!(!should_ignore(Path::new("/elsewhere/.cache/file"), root));
+        assert!(!is_workspace_config(
+            Path::new("/workspace/.claude/worktrees/x/.writer/config"),
+            root
+        ));
+        assert!(!is_workspace_config(
+            Path::new("/workspace/.writer/other"),
+            root
+        ));
+        assert!(!is_workspace_config(
+            Path::new("/elsewhere/.writer/config"),
+            root
+        ));
     }
 
     #[test]

@@ -149,9 +149,7 @@ fn visible_fs_entry(
     let entry = entry?;
     let file_type = entry.file_type()?;
     let path = entry.path();
-    if entry.file_name().to_string_lossy().starts_with('.')
-        || ignore.is_some_and(|matcher| matcher.is_ignored(&path, file_type.is_dir()))
-    {
+    if ignore.is_some_and(|matcher| matcher.is_ignored(&path, file_type.is_dir())) {
         return Ok(None);
     }
     Ok(Some((path, file_type)))
@@ -265,13 +263,8 @@ pub fn read_directory_impl(
         let entry_path = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
 
-        // Skip hidden files/dirs (the workspace `.gitignore` stays available
-        // because `read_directory` only surfaces markdown files and
-        // directories, never dotfiles — see the sidebar spec).
-        if name.starts_with('.') {
-            continue;
-        }
-
+        // `WorkspaceIgnore` is the only filter: dotfiles show like any other
+        // entry unless `.gitignore` or `files.exclude` hides them.
         if let Some(ignore) = ignore_matcher {
             if ignore.is_ignored(&entry_path, file_type.is_dir()) {
                 continue;
@@ -344,6 +337,18 @@ pub async fn read_file(path: String) -> Result<FileContent, AppError> {
     blocking(move || read_file_impl(&path)).await
 }
 
+/// Name prefix of the temp file [`write_file_impl`] writes next to a note
+/// before renaming it into place.
+const ATOMIC_WRITE_TEMP_PREFIX: &str = ".~writer-";
+
+/// True for [`write_file_impl`]'s temp file. The watcher drops these: with
+/// dotfiles visible, every autosave would otherwise refresh the folder, the
+/// recent-files list and the index.
+pub(crate) fn is_atomic_write_temp(path: &Path) -> bool {
+    path.file_name()
+        .is_some_and(|name| name.to_string_lossy().starts_with(ATOMIC_WRITE_TEMP_PREFIX))
+}
+
 pub fn write_file_impl(path: &str, content: &str) -> Result<WriteResult, AppError> {
     let file_path = PathBuf::from(path);
 
@@ -351,7 +356,10 @@ pub fn write_file_impl(path: &str, content: &str) -> Result<WriteResult, AppErro
     let dir = file_path
         .parent()
         .ok_or_else(|| AppError::Io("No parent directory".into()))?;
-    let temp_path = dir.join(format!(".~{}", uuid::Uuid::new_v4()));
+    let temp_path = dir.join(format!(
+        "{ATOMIC_WRITE_TEMP_PREFIX}{}",
+        uuid::Uuid::new_v4()
+    ));
     fs::write(&temp_path, content)?;
     fs::rename(&temp_path, &file_path)?;
 
@@ -787,12 +795,49 @@ mod tests {
         assert_eq!(result[2].title.as_deref(), Some("World"));
     }
 
+    /// A workspace state for `root` with the full default matcher loaded,
+    /// as after the background bootstrap finishes.
+    fn state_for(root: &Path) -> WorkspaceState {
+        let state = WorkspaceState::default();
+        *state.workspace_ignore.write() = Some(Arc::new(WorkspaceIgnore::load(
+            root,
+            crate::ignore::FileExcludes::from_settings(None),
+        )));
+        state
+    }
+
+    fn write(path: &Path, content: &str) {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, content).unwrap();
+    }
+
+    fn names(path: &Path, state: &WorkspaceState) -> Vec<String> {
+        read_directory_impl(&path.to_string_lossy(), Some(state))
+            .unwrap()
+            .into_iter()
+            .map(|entry| entry.name)
+            .collect()
+    }
+
+    /// Every markdown file the sidebar can reach by expanding folders.
+    fn sidebar_markdown(path: &Path, state: &WorkspaceState, out: &mut Vec<PathBuf>) {
+        for entry in read_directory_impl(&path.to_string_lossy(), Some(state)).unwrap() {
+            if entry.is_dir {
+                sidebar_markdown(Path::new(&entry.path), state, out);
+            } else {
+                out.push(PathBuf::from(entry.path));
+            }
+        }
+    }
+
     #[test]
     fn test_read_directory_includes_empty_folder_trees_but_filters_non_markdown_content() {
         let dir = setup_test_dir();
         fs::create_dir_all(dir.path().join("drafts").join("nested")).unwrap();
+        // Excluded by default, so it doesn't make `drafts/` count as non-empty.
         fs::write(dir.path().join("drafts").join(".DS_Store"), "hidden").unwrap();
-        let result = read_directory_impl(&dir.path().to_string_lossy(), None).unwrap();
+        let state = state_for(dir.path());
+        let result = read_directory_impl(&dir.path().to_string_lossy(), Some(&state)).unwrap();
 
         // `drafts/` is an empty folder tree and stays available for authoring.
         // `empty/` contains only a visible non-Markdown file and remains hidden.
@@ -810,11 +855,13 @@ mod tests {
     fn test_read_directory_uses_index_when_ready() {
         let dir = setup_test_dir();
         fs::create_dir_all(dir.path().join("drafts").join("nested")).unwrap();
-        let state = WorkspaceState::default();
+        let state = state_for(dir.path());
 
         // Build index
         let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let (indexed, dirs) = crate::commands::search::index_workspace_impl(dir.path(), cancel);
+        let ignore = state.workspace_ignore.read().clone().unwrap();
+        let (indexed, dirs) =
+            crate::commands::search::index_workspace_impl(dir.path(), &ignore, cancel);
         *state.file_index.write() = indexed;
         *state.dirs_with_markdown.write() = dirs;
         state.index_ready.store(true, Ordering::Relaxed);
@@ -827,6 +874,101 @@ mod tests {
             .any(|entry| entry.name == "drafts" && entry.is_dir));
         assert!(!result.iter().any(|entry| entry.name == "empty"));
         assert!(result[0].is_dir);
+    }
+
+    #[test]
+    fn test_read_directory_shows_dot_folders_with_markdown() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        write(&root.join(".claude/skills/demo/SKILL.md"), "# Demo skill");
+        write(&root.join(".claude/settings.json"), "{}");
+        write(&root.join(".claude/worktrees/feature/README.md"), "# Copy");
+        write(&root.join(".trash/old.md"), "# Old");
+        write(&root.join(".obsidian/app.json"), "{}");
+        write(&root.join(".writer/config"), "editor.font-size = 16\n");
+        write(&root.join(".notes.md"), "# Dot note");
+        write(&root.join("note.md"), "# Note");
+        let state = state_for(root);
+
+        // `.obsidian/` and `.writer/` hold no markdown, so they stay out like
+        // any other folder without notes.
+        assert_eq!(names(root, &state), vec![".claude", ".notes.md", "note.md"]);
+        assert_eq!(names(&root.join(".claude"), &state), vec!["skills"]);
+        assert_eq!(
+            names(&root.join(".claude/skills/demo"), &state),
+            vec!["SKILL.md"]
+        );
+    }
+
+    #[test]
+    fn test_sidebar_and_search_agree_on_gitignore_outside_git() {
+        // Not a git repository: `.gitignore` still applies to both.
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        write(&root.join(".gitignore"), ".cache/\n*.draft.md\n");
+        write(&root.join(".cache/notes.md"), "# Cached");
+        write(&root.join("ideas.draft.md"), "# Draft");
+        write(&root.join(".claude/skills/demo/SKILL.md"), "# Skill");
+        write(&root.join(".trash/old.md"), "# Old");
+        write(&root.join("docs/guide.md"), "# Guide");
+        write(&root.join("note.md"), "# Note");
+        let state = state_for(root);
+
+        let mut sidebar = Vec::new();
+        sidebar_markdown(root, &state, &mut sidebar);
+        sidebar.sort();
+
+        let ignore = state.workspace_ignore.read().clone().unwrap();
+        let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let (index, _) = crate::commands::search::index_workspace_impl(root, &ignore, cancel);
+        let mut search: Vec<PathBuf> = index.into_iter().map(|f| f.path).collect();
+        search.sort();
+
+        assert_eq!(sidebar, search);
+        assert_eq!(
+            search,
+            vec![
+                root.join(".claude/skills/demo/SKILL.md"),
+                root.join("docs/guide.md"),
+                root.join("note.md"),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_workspace_files_exclude_replaces_the_default_list() {
+        let config_dir = TempDir::new().unwrap();
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        write(&root.join(".writer/config"), "files.exclude = archive\n");
+        write(&root.join("archive/old.md"), "# Archived");
+        write(&root.join(".trash/deleted.md"), "# Deleted");
+        write(&root.join("note.md"), "# Note");
+
+        let state = WorkspaceState::default();
+        *state.settings.write() =
+            Some(crate::config::Settings::new(config_dir.path().to_path_buf()).unwrap());
+        state.transition_to_workspace(root.clone());
+
+        assert_eq!(names(&root, &state), vec![".trash", "note.md"]);
+    }
+
+    #[test]
+    fn test_write_file_temp_is_recognised_and_removed() {
+        let dir = TempDir::new().unwrap();
+        let note = dir.path().join("note.md");
+        write_file_impl(&note.to_string_lossy(), "# Note").unwrap();
+        // Only the note is left behind, and the prefix the watcher drops
+        // is the one the write path uses.
+        let names: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(names, vec![std::ffi::OsString::from("note.md")]);
+        let temp = dir.path().join(format!("{ATOMIC_WRITE_TEMP_PREFIX}1234"));
+        assert!(is_atomic_write_temp(&temp));
+        assert!(!is_atomic_write_temp(&note));
+        assert!(!is_atomic_write_temp(&dir.path().join(".~lock.note.md#")));
     }
 
     #[test]

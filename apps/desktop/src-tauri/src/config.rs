@@ -90,6 +90,20 @@ fn parse_config_with_defaults(
             let key = key.trim().to_string();
             let value_str = value.trim().to_string();
 
+            // A key whose default is a list is always a list, even when the
+            // file has a single line for it. An empty value (`key =`) is an
+            // explicitly empty list, so a user can clear a list default.
+            if matches!(
+                defaults.and_then(|values| values.get(&key)),
+                Some(ConfigValue::List(_))
+            ) {
+                let items = list_keys.entry(key).or_default();
+                if !value_str.is_empty() {
+                    items.push(value_str);
+                }
+                continue;
+            }
+
             if list_keys.contains_key(&key) {
                 // Already seen this key — it's a list
                 list_keys.get_mut(&key).unwrap().push(value_str);
@@ -155,16 +169,7 @@ pub fn serialize_config(values: &HashMap<String, ConfigValue>, original: &str) -
                 continue;
             }
             if let Some(value) = values.get(&key) {
-                match value {
-                    ConfigValue::List(items) => {
-                        for item in items {
-                            result.push_str(&format!("{} = {}\n", key, item));
-                        }
-                    }
-                    _ => {
-                        result.push_str(&format!("{} = {}\n", key, value_to_string(value)));
-                    }
-                }
+                push_config_entry(&mut result, &key, value);
                 written_keys.insert(key);
             }
             // If key is not in values, it was removed — skip the line
@@ -178,20 +183,30 @@ pub fn serialize_config(values: &HashMap<String, ConfigValue>, original: &str) -
     // Append any new keys not in the original
     for (key, value) in values {
         if !written_keys.contains(key) {
-            match value {
-                ConfigValue::List(items) => {
-                    for item in items {
-                        result.push_str(&format!("{} = {}\n", key, item));
-                    }
-                }
-                _ => {
-                    result.push_str(&format!("{} = {}\n", key, value_to_string(value)));
-                }
-            }
+            push_config_entry(&mut result, key, value);
         }
     }
 
     result
+}
+
+/// Append `key = value` lines for one setting. A list writes one line per
+/// item; an empty list writes a bare `key =` so it reads back as empty
+/// instead of falling back to the default.
+fn push_config_entry(result: &mut String, key: &str, value: &ConfigValue) {
+    match value {
+        ConfigValue::List(items) if items.is_empty() => {
+            result.push_str(&format!("{key} =\n"));
+        }
+        ConfigValue::List(items) => {
+            for item in items {
+                result.push_str(&format!("{key} = {item}\n"));
+            }
+        }
+        _ => {
+            result.push_str(&format!("{key} = {}\n", value_to_string(value)));
+        }
+    }
 }
 
 /// Remove a key from a config file's text, preserving other content.
@@ -684,6 +699,35 @@ mod tests {
                 "dist".into()
             ]))
         );
+    }
+
+    #[test]
+    fn test_list_default_keys_parse_as_lists() {
+        let defaults = default_settings();
+        let single = parse_config_with_defaults("files.exclude = 2024\n", Some(&defaults));
+        assert_eq!(
+            single.get("files.exclude"),
+            Some(&ConfigValue::List(vec!["2024".into()]))
+        );
+        let empty = parse_config_with_defaults("files.exclude =\n", Some(&defaults));
+        assert_eq!(empty.get("files.exclude"), Some(&ConfigValue::List(vec![])));
+    }
+
+    #[test]
+    fn test_list_setting_round_trips_through_the_global_file() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut settings = Settings::new(dir.path().to_path_buf()).unwrap();
+        for items in [
+            vec![".git".to_string()],
+            vec![],
+            vec!["a".into(), "b/c".into()],
+        ] {
+            settings
+                .set_global("files.exclude", ConfigValue::List(items.clone()))
+                .unwrap();
+            let reread = Settings::new(dir.path().to_path_buf()).unwrap();
+            assert_eq!(reread.get("files.exclude"), Some(&ConfigValue::List(items)));
+        }
     }
 
     #[test]

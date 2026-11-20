@@ -8,7 +8,7 @@ The sidebar shows the workspace folder you opened ([how](/docs/open-a-folder/)) 
 
 - **Pinned** holds the notes you pin: right-click a note and choose **Pin** (or **Unpin**). New pins go to the top, and pins are kept per workspace. The section only appears once something is pinned.
 - **Recents** lists the notes changed most recently, newest first, leaving out pinned ones. It appears once a workspace has 10 or more notes.
-- **Everything** is the whole folder as a tree, with folders and markdown files only. Hidden folders and anything your `.gitignore` excludes are left out.
+- **Everything** is the whole folder as a tree, with folders and markdown files only. Folders whose names start with a dot, such as `.claude` or `.github`, show like any other folder when they contain notes. Anything your `.gitignore` excludes is left out, and so is everything in **Files → Hidden Files** in Preferences: `.git`, `node_modules`, Obsidian's `.trash` folder and a few more (see [what Writer leaves out](/docs/open-a-folder/#what-writer-does-with-your-files)).
 
 Click a section's title to collapse or expand it. **Show More** under Pinned or Recents lists more notes.
 
